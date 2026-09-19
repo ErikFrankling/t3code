@@ -288,6 +288,38 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
     ),
   );
 
+  it.effect("reuses a real administrative session only with explicit unsafe-no-auth opt-in", () =>
+    Effect.acquireUseRelease(
+      Effect.sync(() => {
+        const previous = process.env.T3CODE_UNSAFE_NO_AUTH;
+        process.env.T3CODE_UNSAFE_NO_AUTH = "1";
+        return previous;
+      }),
+      () =>
+        Effect.gen(function* () {
+          const auth = yield* EnvironmentAuth.EnvironmentAuth;
+          const sessions = yield* SessionStore.SessionStore;
+          const missing = yield* auth.authenticateHttpRequest({
+            cookies: {},
+            headers: {},
+          } as never);
+          const stale = yield* auth.authenticateHttpRequest(
+            makeCookieRequest(sessions.cookieName, "stale"),
+          );
+          expect(missing.subject).toBe("no-auth");
+          expect(missing.scopes).toEqual(AuthAdministrativeScopes);
+          expect(stale.sessionId).toBe(missing.sessionId);
+          const stored = yield* sessions.listActive();
+          expect(stored.some((session) => session.sessionId === missing.sessionId)).toBe(true);
+        }).pipe(Effect.provide(makeEnvironmentAuthLayer())),
+      (previous) =>
+        Effect.sync(() => {
+          if (previous === undefined) delete process.env.T3CODE_UNSAFE_NO_AUTH;
+          else process.env.T3CODE_UNSAFE_NO_AUTH = previous;
+        }),
+    ),
+  );
+
   it.effect("classifies invalid bootstrap credential failures for the HTTP boundary", () =>
     Effect.sync(() => {
       const error = EnvironmentAuth.toBootstrapExchangeError(

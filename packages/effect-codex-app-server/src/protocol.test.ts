@@ -130,7 +130,7 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
   );
 
   it.effect(
-    "encodes requests without a jsonrpc field and routes inbound requests and notifications",
+    "encodes JSON-RPC 2.0 envelopes and routes inbound requests and notifications",
     () =>
       Effect.gen(function* () {
         const { stdio, input, output } = yield* makeInMemoryStdio();
@@ -156,7 +156,7 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
         );
 
         yield* transport.notify("initialized");
-        assert.equal(yield* Queue.take(output), '{"method":"initialized"}\n');
+        assert.equal(yield* Queue.take(output), '{"jsonrpc":"2.0","method":"initialized"}\n');
 
         const initializeParams = {
           clientInfo: {
@@ -174,6 +174,7 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
           .request("initialize", initializeParams)
           .pipe(Effect.forkScoped);
         assert.deepEqual(yield* decodeJson(yield* Queue.take(output)), {
+          jsonrpc: "2.0",
           id: 1,
           method: "initialize",
           params: initializeParams,
@@ -267,6 +268,7 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
           },
         });
         assert.deepEqual(yield* decodeJson(yield* Queue.take(output)), {
+          jsonrpc: "2.0",
           id: 77,
           result: {
             answers: {
@@ -282,6 +284,7 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
           CodexError.CodexAppServerRequestError.methodNotFound("x/test"),
         );
         assert.deepEqual(yield* decodeJson(yield* Queue.take(output)), {
+          jsonrpc: "2.0",
           id: 78,
           error: {
             code: -32601,
@@ -469,6 +472,7 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
 
       yield* Deferred.succeed(approvalDecision, { decision: "accept" });
       assert.deepEqual(yield* decodeJson(yield* Queue.take(output)), {
+        jsonrpc: "2.0",
         id: 7,
         result: { decision: "accept" },
       });
@@ -506,6 +510,7 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
       yield* Deferred.await(handlersStarted);
 
       assert.deepEqual(yield* decodeJson(yield* Queue.take(output)), {
+        jsonrpc: "2.0",
         id: 33,
         error: {
           code: -32001,

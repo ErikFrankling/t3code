@@ -635,7 +635,7 @@ export const make = Effect.gen(function* () {
       mapSessionVerificationErrors,
     );
 
-  const authenticateRequest = (
+  const authenticateRequestStrict = (
     request: HttpServerRequest.HttpServerRequest,
   ): Effect.Effect<AuthenticatedSession, ServerAuthCredentialError | ServerAuthInternalError> => {
     const selectedCredential = selectRequestCredential(
@@ -687,6 +687,41 @@ export const make = Effect.gen(function* () {
       }),
     );
   };
+
+  // Explicit opt-in for trusted LAN deployments. Keep a real stored session so
+  // websocket tickets and access-management routes share the same principal.
+  const noAuthEnabled = process.env.T3CODE_UNSAFE_NO_AUTH === "1";
+  let noAuthPrincipal: AuthenticatedSession | null = null;
+  const loadNoAuthSession = Effect.gen(function* () {
+    const active = yield* sessions.listActive();
+    const existing = active.find((session) => session.subject === "no-auth");
+    const session =
+      existing ??
+      (yield* sessions.issue({
+        method: "browser-session-cookie",
+        subject: "no-auth",
+        scopes: AuthAdministrativeScopes,
+        client: { deviceType: "unknown", label: "unauthenticated LAN access" },
+        ttl: Duration.days(3650),
+      }));
+    noAuthPrincipal = {
+      sessionId: session.sessionId,
+      subject: "no-auth",
+      method: session.method,
+      scopes: session.scopes,
+      ...(session.expiresAt ? { expiresAt: session.expiresAt } : {}),
+    };
+    return noAuthPrincipal;
+  }).pipe(mapSessionVerificationErrors);
+  const noAuthSession = Effect.suspend(() =>
+    noAuthPrincipal === null ? loadNoAuthSession : Effect.succeed(noAuthPrincipal),
+  );
+  const authenticateRequest: typeof authenticateRequestStrict = noAuthEnabled
+    ? (request) =>
+        authenticateRequestStrict(request).pipe(
+          Effect.catchIf(isServerAuthCredentialError, () => noAuthSession),
+        )
+    : authenticateRequestStrict;
 
   const getSessionState: EnvironmentAuth["Service"]["getSessionState"] = (request) =>
     authenticateRequest(request).pipe(
@@ -1018,10 +1053,12 @@ export const make = Effect.gen(function* () {
   const listClientSessions: EnvironmentAuth["Service"]["listClientSessions"] = (currentSessionId) =>
     listSessions().pipe(
       Effect.map((clientSessions) =>
-        clientSessions.map((clientSession): AuthClientSession => ({
-          ...clientSession,
-          current: clientSession.sessionId === currentSessionId,
-        })),
+        clientSessions.map(
+          (clientSession): AuthClientSession => ({
+            ...clientSession,
+            current: clientSession.sessionId === currentSessionId,
+          }),
+        ),
       ),
       Effect.withSpan("EnvironmentAuth.listClientSessions"),
     );
