@@ -8,6 +8,7 @@ import { Dialog, DialogPopup, DialogTitle } from "../ui/dialog";
 import { filterComposerPullRequestMatches } from "@t3tools/shared/composerPullRequestMatches";
 import { importPastedComposerText, readPastedComposerContext } from "../composerInlineTokenPaste";
 import { elementContextToPreviewAnnotation } from "../../lib/elementContext";
+import { Dictation } from "./Dictation";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import {
   questionAttachmentDraftId,
@@ -6366,6 +6367,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               composerProviderState.composerSurfaceClassName,
             )}
           >
+            <Dictation
+              key={composerTargetKey(composerDraftTarget)}
+              target={composerTargetKey(composerDraftTarget)}
+              project={gitCwd}
+              prompt={prompt}
+              onChange={(text) => setComposerDraftPrompt(composerDraftTarget, text)}
+            />
             {showCollapsedMobilePromptRow ? (
               <div className="flex items-center justify-between gap-2 px-3 py-2">
                 <button

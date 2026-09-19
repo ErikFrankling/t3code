@@ -3,6 +3,7 @@ import {
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   EnvironmentHttpApi,
+  DictationRequest,
 } from "@t3tools/contracts";
 import { isDevProxiedPath } from "@t3tools/shared/devProxy";
 import { decodeOtlpTraceRecords } from "@t3tools/shared/observability";
@@ -292,6 +293,7 @@ const authenticateRawRouteWithScope = (
     if (!session.scopes.includes(scope)) {
       return yield* failEnvironmentScopeRequired(scope);
     }
+    return session;
   });
 
 export const serverEnvironmentHttpApiLayer = HttpApiBuilder.group(
@@ -650,5 +652,42 @@ const handleStaticAndDevRequest = Effect.fn("handleStaticAndDevRequest")(
 export const staticAndDevRouteLayer = Layer.unwrap(
   loadImmutableBuildAssets.pipe(
     Effect.map((assets) => HttpRouter.add("GET", "*", handleStaticAndDevRequest(assets))),
+  ),
+);
+
+// The worker is loopback-only. Browser credentials terminate here and are never
+// forwarded; ownership uses the authenticated subject, stable across sessions.
+const decodeDictationRequest = Schema.decodeUnknownEffect(DictationRequest);
+
+export const dictationRouteLayer = HttpRouter.add(
+  "POST",
+  "/api/dictation",
+  Effect.gen(function* () {
+    const session = yield* authenticateRawRouteWithScope(AuthOrchestrationOperateScope);
+    const request = yield* HttpServerRequest.HttpServerRequest;
+    const client = yield* HttpClient.HttpClient;
+    const body = yield* decodeDictationRequest(yield* request.json);
+    const response = yield* client.post(
+      process.env.T3CODE_STT_URL ?? "http://127.0.0.1:8781/dictation",
+      { body: HttpBody.jsonUnsafe(body), headers: { "X-STT-Owner": session.subject } },
+    );
+    return HttpServerResponse.text(yield* response.text, {
+      status: response.status,
+      contentType: response.headers["content-type"] ?? "application/json",
+    });
+  }).pipe(
+    Effect.catchTags({
+      EnvironmentAuthInvalidError: HttpServerRespondable.toResponse,
+      EnvironmentInternalError: HttpServerRespondable.toResponse,
+      EnvironmentScopeRequiredError: HttpServerRespondable.toResponse,
+    }),
+    Effect.catch(() =>
+      Effect.succeed(
+        HttpServerResponse.text(
+          "The local speech service is unavailable or the request is invalid.",
+          { status: 502 },
+        ),
+      ),
+    ),
   ),
 );
