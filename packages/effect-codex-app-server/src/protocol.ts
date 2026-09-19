@@ -146,6 +146,7 @@ const toProtocolMessage = (
     readonly error?: CodexError.CodexAppServerProtocolErrorShape;
   },
 ): { readonly [key: string]: unknown } => ({
+  jsonrpc: "2.0",
   id: requestId,
   ...(fields.result !== undefined ? { result: fields.result } : {}),
   ...(fields.error !== undefined ? { error: fields.error } : {}),
@@ -458,6 +459,7 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
           new Map(current).set(String(requestId), { deferred, method }),
         );
         yield* offerOutgoing({
+          jsonrpc: "2.0",
           id: requestId,
           method,
           ...(payload !== undefined ? { params: payload } : {}),
@@ -469,6 +471,7 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
 
     const notify = (method: string, payload?: unknown) =>
       offerOutgoing({
+        jsonrpc: "2.0",
         method,
         ...(payload !== undefined ? { params: payload } : {}),
       });
