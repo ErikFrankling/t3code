@@ -1931,7 +1931,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     selectedProviderEntry?.snapshot,
     selectedModel,
   );
+  const [dictationBusy, setDictationBusy] = useState(false);
   const sendDisabledReason =
+    (dictationBusy ? "Finish or cancel dictation before sending" : null) ??
     externalSendDisabledReason ??
     (multipleModelSelections?.length === 0 ? "Select at least one model." : null) ??
     (activePendingProgress
@@ -6371,6 +6373,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               key={composerTargetKey(composerDraftTarget)}
               target={composerTargetKey(composerDraftTarget)}
               project={gitCwd}
+              onBusyChange={setDictationBusy}
               prompt={prompt}
               onChange={(text) => setComposerDraftPrompt(composerDraftTarget, text)}
             />

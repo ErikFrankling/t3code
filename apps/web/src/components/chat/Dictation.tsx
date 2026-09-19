@@ -23,11 +23,13 @@ export function Dictation({
   project,
   prompt,
   onChange,
+  onBusyChange,
 }: {
   target: string;
   project: string | null;
   prompt: string;
   onChange: (text: string) => void;
+  onBusyChange: (busy: boolean) => void;
 }) {
   const storageKey = `t3-dictation:${target}`;
   const [state, setState] = useState<DictationState | null>(null);
@@ -47,6 +49,11 @@ export function Dictation({
   const failedSequence = useRef(0);
   const audio = useRef<Int16Array[]>([]);
   const sequence = useRef(0);
+
+  useEffect(() => {
+    onBusyChange(starting || state?.status === "recording" || state?.status === "finalizing");
+    return () => onBusyChange(false);
+  }, [onBusyChange, starting, state?.status]);
 
   function accept(next: DictationState) {
     if (!active.current || next.id !== id.current) return;
