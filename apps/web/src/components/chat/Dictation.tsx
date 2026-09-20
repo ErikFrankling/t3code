@@ -47,6 +47,20 @@ export function Dictation({
   const [open, setOpen] = useState(false);
   const [level, setLevel] = useState(0);
   const [view, setView] = useState<"draft" | "final">("draft");
+  const draftPanel = useRef<HTMLElement>(null);
+  const finalPanel = useRef<HTMLElement>(null);
+  const follow = useRef({ draft: true, final: true });
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      for (const [kind, panel] of [
+        ["draft", draftPanel.current],
+        ["final", finalPanel.current],
+      ] as const) {
+        if (panel && follow.current[kind]) panel.scrollTop = panel.scrollHeight;
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [state?.draft, state?.final, view, open]);
   const live = useRef({ prompt, onChange });
   live.current = { prompt, onChange };
   const active = useRef(true);
@@ -97,7 +111,8 @@ export function Dictation({
         stopCapture.current();
         stopCapture.current = null;
         // Finalize against the captured session, never the newly selected thread.
-        const stoppedWithError = Boolean(error) && Boolean(state) && !stopCapture.current && !starting;
+        const stoppedWithError =
+          Boolean(error) && Boolean(state) && !stopCapture.current && !starting;
         const fallback =
           state?.status === "error" || state?.status === "cancelled" || stoppedWithError;
         const recording = id.current;
@@ -355,6 +370,12 @@ export function Dictation({
             <section
               className={`min-h-0 overflow-auto px-6 py-5 md:block md:border-r ${view === "draft" ? "block" : "hidden"}`}
               aria-label="Live draft"
+              ref={draftPanel}
+              onScroll={(event) => {
+                const panel = event.currentTarget;
+                follow.current.draft =
+                  panel.scrollHeight - panel.scrollTop - panel.clientHeight < 80;
+              }}
             >
               <h3 className="mb-4 text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 Live draft
@@ -369,6 +390,12 @@ export function Dictation({
             <section
               className={`min-h-0 overflow-auto px-6 py-5 md:block ${view === "final" ? "block" : "hidden"}`}
               aria-label="Transcript"
+              ref={finalPanel}
+              onScroll={(event) => {
+                const panel = event.currentTarget;
+                follow.current.final =
+                  panel.scrollHeight - panel.scrollTop - panel.clientHeight < 80;
+              }}
             >
               <h3 className="mb-4 text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 {fallback
