@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { DictationState, type DictationRequest } from "@t3tools/contracts";
 import { Schema } from "effect";
-import { MicIcon, SquareIcon } from "lucide-react";
+import {
+  MicIcon,
+  SquareIcon,
+  XIcon,
+  CheckIcon,
+  LoaderCircleIcon,
+  DownloadIcon,
+} from "lucide-react";
+
+import { Dialog, DialogPopup, DialogTitle } from "../ui/dialog";
 
 const decodeDictationState = Schema.decodeUnknownSync(DictationState);
 
@@ -35,14 +44,14 @@ export function Dictation({
   const [state, setState] = useState<DictationState | null>(null);
   const [error, setError] = useState("");
   const [starting, setStarting] = useState(false);
-  const [manual, setManual] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [level, setLevel] = useState(0);
+  const [view, setView] = useState<"draft" | "final">("draft");
   const live = useRef({ prompt, onChange });
   live.current = { prompt, onChange };
   const active = useRef(true);
+  const captureRequested = useRef(false);
   const id = useRef<string | null>(null);
-  const base = useRef(prompt);
-  const written = useRef(prompt);
-  const edited = useRef(false);
   const stopCapture = useRef<(() => void) | null>(null);
   const queue = useRef(Promise.resolve());
   const failed = useRef(false);
@@ -59,20 +68,7 @@ export function Dictation({
     if (!active.current || next.id !== id.current) return;
     if (!failed.current) setError("");
     setState(next);
-    if (live.current.prompt !== written.current) {
-      edited.current = true;
-      setManual(true);
-    }
-    const text = next.status === "complete" ? next.final : next.draft;
-    if (text && !edited.current) {
-      const value = [base.current, text].filter(Boolean).join("\n");
-      written.current = value;
-      live.current.onChange(value);
-      if (next.status === "complete") {
-        id.current = null;
-        localStorage.removeItem(storageKey);
-      }
-    }
+    if (next.status === "complete" || next.status === "error") setView("final");
   }
 
   useEffect(() => {
@@ -80,9 +76,6 @@ export function Dictation({
     const saved = localStorage.getItem(storageKey);
     if (saved) {
       id.current = saved;
-      // A recovered recording must never replace a composer edited elsewhere.
-      edited.current = true;
-      setManual(true);
     }
     let polling = false;
     const timer = window.setInterval(() => {
@@ -104,6 +97,7 @@ export function Dictation({
         stopCapture.current();
         stopCapture.current = null;
         // Finalize against the captured session, never the newly selected thread.
+        const fallback = state?.status === "error" || state?.status === "cancelled";
         const recording = id.current;
         void queue.current.then(() =>
           recording && !failed.current ? call({ action: "finish", id: recording }) : undefined,
@@ -140,6 +134,9 @@ export function Dictation({
   }
 
   async function start() {
+    captureRequested.current = true;
+    setOpen(true);
+    setView("draft");
     setStarting(true);
     setError("");
     let media: MediaStream | undefined;
@@ -154,16 +151,12 @@ export function Dictation({
       if (context.sampleRate !== 16000) throw new Error("This browser cannot capture at 16 kHz.");
       await context.resume();
       const next = await call({ action: "start", project: project ?? "" });
-      if (!active.current) {
+      if (!active.current || !captureRequested.current) {
         await call({ action: "cancel", id: next.id });
         throw new Error("Composer changed while starting the microphone.");
       }
       id.current = next.id;
       localStorage.setItem(storageKey, next.id);
-      base.current = live.current.prompt;
-      written.current = base.current;
-      edited.current = false;
-      setManual(false);
       audio.current = [];
       sequence.current = 0;
       failed.current = false;
@@ -180,6 +173,10 @@ export function Dictation({
       processor.onaudioprocess = (event) => {
         if (count >= 16000 * 1800) return;
         const input = event.inputBuffer.getChannelData(0);
+        if (active.current)
+          setLevel(
+            Math.min(1, Math.sqrt(input.reduce((sum, x) => sum + x * x, 0) / input.length) * 8),
+          );
         for (const sample of input.subarray(0, 16000 * 1800 - count))
           pending.push(Math.max(-32768, Math.min(32767, Math.round(sample * 32767))));
         count += input.length;
@@ -219,28 +216,30 @@ export function Dictation({
     }
   }
 
-  async function cancel() {
-    stopCapture.current?.();
-    stopCapture.current = null;
-    await queue.current;
-    if (!id.current) return;
-    try {
-      await call({ action: "cancel", id: id.current });
-      if (!edited.current && live.current.prompt === written.current)
-        live.current.onChange(base.current);
-      id.current = null;
-      localStorage.removeItem(storageKey);
-      setState(null);
-      setError("");
-    } catch (cause) {
-      setError(String(cause));
-    }
+  async function close() {
+    // Closing the workspace never discards a recording. Stop capture and finish
+    // in the background; the mic button reopens the saved result.
+    captureRequested.current = false;
+    setOpen(false);
+    if (stopCapture.current) await finish();
+  }
+
+  function insert() {
+    if (!state) return;
+    const text = state.status === "complete" ? state.final : state.draft || state.final;
+    if (!text) return;
+    live.current.onChange([live.current.prompt, text].filter(Boolean).join("\n"));
+    id.current = null;
+    localStorage.removeItem(storageKey);
+    setState(null);
+    setOpen(false);
   }
 
   async function retryUpload() {
     stopCapture.current?.();
     stopCapture.current = null;
     await queue.current;
+    const fallback = state?.status === "error" || state?.status === "cancelled";
     const recording = id.current;
     if (!recording) return;
     setError("");
@@ -291,100 +290,185 @@ export function Dictation({
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  const busy = state?.status === "recording" || state?.status === "finalizing";
+  const fallback = state?.status === "error" || state?.status === "cancelled";
+  const recording = state?.status === "recording";
+  const refining = state?.status === "finalizing";
+  const seconds = Math.floor((state?.bytes ?? 0) / 32000);
+  const elapsed = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
   return (
-    <div className="px-3 py-2 text-xs" data-testid="dictation">
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          aria-label={state?.status === "recording" ? "Stop dictation" : "Start dictation"}
-          disabled={starting || state?.status === "finalizing"}
-          onClick={() => void (state?.status === "recording" ? finish() : start())}
+    <div className="px-3 py-2" data-testid="dictation">
+      <button
+        type="button"
+        aria-label={state ? "Open dictation" : "Start dictation"}
+        onClick={() => (state ? setOpen(true) : void start())}
+        className="flex items-center gap-2 min-h-12 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
+      >
+        <MicIcon className={`size-5 ${recording ? "text-red-500" : ""}`} />
+        {recording ? elapsed : refining ? "Finishing…" : state ? "Your recording" : "Dictate"}
+        {state?.status === "complete" && <CheckIcon className="size-4 text-emerald-500" />}
+      </button>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (!next) void close();
+        }}
+      >
+        <DialogPopup
+          showCloseButton={false}
+          className="flex h-[min(78dvh,800px)] w-[min(94vw,960px)] max-w-[960px] flex-col gap-0 overflow-hidden p-0"
         >
-          {state?.status === "recording" ? (
-            <SquareIcon className="size-4 text-red-500" />
-          ) : (
-            <MicIcon className="size-4" />
-          )}
-        </button>
-        <span role="status">
-          {starting
-            ? "Starting microphone…"
-            : state?.status === "recording"
-              ? "Listening · draft"
-              : state?.status === "finalizing"
-                ? "VibeVoice is refining your recording…"
-                : state?.status === "complete"
-                  ? "Transcription ready"
-                  : "Dictate"}
-        </span>
-        {state?.status === "error" && (
-          <button
-            type="button"
-            onClick={() => {
-              if (id.current)
-                void call({ action: "retry", id: id.current })
-                  .then(accept)
-                  .catch((cause: unknown) => setError(String(cause)));
-            }}
-          >
-            Retry saved audio
-          </button>
-        )}
-        {busy && (
-          <button type="button" onClick={() => void cancel()}>
-            Cancel dictation
-          </button>
-        )}
-        {failed.current && (
-          <button type="button" onClick={() => void retryUpload()}>
-            Retry audio upload
-          </button>
-        )}
-        {audio.current.length > 0 && (!busy || failed.current) && (
-          <button type="button" onClick={download}>
-            Save WAV
-          </button>
-        )}
-        {state && !busy && (
-          <button
-            type="button"
-            onClick={() => {
-              id.current = null;
-              localStorage.removeItem(storageKey);
-              setState(null);
-              setError("");
-            }}
-          >
-            Dismiss
-          </button>
-        )}
-      </div>
-      {(error || state?.error) && (
-        <p role="alert" className="mt-1 text-destructive">
-          {error || state?.error}
-        </p>
-      )}
-      {manual && state && (
-        <div className="mt-2">
-          <p>{state.final || state.draft}</p>
-          {state.status === "complete" && (
+          <header className="flex items-center justify-between border-b px-6 py-4">
+            <DialogTitle className="text-base font-medium">Dictation</DialogTitle>
             <button
               type="button"
-              onClick={() => {
-                const value = [live.current.prompt, state.final].filter(Boolean).join("\n");
-                written.current = value;
-                live.current.onChange(value);
-                id.current = null;
-                localStorage.removeItem(storageKey);
-                setState(null);
-              }}
+              aria-label="Close dictation, keep draft and audio"
+              onClick={() => void close()}
+              className="flex size-12 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent"
             >
-              Insert transcript (keep my edits)
+              <XIcon className="size-5" />
             </button>
+          </header>
+          <nav aria-label="Transcription view" className="grid grid-cols-2 border-b md:hidden">
+            <button
+              type="button"
+              aria-pressed={view === "draft"}
+              onClick={() => setView("draft")}
+              className={`min-h-12 text-sm ${view === "draft" ? "border-b-2 border-primary text-foreground" : "text-muted-foreground"}`}
+            >
+              Live draft
+            </button>
+            <button
+              type="button"
+              aria-pressed={view === "final"}
+              onClick={() => setView("final")}
+              className={`min-h-12 text-sm ${view === "final" ? "border-b-2 border-primary text-foreground" : "text-muted-foreground"}`}
+            >
+              {fallback ? "Saved draft" : "Refined"}
+            </button>
+          </nav>
+          <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-2">
+            <section
+              className={`min-h-0 overflow-auto px-6 py-5 md:block md:border-r ${view === "draft" ? "block" : "hidden"}`}
+              aria-label="Live draft"
+            >
+              <h3 className="mb-4 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                Live draft
+              </h3>
+              <p
+                className="whitespace-pre-wrap text-lg leading-relaxed text-muted-foreground"
+                data-testid="dictation-draft"
+              >
+                {state?.draft || (starting ? "Getting ready…" : "Speak naturally.")}
+              </p>
+            </section>
+            <section
+              className={`min-h-0 overflow-auto px-6 py-5 md:block ${view === "final" ? "block" : "hidden"}`}
+              aria-label="Transcript"
+            >
+              <h3 className="mb-4 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                {fallback
+                  ? "Draft saved"
+                  : state?.status === "complete"
+                    ? "Ready to use"
+                    : "Refined"}
+              </h3>
+              <p
+                className="whitespace-pre-wrap text-lg leading-relaxed"
+                data-testid="dictation-final"
+              >
+                {(fallback ? state?.draft || state?.final : state?.final) || (
+                  <span className="text-muted-foreground">
+                    Your finished words will appear here.
+                  </span>
+                )}
+              </p>
+            </section>
+          </div>
+          {(error || state?.error) && (
+            <p role="alert" className="border-t px-6 py-3 text-sm text-destructive">
+              {error || state?.error}
+            </p>
           )}
-        </div>
-      )}
+          <footer className="flex min-h-28 items-center justify-between gap-4 border-t px-6 py-4">
+            <span className="w-24 text-sm tabular-nums text-muted-foreground">{elapsed}</span>
+            <div className="flex flex-col items-center gap-2">
+              <button
+                type="button"
+                aria-label={
+                  !state && !starting
+                    ? "Retry microphone"
+                    : recording
+                      ? "Stop dictation"
+                      : fallback
+                        ? "Insert draft"
+                        : state?.status === "complete"
+                          ? "Insert transcript"
+                          : "Finishing dictation"
+                }
+                disabled={starting || refining || (fallback && !state?.draft && !state?.final)}
+                onClick={() => void (recording ? finish() : !state ? start() : insert())}
+                className={`flex size-16 items-center justify-center rounded-full transition-shadow disabled:opacity-60 ${recording ? "bg-red-500 text-white" : "bg-primary text-primary-foreground"}`}
+                style={
+                  recording
+                    ? {
+                        boxShadow: `0 0 0 ${4 + level * 14}px rgb(239 68 68 / ${0.08 + level * 0.15})`,
+                      }
+                    : undefined
+                }
+              >
+                {starting || refining ? (
+                  <LoaderCircleIcon className="size-6 motion-safe:animate-spin" />
+                ) : recording ? (
+                  <SquareIcon className="size-6 fill-current" />
+                ) : (
+                  <CheckIcon className="size-7" />
+                )}
+              </button>
+              <span role="status" className="text-xs text-muted-foreground">
+                {starting
+                  ? "Getting ready"
+                  : recording
+                    ? "Listening"
+                    : refining
+                      ? "Finishing"
+                      : fallback
+                        ? "Use draft"
+                        : state?.status === "complete"
+                          ? "Use transcript"
+                          : "Retry microphone"}
+              </span>
+            </div>
+            <div className="flex w-24 justify-end gap-2">
+              {(state?.status === "error" || failed.current) && (
+                <button
+                  type="button"
+                  className="min-h-12 min-w-12 text-sm underline"
+                  onClick={() => {
+                    if (failed.current) void retryUpload();
+                    else if (id.current)
+                      void call({ action: "retry", id: id.current })
+                        .then(accept)
+                        .catch((cause: unknown) => setError(String(cause)));
+                  }}
+                >
+                  Retry
+                </button>
+              )}
+              {audio.current.length > 0 && (
+                <button
+                  type="button"
+                  aria-label="Save audio"
+                  title="Save audio"
+                  onClick={download}
+                  className="flex size-12 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent"
+                >
+                  <DownloadIcon className="size-5" />
+                </button>
+              )}
+            </div>
+          </footer>
+        </DialogPopup>
+      </Dialog>
     </div>
   );
 }

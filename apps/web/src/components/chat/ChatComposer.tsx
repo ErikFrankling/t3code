@@ -1933,7 +1933,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   );
   const [dictationBusy, setDictationBusy] = useState(false);
   const sendDisabledReason =
-    (dictationBusy ? "Finish or cancel dictation before sending" : null) ??
+    (dictationBusy ? "Finish dictation before sending" : null) ??
     externalSendDisabledReason ??
     (multipleModelSelections?.length === 0 ? "Select at least one model." : null) ??
     (activePendingProgress
