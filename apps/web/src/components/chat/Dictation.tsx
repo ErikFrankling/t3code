@@ -315,6 +315,7 @@ export function Dictation({
       >
         <DialogPopup
           showCloseButton={false}
+          style={{ background: "var(--background)", backdropFilter: "none" }}
           className="flex h-[min(78dvh,800px)] w-[min(94vw,960px)] max-w-[960px] flex-col gap-0 overflow-hidden p-0"
         >
           <header className="flex items-center justify-between border-b px-6 py-4">
