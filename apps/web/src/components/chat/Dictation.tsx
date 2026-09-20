@@ -421,7 +421,7 @@ export function Dictation({
               {error || state?.error}
             </p>
           )}
-          <footer className="flex min-h-28 items-center justify-between gap-4 border-t px-6 py-4">
+          <footer className="grid min-h-28 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1 border-t px-4 py-4 sm:gap-4 sm:px-6">
             <span className="w-24 text-sm tabular-nums text-muted-foreground">{elapsed}</span>
             <div className="flex flex-col items-center gap-2">
               <button
@@ -470,7 +470,7 @@ export function Dictation({
                           : "Retry microphone"}
               </span>
             </div>
-            <div className="flex w-24 justify-end gap-2">
+            <div className="flex w-24 justify-self-end justify-end">
               {(fallback || failed.current) && (
                 <button
                   type="button"
