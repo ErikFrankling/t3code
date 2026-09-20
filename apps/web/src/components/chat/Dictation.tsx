@@ -66,7 +66,7 @@ export function Dictation({
 
   function accept(next: DictationState) {
     if (!active.current || next.id !== id.current) return;
-    if (!failed.current) setError("");
+    if (!failed.current && (next.status !== "recording" || stopCapture.current)) setError("");
     setState(next);
     if (next.status === "complete" || next.status === "error") setView("final");
   }
@@ -97,7 +97,9 @@ export function Dictation({
         stopCapture.current();
         stopCapture.current = null;
         // Finalize against the captured session, never the newly selected thread.
-        const fallback = state?.status === "error" || state?.status === "cancelled";
+        const stoppedWithError = Boolean(error) && !stopCapture.current && !starting;
+        const fallback =
+          state?.status === "error" || state?.status === "cancelled" || stoppedWithError;
         const recording = id.current;
         void queue.current.then(() =>
           recording && !failed.current ? call({ action: "finish", id: recording }) : undefined,
@@ -239,7 +241,8 @@ export function Dictation({
     stopCapture.current?.();
     stopCapture.current = null;
     await queue.current;
-    const fallback = state?.status === "error" || state?.status === "cancelled";
+    const stoppedWithError = Boolean(error) && !stopCapture.current && !starting;
+    const fallback = state?.status === "error" || state?.status === "cancelled" || stoppedWithError;
     const recording = id.current;
     if (!recording) return;
     setError("");
@@ -290,9 +293,10 @@ export function Dictation({
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  const fallback = state?.status === "error" || state?.status === "cancelled";
-  const recording = state?.status === "recording";
-  const refining = state?.status === "finalizing";
+  const stoppedWithError = Boolean(error) && !stopCapture.current && !starting;
+  const fallback = state?.status === "error" || state?.status === "cancelled" || stoppedWithError;
+  const recording = state?.status === "recording" && !stoppedWithError;
+  const refining = state?.status === "finalizing" && !stoppedWithError;
   const seconds = Math.floor((state?.bytes ?? 0) / 32000);
   const elapsed = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
   return (
@@ -440,7 +444,7 @@ export function Dictation({
               </span>
             </div>
             <div className="flex w-24 justify-end gap-2">
-              {(state?.status === "error" || failed.current) && (
+              {(fallback || failed.current) && (
                 <button
                   type="button"
                   className="min-h-12 min-w-12 text-sm underline"
