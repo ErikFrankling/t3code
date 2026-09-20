@@ -97,7 +97,7 @@ export function Dictation({
         stopCapture.current();
         stopCapture.current = null;
         // Finalize against the captured session, never the newly selected thread.
-        const stoppedWithError = Boolean(error) && !stopCapture.current && !starting;
+        const stoppedWithError = Boolean(error) && Boolean(state) && !stopCapture.current && !starting;
         const fallback =
           state?.status === "error" || state?.status === "cancelled" || stoppedWithError;
         const recording = id.current;
@@ -241,7 +241,7 @@ export function Dictation({
     stopCapture.current?.();
     stopCapture.current = null;
     await queue.current;
-    const stoppedWithError = Boolean(error) && !stopCapture.current && !starting;
+    const stoppedWithError = Boolean(error) && Boolean(state) && !stopCapture.current && !starting;
     const fallback = state?.status === "error" || state?.status === "cancelled" || stoppedWithError;
     const recording = id.current;
     if (!recording) return;
@@ -293,7 +293,7 @@ export function Dictation({
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  const stoppedWithError = Boolean(error) && !stopCapture.current && !starting;
+  const stoppedWithError = Boolean(error) && Boolean(state) && !stopCapture.current && !starting;
   const fallback = state?.status === "error" || state?.status === "cancelled" || stoppedWithError;
   const recording = state?.status === "recording" && !stoppedWithError;
   const refining = state?.status === "finalizing" && !stoppedWithError;
