@@ -1,9 +1,13 @@
+import * as HttpBody from "effect/unstable/http/HttpBody";
 import * as Mime from "effect/unstable/http/Mime";
+import { DictationDelivery } from "./DictationDelivery.ts";
+import { normalizeDispatchCommand } from "./orchestration/Normalizer.ts";
 import {
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   EnvironmentHttpApi,
   DictationRequest,
+  DictationState,
 } from "@t3tools/contracts";
 import { isDevProxiedPath } from "@t3tools/shared/devProxy";
 import { decodeOtlpTraceRecords } from "@t3tools/shared/observability";
@@ -659,35 +663,100 @@ export const staticAndDevRouteLayer = Layer.unwrap(
 // forwarded; ownership uses the authenticated subject, stable across sessions.
 const decodeDictationRequest = Schema.decodeUnknownEffect(DictationRequest);
 
-export const dictationRouteLayer = HttpRouter.add(
-  "POST",
-  "/api/dictation",
+export const dictationRouteLayer = Layer.unwrap(
   Effect.gen(function* () {
-    const session = yield* authenticateRawRouteWithScope(AuthOrchestrationOperateScope);
-    const request = yield* HttpServerRequest.HttpServerRequest;
-    const client = yield* HttpClient.HttpClient;
-    const body = yield* decodeDictationRequest(yield* request.json);
-    const response = yield* client.post(
-      process.env.T3CODE_STT_URL ?? "http://127.0.0.1:8781/dictation",
-      { body: HttpBody.jsonUnsafe(body), headers: { "X-STT-Owner": session.subject } },
-    );
-    return HttpServerResponse.text(yield* response.text, {
-      status: response.status,
-      contentType: response.headers["content-type"] ?? "application/json",
-    });
-  }).pipe(
-    Effect.catchTags({
-      EnvironmentAuthInvalidError: HttpServerRespondable.toResponse,
-      EnvironmentInternalError: HttpServerRespondable.toResponse,
-      EnvironmentScopeRequiredError: HttpServerRespondable.toResponse,
-    }),
-    Effect.catch(() =>
-      Effect.succeed(
-        HttpServerResponse.text(
-          "The local speech service is unavailable or the request is invalid.",
-          { status: 502 },
+    const deliveries = yield* DictationDelivery;
+    return HttpRouter.add(
+      "POST",
+      "/api/dictation",
+      Effect.gen(function* () {
+        const session = yield* authenticateRawRouteWithScope(AuthOrchestrationOperateScope);
+        const request = yield* HttpServerRequest.HttpServerRequest;
+        const client = yield* HttpClient.HttpClient;
+        const body = yield* decodeDictationRequest(yield* request.json);
+        if (body.action === "send") {
+          if (!body.id || body.command?.type !== "thread.turn.start") {
+            return HttpServerResponse.text("A recording and target chat are required.", {
+              status: 400,
+            });
+          }
+          const recordingId = body.id;
+          const marker = `[dictation:${recordingId}]`;
+          if (body.command.message.text.split(marker).length !== 2) {
+            return HttpServerResponse.text("Invalid dictation message.", { status: 400 });
+          }
+          const existing = deliveries.get(session.subject, body.id);
+          if (existing && existing.command.threadId !== body.command.threadId) {
+            return HttpServerResponse.text(
+              "This recording is already queued for its original chat.",
+              { status: 409 },
+            );
+          }
+          if (!existing) {
+            const command = yield* normalizeDispatchCommand(body.command);
+            if (command.type !== "thread.turn.start")
+              return HttpServerResponse.text("Invalid turn.", { status: 400 });
+            yield* Effect.tryPromise(() =>
+              deliveries.enqueue({
+                id: recordingId,
+                owner: session.subject,
+                command,
+                marker,
+                draft: body.draft || "",
+              }),
+            );
+          }
+        }
+        const queued = body.id ? deliveries.get(session.subject, body.id) : undefined;
+        if (body.action === "send" && queued) {
+          // Accept the durable handoff even when the speech process is unavailable.
+          // Worker requests carry the authenticated owner; they cannot read another
+          // user's recording. The submitted draft remains available as fallback.
+          return HttpServerResponse.jsonUnsafe({
+            id: queued.id,
+            status: "finalizing",
+            draft: queued.draft,
+            final: "",
+            error: "",
+            bytes: 0,
+            delivery: queued.status,
+          });
+        }
+        const response = yield* client.post(
+          process.env.T3CODE_STT_URL ?? "http://127.0.0.1:8781/dictation",
+          { body: HttpBody.jsonUnsafe(body), headers: { "X-STT-Owner": session.subject } },
+        );
+        const raw = yield* response.text;
+        if (response.status !== 200) {
+          yield* Effect.logWarning("dictation.speech_request_failed", {
+            recordingId: body.id,
+            action: body.action,
+            status: response.status,
+          });
+          return HttpServerResponse.text(raw, { status: response.status });
+        }
+        const state = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(DictationState))(raw);
+        const delivery = deliveries.get(session.subject, state.id);
+        return HttpServerResponse.jsonUnsafe({
+          ...state,
+          ...(delivery ? { delivery: delivery.status, deliveryError: delivery.error } : {}),
+        });
+      }).pipe(
+        Effect.catchTags({
+          EnvironmentAuthInvalidError: HttpServerRespondable.toResponse,
+          EnvironmentInternalError: HttpServerRespondable.toResponse,
+          EnvironmentScopeRequiredError: HttpServerRespondable.toResponse,
+        }),
+        Effect.tapError((cause) => Effect.logError("dictation.request_failed", { cause })),
+        Effect.catch(() =>
+          Effect.succeed(
+            HttpServerResponse.text(
+              "The local speech service is unavailable or the request is invalid.",
+              { status: 502 },
+            ),
+          ),
         ),
       ),
-    ),
-  ),
+    );
+  }),
 );

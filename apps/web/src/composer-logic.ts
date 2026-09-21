@@ -36,7 +36,7 @@ export function composerSubmissionIntentForEnter(input: {
   const requiresModifier =
     input.sendShortcut === "mod-enter" ||
     (input.sendShortcut === "mod-enter-multiline" && /[\r\n]/.test(input.prompt ?? ""));
-  if (input.isMobileViewport || (requiresModifier && !input.modifierKey)) return null;
+  if ((requiresModifier && !input.modifierKey)) return null;
   if (input.shiftKey && !(requiresModifier && input.modifierKey && input.isRunning)) return null;
   if (input.isRunning && input.modifierKey && (!requiresModifier || input.shiftKey)) {
     return "alternate";
