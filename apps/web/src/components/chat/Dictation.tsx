@@ -30,14 +30,12 @@ async function call(body: DictationRequest): Promise<DictationState> {
 export function Dictation({
   target,
   project,
-  prompt,
-  onChange,
+  onSend,
   onBusyChange,
 }: {
   target: string;
   project: string | null;
-  prompt: string;
-  onChange: (text: string) => void;
+  onSend: (id: string, draft: string, uploaded: Promise<void>) => Promise<void>;
   onBusyChange: (busy: boolean) => void;
 }) {
   const storageKey = `t3-dictation:${target}`;
@@ -61,8 +59,11 @@ export function Dictation({
     });
     return () => cancelAnimationFrame(frame);
   }, [state?.draft, state?.final, view, open]);
-  const live = useRef({ prompt, onChange });
-  live.current = { prompt, onChange };
+  const sender = useRef(onSend);
+  sender.current = onSend;
+  const latestState = useRef(state);
+  latestState.current = state;
+  const handoff = useRef<Promise<void> | null>(null);
   const active = useRef(true);
   const captureRequested = useRef(false);
   const id = useRef<string | null>(null);
@@ -80,6 +81,14 @@ export function Dictation({
 
   function accept(next: DictationState) {
     if (!active.current || next.id !== id.current) return;
+    if (next.delivery === "sent" || next.delivery === "queued" || next.delivery === "ready") {
+      localStorage.removeItem(storageKey);
+      id.current = null;
+      setState(null);
+      setOpen(false);
+      onBusyChange(false);
+      return;
+    }
     if (!failed.current && (next.status !== "recording" || stopCapture.current)) setError("");
     setState(next);
     if (next.status === "complete" || next.status === "error") setView("final");
@@ -107,19 +116,7 @@ export function Dictation({
     return () => {
       active.current = false;
       window.clearInterval(timer);
-      if (stopCapture.current) {
-        stopCapture.current();
-        stopCapture.current = null;
-        // Finalize against the captured session, never the newly selected thread.
-        const stoppedWithError =
-          Boolean(error) && Boolean(state) && !stopCapture.current && !starting;
-        const fallback =
-          state?.status === "error" || state?.status === "cancelled" || stoppedWithError;
-        const recording = id.current;
-        void queue.current.then(() =>
-          recording && !failed.current ? call({ action: "finish", id: recording }) : undefined,
-        );
-      }
+      if (stopCapture.current) void finish();
     };
   }, [storageKey]);
 
@@ -222,42 +219,54 @@ export function Dictation({
   }
 
   async function finish() {
+    if (handoff.current) return handoff.current;
+    const recording = id.current;
+    if (!recording) return;
+    const send = sender.current;
+    const draft = latestState.current?.draft ?? "";
     stopCapture.current?.();
     stopCapture.current = null;
-    await queue.current;
-    if (!id.current || failed.current) return;
-    try {
-      accept(await call({ action: "finish", id: id.current }));
-    } catch (cause) {
-      setError(String(cause));
-    }
+    if (active.current) setOpen(false);
+    // Invoke the original chat callback now so it snapshots model, destination,
+    // attachments and typed text before navigation. Uploads continue on unmount.
+    const uploaded = queue.current.then(() => {
+      if (failed.current)
+        throw new Error("Upload interrupted. Your recording is retained; retry the upload.");
+    });
+    handoff.current = send(recording, draft, uploaded)
+      .then(() => {
+        localStorage.removeItem(storageKey);
+        if (id.current === recording) id.current = null;
+        if (active.current) {
+          setState(null);
+          setError("");
+          onBusyChange(false);
+        }
+      })
+      .catch((cause: unknown) => {
+        console.error("dictation.handoff_failed", { recordingId: recording, error: String(cause) });
+        if (active.current) {
+          setError(String(cause));
+          setOpen(true);
+        }
+      })
+      .finally(() => {
+        handoff.current = null;
+      });
+    return handoff.current;
   }
 
   async function close() {
-    // Closing the workspace never discards a recording. Stop capture and finish
-    // in the background; the mic button reopens the saved result.
+    // Closing stops capture and hands delivery to the original chat.
     captureRequested.current = false;
     setOpen(false);
     if (stopCapture.current) await finish();
-  }
-
-  function insert() {
-    if (!state) return;
-    const text = state.status === "complete" ? state.final : state.draft || state.final;
-    if (!text) return;
-    live.current.onChange([live.current.prompt, text].filter(Boolean).join("\n"));
-    id.current = null;
-    localStorage.removeItem(storageKey);
-    setState(null);
-    setOpen(false);
   }
 
   async function retryUpload() {
     stopCapture.current?.();
     stopCapture.current = null;
     await queue.current;
-    const stoppedWithError = Boolean(error) && Boolean(state) && !stopCapture.current && !starting;
-    const fallback = state?.status === "error" || state?.status === "cancelled" || stoppedWithError;
     const recording = id.current;
     if (!recording) return;
     setError("");
@@ -270,7 +279,7 @@ export function Dictation({
         accept(await call({ action: "append", id: recording, sequence: n, audio: btoa(binary) }));
       }
       failed.current = false;
-      accept(await call({ action: "finish", id: recording }));
+      await finish();
     } catch (cause) {
       setError(`Retry failed; your audio is still available to download. ${String(cause)}`);
     }
@@ -401,7 +410,7 @@ export function Dictation({
                 {fallback
                   ? "Draft saved"
                   : state?.status === "complete"
-                    ? "Ready to use"
+                    ? "Ready to send"
                     : "Refined"}
               </h3>
               <p
@@ -432,13 +441,13 @@ export function Dictation({
                     : recording
                       ? "Stop dictation"
                       : fallback
-                        ? "Insert draft"
+                        ? "Send draft"
                         : state?.status === "complete"
-                          ? "Insert transcript"
+                          ? "Send transcript"
                           : "Finishing dictation"
                 }
                 disabled={starting || refining || (fallback && !state?.draft && !state?.final)}
-                onClick={() => void (recording ? finish() : !state ? start() : insert())}
+                onClick={() => void (!state ? start() : finish())}
                 className={`flex size-16 items-center justify-center rounded-full transition-shadow disabled:opacity-60 ${recording ? "bg-red-500 text-white" : "bg-primary text-primary-foreground"}`}
                 style={
                   recording
@@ -464,9 +473,9 @@ export function Dictation({
                     : refining
                       ? "Finishing"
                       : fallback
-                        ? "Use draft"
+                        ? "Send draft"
                         : state?.status === "complete"
-                          ? "Use transcript"
+                          ? "Send transcript"
                           : "Retry microphone"}
               </span>
             </div>
@@ -477,10 +486,7 @@ export function Dictation({
                   className="min-h-12 min-w-12 text-sm underline"
                   onClick={() => {
                     if (failed.current) void retryUpload();
-                    else if (id.current)
-                      void call({ action: "retry", id: id.current })
-                        .then(accept)
-                        .catch((cause: unknown) => setError(String(cause)));
+                    else void finish();
                   }}
                 >
                   Retry
