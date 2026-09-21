@@ -1447,6 +1447,7 @@ export interface ChatComposerProps {
 
   // Callbacks
   onCompactContext: () => void;
+  onDictationSend: (id: string, draft: string, uploaded: Promise<void>) => Promise<void>;
   onSend: (e?: { preventDefault: () => void }, intent?: ComposerSubmissionIntent) => void;
   onInterrupt: () => void;
   onImplementPlanInNewThread: () => void;
@@ -1564,6 +1565,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     onPageScrollRelease,
     onCompactContext,
     onSend,
+    onDictationSend,
     onInterrupt,
     onImplementPlanInNewThread,
     onRespondToApproval,
@@ -2148,8 +2150,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     key: 0,
     active: false,
   });
-  const isComposerCollapsedMobile =
-    isMobileViewport && !forceExpandedOnMobile && !isComposerFocused && !hasMultilinePrompt;
+  // Keep the editor stable while dictating and opening the mobile keyboard.
+  const isComposerCollapsedMobile = false;
 
   // ------------------------------------------------------------------
   // Refs
@@ -4742,14 +4744,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     composerSubmissionError !== null ||
     providerInputSubmissionError !== null ||
     hasImageAttachmentAttention;
-  const isComposerResting = shouldUseRestingComposerLayout({
-    isExistingThread: routeKind === "server" && activeThreadId !== null,
-    isMobileViewport,
-    isScrollCollapsed: isComposerScrollCollapsed,
-    hasExpandedChrome: composerHasExpandedChrome,
-    hasMultilinePrompt,
-    timelineOverflows,
-  });
+  const isComposerResting = false;
   const expandedComposerImages = isComposerResting
     ? standaloneComposerImages.filter((image) => pendingSnapShotIdSet.has(image.id))
     : standaloneComposerImages;
@@ -6391,8 +6386,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               target={composerTargetKey(composerDraftTarget)}
               project={gitCwd}
               onBusyChange={setDictationBusy}
-              prompt={prompt}
-              onChange={(text) => setComposerDraftPrompt(composerDraftTarget, text)}
+              onSend={onDictationSend}
             />
             {showCollapsedMobilePromptRow ? (
               <div className="flex items-center justify-between gap-2 px-3 py-2">
