@@ -22,7 +22,8 @@ import {
   type ChatFileAttachment,
   DEFAULT_MODEL,
   type EnvironmentId,
-  type MessageId,
+  MessageId,
+  CommandId,
   type ModelSelection,
   type ProjectScript,
   type ProjectId,
@@ -7281,6 +7282,7 @@ export default function ChatView(props: ChatViewProps) {
     },
     /** A queued message being sent now instead of the live composer draft. */
     queuedMessage?: QueuedComposerMessage,
+    dictation?: { id: string; draft: string; uploaded: Promise<void> },
   ) => {
     e?.preventDefault();
     // Typed out in full rather than picked from the menu. Attachments or contexts
@@ -7290,6 +7292,7 @@ export default function ChatView(props: ChatViewProps) {
       usageLimitsKey !== null &&
       !directAnnotation &&
       !queuedMessage &&
+      !dictation &&
       !composerHasNonPromptContent &&
       isUsageLimitsCommand(promptRef.current)
     ) {
@@ -7353,7 +7356,7 @@ export default function ChatView(props: ChatViewProps) {
     if (activePendingProgress) {
       // A queued message waits until the question is answered; it must not
       // be submitted as the answer.
-      if (directAnnotation || queuedMessage) {
+      if (directAnnotation || queuedMessage || dictation) {
         notifyDirectAnnotationAttached();
         return;
       }
@@ -7365,7 +7368,8 @@ export default function ChatView(props: ChatViewProps) {
       notifyDirectAnnotationAttached();
       return;
     }
-    const multipleModelSelections = queuedMessage ? null : sendCtx.multipleModelSelections;
+    const multipleModelSelections =
+      queuedMessage || dictation ? null : sendCtx.multipleModelSelections;
     if (
       multipleModelSelections !== null &&
       serverConfig?.environment.capabilities.requiredWorktreeBootstrap !== true
@@ -7440,13 +7444,15 @@ export default function ChatView(props: ChatViewProps) {
         : sendContextPreviewAnnotations;
     // A direct "send annotation" writes the draft and sends in the same tick; the reference
     // must be in the text now, not after the next render.
-    const promptForSend = queuedMessage
+    let promptForSend = queuedMessage
       ? queuedMessage.prompt
       : directAnnotation
         ? ensureInlineContextReferences(promptRef.current, [
             previewAnnotationContextReference(directAnnotation.annotation),
           ])
         : promptRef.current;
+    const dictationMarker = dictation ? `[dictation:${dictation.id}]` : "";
+    if (dictation) promptForSend = [promptForSend, dictationMarker].filter(Boolean).join("\n");
     const {
       trimmedPrompt: trimmed,
       sendableTerminalContexts: sendableComposerTerminalContexts,
@@ -7517,6 +7523,7 @@ export default function ChatView(props: ChatViewProps) {
       return;
     }
     if (
+      !dictation &&
       !directAnnotation &&
       !queuedMessage &&
       sendInteractionModeEnabled &&
@@ -7631,6 +7638,7 @@ export default function ChatView(props: ChatViewProps) {
     }
     if (
       !queuedMessage &&
+      !dictation &&
       !directAnnotation &&
       phase === "running" &&
       activeThreadKey &&
@@ -7903,7 +7911,7 @@ export default function ChatView(props: ChatViewProps) {
       submissionIntent: resolvedSubmissionIntent,
     });
 
-    const messageIdForSend = newMessageId();
+    const messageIdForSend = dictation ? MessageId.make(dictation.id) : newMessageId();
     const messageCreatedAt = new Date().toISOString();
     const turnAttachmentsPromise = Promise.all(
       composerAttachmentsSnapshot.map(async (attachment) => {
@@ -8234,7 +8242,12 @@ export default function ChatView(props: ChatViewProps) {
       {
         id: messageIdForSend,
         role: "user",
-        text: outgoingMessageText,
+        text: dictation
+          ? outgoingMessageText.replace(
+              dictationMarker,
+              () => dictation.draft || "Processing recording…",
+            )
+          : outgoingMessageText,
         ...(optimisticAttachments.length > 0 ? { attachments: optimisticAttachments } : {}),
         ...(outgoingMessageContext !== undefined ? { context: outgoingMessageContext } : {}),
         turnId: null,
@@ -8271,6 +8284,8 @@ export default function ChatView(props: ChatViewProps) {
       }
     }
     let titleSeed = assistantCitationsToPlainText(stripInlineContextReferences(trimmed)).trim();
+    if (dictation)
+      titleSeed = titleSeed.replace(dictationMarker, () => dictation.draft || "Voice message");
     if (!titleSeed) {
       if (firstComposerImageName) {
         titleSeed = `Image: ${firstComposerImageName}`;
@@ -8376,50 +8391,70 @@ export default function ChatView(props: ChatViewProps) {
       if (backgroundThreadRef) {
         beginBackgroundDraftSubmissionByRef(backgroundThreadRef);
       }
-      const startPromise = startThreadTurn({
-        environmentId,
-        input: {
-          threadId: threadIdForSend,
-          message: {
-            messageId: messageIdForSend,
-            role: "user",
-            text: outgoingMessageText,
-            attachments: turnAttachmentsResult.value,
-            ...(() => {
-              const context = buildOutgoingMessageContext(
-                turnAttachmentsResult.value.map((attachment, index) =>
-                  "id" in attachment && attachment.id !== undefined
-                    ? attachment.id
-                    : composerAttachmentsSnapshot[index]!.id,
-                ),
-              );
-              if (context === undefined) return {};
-              // Read the capability at dispatch time: the upload and persistence
-              // awaits above can span a server reconnect that changes it. Servers
-              // from before inline context drop the records and forward the links
-              // as literal text, so their turns carry the payload the legacy way.
-              const supportsInlineMessageContext =
-                appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId)?.environment
-                  .capabilities.inlineMessageContext === true;
-              if (!supportsInlineMessageContext) {
-                return {
-                  text: serializeLegacyContextMessage({
-                    text: outgoingMessageText,
-                    records: context.records,
-                  }),
-                };
-              }
-              return { context };
-            })(),
-          },
-          modelSelection: ctxSelectedModelSelection,
-          titleSeed: title,
-          runtimeMode,
-          interactionMode: sendInteractionMode,
-          ...(bootstrap ? { bootstrap } : {}),
-          createdAt: messageCreatedAt,
+      const turnInput = {
+        threadId: threadIdForSend,
+        message: {
+          messageId: messageIdForSend,
+          role: "user" as const,
+          text: outgoingMessageText,
+          attachments: turnAttachmentsResult.value,
+          ...(() => {
+            const context = buildOutgoingMessageContext(
+              turnAttachmentsResult.value.map((attachment, index) =>
+                "id" in attachment && attachment.id !== undefined
+                  ? attachment.id
+                  : composerAttachmentsSnapshot[index]!.id,
+              ),
+            );
+            if (context === undefined) return {};
+            // Read the capability at dispatch time: the upload and persistence
+            // awaits above can span a server reconnect that changes it. Servers
+            // from before inline context drop the records and forward the links
+            // as literal text, so their turns carry the payload the legacy way.
+            const supportsInlineMessageContext =
+              appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId)?.environment
+                .capabilities.inlineMessageContext === true;
+            if (!supportsInlineMessageContext) {
+              return {
+                text: serializeLegacyContextMessage({
+                  text: outgoingMessageText,
+                  records: context.records,
+                }),
+              };
+            }
+            return { context };
+          })(),
         },
-      });
+        modelSelection: ctxSelectedModelSelection,
+        titleSeed: title,
+        runtimeMode,
+        interactionMode: sendInteractionMode,
+        ...(bootstrap ? { bootstrap } : {}),
+        createdAt: messageCreatedAt,
+      };
+      const startPromise = dictation
+        ? settlePromise(async () => {
+            await dictation.uploaded;
+            const response = await fetch("/api/dictation", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "send",
+                id: dictation.id,
+                draft: dictation.draft,
+                command: {
+                  ...turnInput,
+                  type: "thread.turn.start",
+                  commandId: CommandId.make(dictation.id),
+                },
+              }),
+              signal: AbortSignal.timeout(30000),
+            });
+            if (!response.ok) throw new Error(await response.text());
+            return response.json();
+          })
+        : startThreadTurn({ environmentId, input: turnInput });
       if (backgroundThreadRef) {
         markPromotedDraftThreadByRef(backgroundThreadRef);
         try {
@@ -8535,20 +8570,23 @@ export default function ChatView(props: ChatViewProps) {
           const next = existing.filter((message) => message.id !== messageIdForSend);
           return next.length === existing.length ? existing : next;
         });
-        promptRef.current = messageTextForSend;
+        const restoredPrompt = dictation
+          ? messageTextForSend.replace(dictationMarker, () => dictation.draft)
+          : messageTextForSend;
+        promptRef.current = restoredPrompt;
         const retryComposerImages = composerImagesSnapshot.map(cloneComposerImageForRetry);
         composerImagesRef.current = retryComposerImages;
         composerFilesRef.current = composerFilesSnapshot;
         composerTerminalContextsRef.current = composerTerminalContextsSnapshot;
-        setComposerDraftPrompt(composerDraftTarget, messageTextForSend);
+        setComposerDraftPrompt(composerDraftTarget, restoredPrompt);
         addComposerDraftImages(composerDraftTarget, retryComposerImages);
         addComposerDraftFiles(composerDraftTarget, composerFilesSnapshot);
         setComposerDraftTerminalContexts(composerDraftTarget, composerTerminalContextsSnapshot);
         setComposerDraftPreviewAnnotations(composerDraftTarget, composerPreviewAnnotationsSnapshot);
         setComposerDraftReviewComments(composerDraftTarget, composerReviewCommentsSnapshot);
         composerRef.current?.resetCursorState({
-          cursor: collapseExpandedComposerCursor(messageTextForSend, messageTextForSend.length),
-          prompt: messageTextForSend,
+          cursor: collapseExpandedComposerCursor(restoredPrompt, restoredPrompt.length),
+          prompt: restoredPrompt,
           detectTrigger: true,
         });
       }
@@ -8595,12 +8633,14 @@ export default function ChatView(props: ChatViewProps) {
       }
     }
     sendInFlightRef.current = false;
+    if (dictation) resetLocalDispatch();
     if (!turnStartSucceeded) {
       setDockedDraftHeroThreadKey((currentThreadKey) =>
         currentThreadKey === activeThreadKey ? null : currentThreadKey,
       );
       resetLocalDispatch();
     }
+    return turnStartSucceeded;
   };
 
   // Sends the oldest queued message once it is due: a tool call finished
@@ -10144,6 +10184,19 @@ export default function ChatView(props: ChatViewProps) {
                             onPageScrollRelease={onComposerPageScrollRelease}
                             onCompactContext={onCompactContext}
                             onSend={onSend}
+                            onDictationSend={async (id, draft, uploaded) => {
+                              if (
+                                !(await onSend(undefined, "foreground", undefined, undefined, {
+                                  id,
+                                  draft,
+                                  uploaded,
+                                }))
+                              ) {
+                                throw new Error(
+                                  "The recording is saved, but this chat could not accept the message. Retry sending.",
+                                );
+                              }
+                            }}
                             onInterrupt={onInterrupt}
                             onImplementPlanInNewThread={onImplementPlanInNewThread}
                             onRespondToApproval={onRespondToApproval}

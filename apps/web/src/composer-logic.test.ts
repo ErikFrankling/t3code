@@ -119,7 +119,7 @@ describe("composerSubmissionIntentForEnter", () => {
     ).toBe("foreground");
   });
 
-  it("inserts a newline for plain Enter on mobile", () => {
+  it("submits plain Enter on mobile", () => {
     expect(
       composerSubmissionIntentForEnter({
         isMobileViewport: true,
@@ -127,7 +127,7 @@ describe("composerSubmissionIntentForEnter", () => {
         modifierKey: false,
         isDraftThread: true,
       }),
-    ).toBeNull();
+    ).toBe("foreground");
   });
 
   it("inserts a newline for Shift+Enter", () => {
