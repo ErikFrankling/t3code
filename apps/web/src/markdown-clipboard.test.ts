@@ -109,6 +109,20 @@ function renderedCodeBlock(lines: ReadonlyArray<string>): FakeElement {
 }
 
 describe("serializeRenderedMarkdownFragment", () => {
+  it("preserves a rendered Mermaid diagram as a fence when copying a message", () => {
+    const source = "```mermaid\nflowchart LR\n  A --> B\n```";
+    const container = new FakeElement("DIV").append(
+      new FakeElement("P").append(new FakeText("Diagram:")),
+      new FakeElement("DIV", ["chat-markdown-codeblock"], {
+        "data-markdown-copy": `\n\n${source}\n\n`,
+      }).append(new FakeElement("SVG").append(new FakeElement("TEXT").append(new FakeText("A B")))),
+      new FakeElement("P").append(new FakeText("Done.")),
+    );
+    expect(serializeRenderedMarkdownFragment(asNode(container))).toBe(
+      `Diagram:\n\n${source}\n\nDone.`,
+    );
+  });
+
   it("copies a popover context reference once, without its details or nested label", () => {
     const reference = "[Review comment](t3-context://v1/review-comment/review-1)";
     const container = new FakeElement("DIV").append(
