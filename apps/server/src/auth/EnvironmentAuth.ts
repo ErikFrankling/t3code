@@ -819,9 +819,22 @@ export const make = Effect.gen(function* () {
     ServerAuthInvalidCredentialError | ServerAuthInternalError
   > => {
     if (!devAuth?.matches(credential)) {
-      return bootstrapCredentials
+      const consumed = bootstrapCredentials
         .consume(credential, input)
         .pipe(Effect.mapError(toBootstrapExchangeError));
+      // Clients that insist on a pairing code (the mobile app) accept any code
+      // under unsafe-no-auth, and get the same administrative scopes.
+      return noAuthEnabled
+        ? consumed.pipe(
+            Effect.catchIf(isServerAuthCredentialError, () =>
+              Effect.succeed({
+                method: "one-time-token",
+                scopes: AuthAdministrativeScopes,
+                subject: "no-auth",
+              } satisfies ResolvedBootstrapGrant),
+            ),
+          )
+        : consumed;
     }
     return sessions.verify(credential).pipe(
       mapSessionVerificationErrors,

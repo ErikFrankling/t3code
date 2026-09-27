@@ -320,6 +320,32 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
     ),
   );
 
+  it.effect("exchanges any pairing code for an access token under unsafe-no-auth", () =>
+    Effect.acquireUseRelease(
+      Effect.sync(() => {
+        const previous = process.env.T3CODE_UNSAFE_NO_AUTH;
+        process.env.T3CODE_UNSAFE_NO_AUTH = "1";
+        return previous;
+      }),
+      () =>
+        Effect.gen(function* () {
+          const auth = yield* EnvironmentAuth.EnvironmentAuth;
+          const exchanged = yield* auth.exchangeBootstrapCredentialForAccessToken(
+            "anything",
+            ["orchestration:read"],
+            requestMetadata,
+          );
+          expect(exchanged.token_type).toBe("Bearer");
+          expect(exchanged.scope).toBe("orchestration:read");
+        }).pipe(Effect.provide(makeEnvironmentAuthLayer())),
+      (previous) =>
+        Effect.sync(() => {
+          if (previous === undefined) delete process.env.T3CODE_UNSAFE_NO_AUTH;
+          else process.env.T3CODE_UNSAFE_NO_AUTH = previous;
+        }),
+    ),
+  );
+
   it.effect("classifies invalid bootstrap credential failures for the HTTP boundary", () =>
     Effect.sync(() => {
       const error = EnvironmentAuth.toBootstrapExchangeError(
