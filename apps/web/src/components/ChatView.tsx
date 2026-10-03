@@ -497,6 +497,7 @@ import { appAtomRegistry } from "../rpc/atomRegistry";
 import { fileAttachmentCapabilityBlockReason } from "./chat/composerAttachmentFiles";
 import { assetEnvironment } from "../state/assets";
 import { readPreparedConnection } from "../state/session";
+import { dictationFetch } from "./chat/Dictation";
 import { useAtomCommand } from "../state/use-atom-command";
 import { useAtomQueryRunner } from "../state/use-atom-query-runner";
 import { Button } from "./ui/button";
@@ -8428,11 +8429,9 @@ export default function ChatView(props: ChatViewProps) {
       const startPromise = dictation
         ? settlePromise(async () => {
             await dictation.uploaded;
-            const response = await fetch("/api/dictation", {
-              method: "POST",
-              credentials: "same-origin",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
+            const response = await dictationFetch(
+              environmentId,
+              {
                 action: "send",
                 id: dictation.id,
                 draft: dictation.draft,
@@ -8441,9 +8440,9 @@ export default function ChatView(props: ChatViewProps) {
                   type: "thread.turn.start",
                   commandId: CommandId.make(dictation.id),
                 },
-              }),
-              signal: AbortSignal.timeout(30000),
-            });
+              },
+              30000,
+            );
             if (!response.ok) throw new Error(await response.text());
             return response.json();
           })

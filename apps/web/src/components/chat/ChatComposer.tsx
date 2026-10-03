@@ -6373,6 +6373,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           >
             <Dictation
               key={composerTargetKey(composerDraftTarget)}
+              environmentId={environmentId}
               target={composerTargetKey(composerDraftTarget)}
               project={gitCwd}
               onBusyChange={setDictationBusy}

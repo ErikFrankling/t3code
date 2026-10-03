@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { DictationState, type DictationRequest } from "@t3tools/contracts";
+import { DictationState, type DictationRequest, type EnvironmentId } from "@t3tools/contracts";
 import { Schema } from "effect";
 import {
   MicIcon,
@@ -10,29 +10,58 @@ import {
   DownloadIcon,
 } from "lucide-react";
 
+import { readPreparedConnection } from "../../state/session";
 import { Dialog, DialogPopup, DialogTitle } from "../ui/dialog";
 
 const decodeDictationState = Schema.decodeUnknownSync(DictationState);
 
-async function call(body: DictationRequest): Promise<DictationState> {
-  const response = await fetch("/api/dictation", {
-    signal: AbortSignal.timeout(body.action === "start" ? 150000 : 30000),
+/**
+ * The web client is same-origin with its server, but the desktop renderer is
+ * served from t3code://app, so the request has to go to the environment's own
+ * HTTP origin with its credential.
+ */
+export async function dictationFetch(
+  environmentId: EnvironmentId,
+  body: DictationRequest,
+  timeoutMs: number,
+): Promise<Response> {
+  const connection = readPreparedConnection(environmentId);
+  const authorization = connection?.httpAuthorization ?? null;
+  if (authorization?._tag === "Dpop")
+    throw new Error("Dictation is not available over a relay connection.");
+  const sameOrigin =
+    !connection || new URL(connection.httpBaseUrl).origin === window.location.origin;
+  return fetch(sameOrigin ? "/api/dictation" : new URL("/api/dictation", connection.httpBaseUrl), {
+    signal: AbortSignal.timeout(timeoutMs),
     method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
+    credentials: authorization ? "omit" : sameOrigin ? "same-origin" : "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...(authorization ? { Authorization: `Bearer ${authorization.token}` } : {}),
+    },
     body: JSON.stringify(body),
   });
+}
+
+async function call(environmentId: EnvironmentId, body: DictationRequest): Promise<DictationState> {
+  const response = await dictationFetch(
+    environmentId,
+    body,
+    body.action === "start" ? 150000 : 30000,
+  );
   if (!response.ok) throw new Error(await response.text());
   return decodeDictationState(await response.json());
 }
 
 /** A component instance belongs to exactly one composer target (React key). */
 export function Dictation({
+  environmentId,
   target,
   project,
   onSend,
   onBusyChange,
 }: {
+  environmentId: EnvironmentId;
   target: string;
   project: string | null;
   onSend: (id: string, draft: string, uploaded: Promise<void>) => Promise<void>;
@@ -104,7 +133,7 @@ export function Dictation({
     const timer = window.setInterval(() => {
       if (!id.current || polling) return;
       polling = true;
-      void call({ action: "status", id: id.current })
+      void call(environmentId, { action: "status", id: id.current })
         .then(accept)
         .catch((cause: unknown) => {
           if (active.current) setError(String(cause));
@@ -131,7 +160,14 @@ export function Dictation({
       if (failed.current) return;
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
-          accept(await call({ action: "append", id: recording, sequence: n, audio: encoded }));
+          accept(
+            await call(environmentId, {
+              action: "append",
+              id: recording,
+              sequence: n,
+              audio: encoded,
+            }),
+          );
           return;
         } catch (cause) {
           if (attempt === 2) {
@@ -164,9 +200,9 @@ export function Dictation({
       context = new AudioContext({ sampleRate: 16000 });
       if (context.sampleRate !== 16000) throw new Error("This browser cannot capture at 16 kHz.");
       await context.resume();
-      const next = await call({ action: "start", project: project ?? "" });
+      const next = await call(environmentId, { action: "start", project: project ?? "" });
       if (!active.current || !captureRequested.current) {
-        await call({ action: "cancel", id: next.id });
+        await call(environmentId, { action: "cancel", id: next.id });
         throw new Error("Composer changed while starting the microphone.");
       }
       id.current = next.id;
@@ -276,7 +312,14 @@ export function Dictation({
         let binary = "";
         for (const byte of new Uint8Array(audio.current[n]!.buffer))
           binary += String.fromCharCode(byte);
-        accept(await call({ action: "append", id: recording, sequence: n, audio: btoa(binary) }));
+        accept(
+          await call(environmentId, {
+            action: "append",
+            id: recording,
+            sequence: n,
+            audio: btoa(binary),
+          }),
+        );
       }
       failed.current = false;
       await finish();
