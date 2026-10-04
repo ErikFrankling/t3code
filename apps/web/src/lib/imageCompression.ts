@@ -10,13 +10,17 @@
  *
  * Supported images already within budget pass through untouched. HEIC/HEIF
  * photos are decoded to JPEG first because providers cannot consume them.
+ * Images wider or taller than `MAX_DIMENSION` are downscaled whatever their
+ * byte size.
  */
 
 /**
- * Longest edge kept when an image has to be re-encoded. Sized so a typical
- * retina screenshot (3024px wide) stays legible rather than being halved.
+ * Longest edge an attachment may keep. Claude rejects any image over 2000px
+ * once a request carries many images, and the rejection names an image deep
+ * in the thread history, so one oversized screenshot breaks every later
+ * image in that thread.
  */
-const MAX_DIMENSION = 2048;
+const MAX_DIMENSION = 2000;
 /** Base64 budget for a single stashed image (~975KB of binary). */
 export const MAX_STASH_IMAGE_DATA_URL_CHARS = 1_300_000;
 /**
@@ -439,9 +443,29 @@ export async function compressImageForStash(
 }
 
 /**
- * Shrinks `file` until its binary size fits `maxBytes`, returning a new
- * `File` (WebP or JPEG). Files already within the limit pass through
- * untouched, preserving their exact bytes and format. Sources above
+ * Whether the decoded image is wider or taller than `MAX_DIMENSION`. A file
+ * that cannot be measured counts as within bounds so it is attached as-is.
+ */
+async function exceedsMaxDimension(file: File): Promise<boolean> {
+  if (!canRecompress()) return false;
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    return false;
+  }
+  try {
+    return Math.max(bitmap.width, bitmap.height) > MAX_DIMENSION;
+  } finally {
+    bitmap.close();
+  }
+}
+
+/**
+ * Shrinks `file` until its binary size fits `maxBytes` and its longest edge
+ * fits `MAX_DIMENSION`, returning a new `File` (WebP or JPEG). Files already
+ * within both limits pass through untouched, preserving their exact bytes
+ * and format. Sources above
  * `MAX_COMPRESSIBLE_SOURCE_BYTES` are refused outright — decoding them is
  * the risk, so no amount of output budget makes them safe. An internally
  * converted image can provide its original source size when the intermediate
@@ -452,7 +476,8 @@ export async function compressImageToByteLimit(
   maxBytes: number,
   options?: { preferredMimeType?: "image/jpeg"; sourceSizeBytes?: number },
 ): Promise<CompressImageFileResult> {
-  if (file.size <= maxBytes) {
+  const withinByteLimit = file.size <= maxBytes;
+  if (withinByteLimit && !(await exceedsMaxDimension(file))) {
     return { ok: true, file, recompressed: false };
   }
   if ((options?.sourceSizeBytes ?? file.size) > MAX_COMPRESSIBLE_SOURCE_BYTES) {
@@ -464,7 +489,8 @@ export async function compressImageToByteLimit(
   const budgetChars = Math.floor(maxBytes / 3) * 4;
   const reencoded = await reencodeWithinBudget(file, budgetChars, options?.preferredMimeType);
   if (!reencoded.ok) {
-    return reencoded;
+    // An image that only needed downscaling is still sendable as it was.
+    return withinByteLimit ? { ok: true, file, recompressed: false } : reencoded;
   }
   return {
     ok: true,

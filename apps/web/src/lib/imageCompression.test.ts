@@ -290,8 +290,13 @@ describe("compressImageForStash", () => {
   });
 
   it("compressImageToByteLimit passes small files through byte-for-byte", async () => {
-    const bitmapSpy = vi.fn();
-    vi.stubGlobal("createImageBitmap", bitmapSpy);
+    const close = vi.fn();
+    vi.stubGlobal(
+      "createImageBitmap",
+      vi.fn(async () => ({ width: 2000, height: 1125, close })),
+    );
+    const canvasSpy = vi.fn();
+    vi.stubGlobal("OffscreenCanvas", canvasSpy);
 
     const original = makeFile(1024);
     const result = await compressImageToByteLimit(original, 10 * 1024 * 1024);
@@ -300,7 +305,35 @@ describe("compressImageForStash", () => {
     expect(result.ok && result.recompressed).toBe(false);
     // Pass-through must be the same File object, not a copy.
     expect(result.ok && result.file).toBe(original);
-    expect(bitmapSpy).not.toHaveBeenCalled();
+    expect(canvasSpy).not.toHaveBeenCalled();
+    expect(close).toHaveBeenCalled();
+  });
+
+  it("compressImageToByteLimit downscales a small file with an oversized edge", async () => {
+    stubCanvasPipeline(() => 200_000);
+
+    const result = await compressImageToByteLimit(makeFile(1024), 10 * 1024 * 1024);
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.recompressed).toBe(true);
+    // The stubbed 4000x3000 source must come back with a 2000px longest edge.
+    expect(result.ok && result.imageSize).toEqual({ width: 2000, height: 1500 });
+  });
+
+  it("compressImageToByteLimit keeps a small file when it cannot be measured", async () => {
+    vi.stubGlobal(
+      "createImageBitmap",
+      vi.fn(async () => {
+        throw new Error("decode failed");
+      }),
+    );
+    vi.stubGlobal("OffscreenCanvas", vi.fn());
+
+    const original = makeFile(1024);
+    const result = await compressImageToByteLimit(original, 10 * 1024 * 1024);
+
+    expect(result.ok && result.file).toBe(original);
+    expect(result.ok && result.recompressed).toBe(false);
   });
 
   it("compressImageToByteLimit re-encodes an oversized file under the byte cap", async () => {
@@ -573,7 +606,7 @@ describe("snapshot coordinates after compression", () => {
               sizeBytes: compressed.file.size,
               dataUrl: `data:${compressed.file.type};base64,${Buffer.from(await compressed.file.arrayBuffer()).toString("base64")}`,
             };
-      expect(image.imageSize).toEqual({ width: 2048, height: 1280 });
+      expect(image.imageSize).toEqual({ width: 2000, height: 1250 });
       const resized = resizeSnapShotSource(source, image.imageSize);
       const [restored] = hydrateImagesFromPersisted([
         {
@@ -586,10 +619,10 @@ describe("snapshot coordinates after compression", () => {
         },
       ]);
       expect(restored?.source?.accessibility).toMatchObject({
-        imageSize: { width: 2048, height: 1280 },
+        imageSize: { width: 2000, height: 1250 },
         root: {
-          bounds: { x: 0, y: 0, width: 2048, height: 1280 },
-          children: [{ bounds: { x: 1920, y: 1120, width: 80, height: 80 } }, { bounds: null }],
+          bounds: { x: 0, y: 0, width: 2000, height: 1250 },
+          children: [{ bounds: { x: 1875, y: 1094, width: 78, height: 78 } }, { bounds: null }],
         },
       });
       expect(source.accessibility).toMatchObject({ imageSize: { width: 2560, height: 1600 } });
