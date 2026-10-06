@@ -28,6 +28,9 @@ interface Dependencies {
   wait?: (milliseconds: number, signal: AbortSignal) => Promise<void>;
 }
 
+/** The speech service no longer has this recording; waiting cannot produce a transcript. */
+export class DictationRecordingUnavailable extends Error {}
+
 /** Persist the destination and immutable command before acknowledging Stop. */
 export class DictationDeliveryQueue {
   private readonly jobs = new Map<string, DeliveryJob>();
@@ -78,7 +81,7 @@ export class DictationDeliveryQueue {
           throw new Error("Invalid delivery checkpoint");
         }
         this.jobs.set(this.key(job.owner, job.id), job);
-        this.launch(job, true);
+        this.launch(job);
       } catch (error) {
         this.deps.log("dictation.checkpoint_failed", { file: name, error: String(error) });
       }
@@ -108,10 +111,10 @@ export class DictationDeliveryQueue {
     );
     return operation;
   }
-  private launch(job: DeliveryJob, resumed = false) {
+  private launch(job: DeliveryJob) {
     const key = this.key(job.owner, job.id);
     if (job.status === "sent" || job.status === "empty" || this.tasks.has(key)) return;
-    const task = this.run(job, resumed)
+    const task = this.run(job)
       .catch((error: unknown) => {
         if (!this.controller.signal.aborted)
           this.deps.log("dictation.worker_failed", { recordingId: job.id, error: String(error) });
@@ -128,35 +131,23 @@ export class DictationDeliveryQueue {
   }
   private async settledState(job: DeliveryJob, initial: DictationState) {
     let state = initial;
-    const deadline = Date.now() + 10 * 60_000;
     while (true) {
       if (state.draft.trim()) job.draft = state.draft;
       if (state.status !== "recording" && state.status !== "finalizing") return state;
-      if (Date.now() > deadline) throw new Error("Refinement deadline exceeded");
       await this.wait(800);
       state = await this.deps.speech(job.owner, job.id, "status");
     }
   }
-  private async run(job: DeliveryJob, resumed: boolean) {
+  private async run(job: DeliveryJob) {
     let text = "";
-    // A process restart can happen after refinement finishes but before its
-    // result is checkpointed. Recover that result before spending another try.
-    if (resumed && job.status === "queued" && job.attempts > 0) {
-      try {
-        let state = await this.deps.speech(job.owner, job.id, "status");
-        if (state.status === "finalizing") state = await this.settledState(job, state);
-        if (state.draft.trim()) job.draft = state.draft;
-        if (state.status === "complete") text = state.final;
-      } catch (error) {
-        this.deps.log("dictation.recovery_failed", { recordingId: job.id, error: String(error) });
-      }
-    }
-    while (
-      !text.trim() &&
-      job.status === "queued" &&
-      job.attempts < 3 &&
-      !this.controller.signal.aborted
-    ) {
+    // The message waits for the full-quality transcript for as long as that
+    // takes: the speech service retries through GPU contention and restarts on
+    // its own, and an unreachable service is simply asked again. "finish" is
+    // idempotent, so resuming after a restart costs no extra transcription.
+    // Only a definite answer ends the wait: a transcript, no speech, or a
+    // recording that no longer exists (the live draft is all there is).
+    let failures = 0;
+    while (job.status === "queued" && !this.controller.signal.aborted) {
       job.attempts++;
       await this.save(job);
       this.deps.log("dictation.refinement_attempt", { recordingId: job.id, attempt: job.attempts });
@@ -165,7 +156,7 @@ export class DictationDeliveryQueue {
           job,
           await this.deps.speech(job.owner, job.id, job.attempts === 1 ? "finish" : "retry"),
         );
-        if (state.status === "complete" && state.final.trim()) {
+        if (state.status === "complete" || state.status === "cancelled") {
           text = state.final;
           break;
         }
@@ -179,7 +170,8 @@ export class DictationDeliveryQueue {
           attempt: job.attempts,
           error: job.error,
         });
-        if (job.attempts < 3) await this.wait(job.attempts * 2000);
+        if (error instanceof DictationRecordingUnavailable) break;
+        await this.wait(Math.min(30_000, 1000 * 2 ** Math.min(failures++, 5)));
       }
     }
     if (this.controller.signal.aborted) return;
@@ -227,7 +219,7 @@ export class DictationDeliveryQueue {
           threadId: job.command.threadId,
           error: job.error,
         });
-        await this.wait(Math.min(30_000, 1000 * 2 ** Math.min(dispatchAttempts++, 5)));
+        await this.wait(Math.min(300_000, 1000 * 2 ** Math.min(dispatchAttempts++, 9)));
       }
     }
   }

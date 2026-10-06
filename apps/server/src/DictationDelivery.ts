@@ -5,7 +5,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import { join } from "node:path";
-import { DictationDeliveryQueue } from "./DictationDeliveryQueue.ts";
+import { DictationDeliveryQueue, DictationRecordingUnavailable } from "./DictationDeliveryQueue.ts";
 import { ServerConfig } from "./config.ts";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { ServerRuntimeStartup } from "./serverRuntimeStartup.ts";
@@ -33,6 +33,8 @@ export const dictationDeliveryLayer = Layer.effect(
             signal: AbortSignal.timeout(30_000),
           },
         );
+        if (response.status === 400 || response.status === 404)
+          throw new DictationRecordingUnavailable(await response.text());
         if (!response.ok) throw new Error(`Speech service returned HTTP ${response.status}`);
         return Schema.decodeUnknownSync(DictationState)(await response.json());
       },
