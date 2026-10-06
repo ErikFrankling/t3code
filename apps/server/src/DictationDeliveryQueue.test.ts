@@ -129,6 +129,31 @@ describe("durable dictation delivery", () => {
     expect(sent[0]?.message.text).toBe("Existing text\nRecovered final");
     expect(q.get(input.owner, input.id)?.usedDraft).toBe(false);
   });
+  it("abandons a long-rejected delivery on restart instead of sending it late", async () => {
+    const key = createHash("sha256")
+      .update(JSON.stringify([input.owner, input.id]))
+      .digest("hex");
+    await writeFile(
+      join(directory, `${key}.json`),
+      JSON.stringify({
+        ...input,
+        attempts: 1,
+        status: "ready",
+        error: "Command previously rejected",
+      }),
+    );
+    const sent: Turn[] = [];
+    const q = queue(
+      async () => state("complete", "Done"),
+      async (c) => {
+        sent.push(c);
+      },
+    );
+    await q.start();
+    await q.drain();
+    expect(sent).toHaveLength(0);
+    expect(q.get(input.owner, input.id)?.status).toBe("abandoned");
+  });
   it("delivers refined text to the captured chat without browser callbacks", async () => {
     const sent: Turn[] = [];
     let attempts = 0;

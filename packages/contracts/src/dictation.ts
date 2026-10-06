@@ -18,7 +18,7 @@ export const DictationState = Schema.Struct({
   final: Schema.String,
   error: Schema.String,
   bytes: Schema.Number,
-  delivery: Schema.optional(Schema.Literals(["queued", "ready", "sent", "empty"])),
+  delivery: Schema.optional(Schema.Literals(["queued", "ready", "sent", "empty", "abandoned"])),
   deliveryError: Schema.optional(Schema.String),
 });
 export type DictationState = typeof DictationState.Type;

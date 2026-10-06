@@ -12,7 +12,7 @@ export interface DeliveryJob {
   marker: string;
   draft: string;
   attempts: number;
-  status: "queued" | "ready" | "sent" | "empty";
+  status: "queued" | "ready" | "sent" | "empty" | "abandoned";
   usedDraft?: boolean;
   error?: string;
 }
@@ -76,11 +76,27 @@ export class DictationDeliveryQueue {
           typeof job.id !== "string" ||
           !job.command?.threadId ||
           !Number.isInteger(job.attempts) ||
-          !["queued", "ready", "sent", "empty"].includes(job.status)
+          !["queued", "ready", "sent", "empty", "abandoned"].includes(job.status)
         ) {
           throw new Error("Invalid delivery checkpoint");
         }
         this.jobs.set(this.key(job.owner, job.id), job);
+        // A message the chat kept rejecting must not appear out of the blue
+        // days later, after a restart happens to clear the cause. The
+        // transcript stays in the checkpoint.
+        if (
+          job.status === "ready" &&
+          job.error &&
+          Date.now() - Date.parse(job.command.createdAt) > 24 * 3600_000
+        ) {
+          job.status = "abandoned";
+          await this.save(job);
+          this.deps.log("dictation.abandoned", {
+            recordingId: job.id,
+            threadId: job.command.threadId,
+            error: job.error,
+          });
+        }
         this.launch(job);
       } catch (error) {
         this.deps.log("dictation.checkpoint_failed", { file: name, error: String(error) });
@@ -113,7 +129,8 @@ export class DictationDeliveryQueue {
   }
   private launch(job: DeliveryJob) {
     const key = this.key(job.owner, job.id);
-    if (job.status === "sent" || job.status === "empty" || this.tasks.has(key)) return;
+    if (job.status !== "queued" && job.status !== "ready") return;
+    if (this.tasks.has(key)) return;
     const task = this.run(job)
       .catch((error: unknown) => {
         if (!this.controller.signal.aborted)
