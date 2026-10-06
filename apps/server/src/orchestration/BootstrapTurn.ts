@@ -107,17 +107,15 @@ export const makeBootstrapTurnDispatcher = Effect.fn("makeBootstrapTurnDispatche
     Effect.gen(function* () {
       const bootstrap = command.bootstrap;
       const existing = durable
-        ? yield* projection
-            .getThreadShellById(command.threadId)
-            .pipe(
-              Effect.mapError(
-                (cause) =>
-                  new OrchestrationDispatchCommandError({
-                    message: "Could not read dictation destination",
-                    cause,
-                  }),
-              ),
-            )
+        ? yield* projection.getThreadShellById(command.threadId).pipe(
+            Effect.mapError(
+              (cause) =>
+                new OrchestrationDispatchCommandError({
+                  message: "Could not read dictation destination",
+                  cause,
+                }),
+            ),
+          )
         : Option.none();
       const existingWorktree = Option.isSome(existing) ? existing.value.worktreePath : null;
       const durableCommandId = (tag: string) =>
@@ -260,7 +258,10 @@ export const makeBootstrapTurnDispatcher = Effect.fn("makeBootstrapTurnDispatche
         });
 
       const bootstrapProgram = Effect.gen(function* () {
-        if (bootstrap?.createThread) {
+        // A dictated first message is delivered after transcription, by which
+        // time the chat may already exist (a typed message, or an earlier
+        // recording, got there first). Creating it again is rejected forever.
+        if (bootstrap?.createThread && Option.isNone(existing)) {
           const created = yield* dispatchFromClient({
             type: "thread.create",
             commandId: yield* durableCommandId("bootstrap-thread-create"),

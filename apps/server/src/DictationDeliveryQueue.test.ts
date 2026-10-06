@@ -9,7 +9,7 @@ import {
   type DictationState,
   ThreadTurnStartCommand,
 } from "@t3tools/contracts";
-import { DictationDeliveryQueue } from "./DictationDeliveryQueue.ts";
+import { DictationDeliveryQueue, DictationRecordingUnavailable } from "./DictationDeliveryQueue.ts";
 
 type Turn = typeof ThreadTurnStartCommand.Type;
 const command: Turn = {
@@ -69,11 +69,13 @@ function queue(
   return q;
 }
 describe("durable dictation delivery", () => {
-  it("delivers the submitted draft when the speech service is unreachable", async () => {
+  it("waits out an unreachable speech service instead of sending the draft", async () => {
     const sent: Turn[] = [];
+    let calls = 0;
     const q = queue(
       async () => {
-        throw new Error("connection refused");
+        if (++calls <= 8) throw new Error("connection refused");
+        return state("complete", "Full quality transcript");
       },
       async (c) => {
         sent.push(c);
@@ -83,10 +85,26 @@ describe("durable dictation delivery", () => {
     await q.enqueue(input);
     await q.drain();
     expect(sent).toHaveLength(1);
-    expect(sent[0]?.message.text).toBe("Existing text\nOriginal live draft");
-    expect(q.get(input.owner, input.id)?.attempts).toBe(3);
+    expect(sent[0]?.message.text).toBe("Existing text\nFull quality transcript");
+    expect(q.get(input.owner, input.id)?.usedDraft).toBe(false);
   });
-  it("recovers a completed third attempt after a process restart", async () => {
+  it("delivers the submitted draft when the recording no longer exists", async () => {
+    const sent: Turn[] = [];
+    const q = queue(
+      async () => {
+        throw new DictationRecordingUnavailable("not found");
+      },
+      async (c) => {
+        sent.push(c);
+      },
+    );
+    await q.start();
+    await q.enqueue(input);
+    await q.drain();
+    expect(sent[0]?.message.text).toBe("Existing text\nOriginal live draft");
+    expect(q.get(input.owner, input.id)?.usedDraft).toBe(true);
+  });
+  it("resumes an interrupted refinement after a process restart", async () => {
     const key = createHash("sha256")
       .update(JSON.stringify([input.owner, input.id]))
       .digest("hex");
@@ -95,10 +113,11 @@ describe("durable dictation delivery", () => {
       JSON.stringify({ ...input, attempts: 3, status: "queued" }),
     );
     const sent: Turn[] = [];
+    const actions: string[] = [];
     const q = queue(
       async (_owner, _id, action) => {
-        expect(action).toBe("status");
-        return state("complete", "Recovered final transcript");
+        actions.push(action);
+        return actions.length < 3 ? state("finalizing") : state("complete", "Recovered final");
       },
       async (c) => {
         sent.push(c);
@@ -106,7 +125,8 @@ describe("durable dictation delivery", () => {
     );
     await q.start();
     await q.drain();
-    expect(sent[0]?.message.text).toBe("Existing text\nRecovered final transcript");
+    expect(actions).toEqual(["retry", "status", "status"]);
+    expect(sent[0]?.message.text).toBe("Existing text\nRecovered final");
     expect(q.get(input.owner, input.id)?.usedDraft).toBe(false);
   });
   it("delivers refined text to the captured chat without browser callbacks", async () => {
@@ -127,14 +147,11 @@ describe("durable dictation delivery", () => {
     expect(attempts).toBe(2);
     expect(q.get("bob", input.id)).toBeUndefined();
   });
-  it("sends the latest live draft after three refinement failures", async () => {
+  it("keeps asking through repeated refinement failures", async () => {
     const sent: Turn[] = [];
     let attempts = 0;
     const q = queue(
-      async () => {
-        attempts++;
-        return state("error");
-      },
+      async () => (++attempts < 12 ? state("error") : state("complete", "Finally refined")),
       async (c) => {
         sent.push(c);
       },
@@ -142,7 +159,21 @@ describe("durable dictation delivery", () => {
     await q.start();
     await q.enqueue(input);
     await q.drain();
-    expect(attempts).toBe(3);
+    expect(attempts).toBe(12);
+    expect(sent[0]?.message.text).toBe("Existing text\nFinally refined");
+    expect(q.get("alice", input.id)?.usedDraft).toBe(false);
+  });
+  it("sends the live draft when the recogniser hears no speech", async () => {
+    const sent: Turn[] = [];
+    const q = queue(
+      async () => state("complete", ""),
+      async (c) => {
+        sent.push(c);
+      },
+    );
+    await q.start();
+    await q.enqueue(input);
+    await q.drain();
     expect(sent[0]?.message.text).toBe("Existing text\nLatest live draft");
     expect(q.get("alice", input.id)?.usedDraft).toBe(true);
   });

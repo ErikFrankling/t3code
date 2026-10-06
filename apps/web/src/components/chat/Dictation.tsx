@@ -43,14 +43,29 @@ export async function dictationFetch(
   });
 }
 
+class DictationHttpError extends Error {
+  readonly status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
 async function call(environmentId: EnvironmentId, body: DictationRequest): Promise<DictationState> {
-  const response = await dictationFetch(
-    environmentId,
-    body,
-    body.action === "start" ? 150000 : 30000,
-  );
-  if (!response.ok) throw new Error(await response.text());
+  const response = await dictationFetch(environmentId, body, 30000);
+  if (!response.ok) throw new DictationHttpError(response.status, await response.text());
   return decodeDictationState(await response.json());
+}
+
+/** The server understood and refused; sending the same request again cannot help. */
+function rejected(cause: unknown) {
+  return (
+    cause instanceof DictationHttpError &&
+    cause.status >= 400 &&
+    cause.status < 500 &&
+    cause.status !== 408 &&
+    cause.status !== 429
+  );
 }
 
 /** A component instance belongs to exactly one composer target (React key). */
@@ -73,6 +88,7 @@ export function Dictation({
   const [starting, setStarting] = useState(false);
   const [open, setOpen] = useState(false);
   const [level, setLevel] = useState(0);
+  const [captured, setCaptured] = useState(0);
   const [view, setView] = useState<"draft" | "final">("draft");
   const draftPanel = useRef<HTMLElement>(null);
   const finalPanel = useRef<HTMLElement>(null);
@@ -100,6 +116,8 @@ export function Dictation({
   const queue = useRef(Promise.resolve());
   const failed = useRef(false);
   const failedSequence = useRef(0);
+  // The server only knows the recording once "start" lands; capture never waits for it.
+  const registered = useRef(false);
   const audio = useRef<Int16Array[]>([]);
   const sequence = useRef(0);
 
@@ -128,10 +146,11 @@ export function Dictation({
     const saved = localStorage.getItem(storageKey);
     if (saved) {
       id.current = saved;
+      registered.current = true;
     }
     let polling = false;
     const timer = window.setInterval(() => {
-      if (!id.current || polling) return;
+      if (!id.current || !registered.current || polling) return;
       polling = true;
       void call(environmentId, { action: "status", id: id.current })
         .then(accept)
@@ -149,38 +168,51 @@ export function Dictation({
     };
   }, [storageKey]);
 
-  function enqueue(samples: Int16Array, recording: string) {
-    audio.current.push(samples);
-    const n = sequence.current++;
-    const bytes = new Uint8Array(samples.buffer);
-    let binary = "";
-    for (const byte of bytes) binary += String.fromCharCode(byte);
-    const encoded = btoa(binary);
+  /**
+   * Audio is kept in memory and uploaded in order behind the microphone. An
+   * unreachable or restarting server only delays the upload: it is retried
+   * until it lands, and only an outright refusal stops it.
+   */
+  function upload(n: number, task: () => Promise<DictationState>) {
     queue.current = queue.current.then(async () => {
       if (failed.current) return;
-      for (let attempt = 0; attempt < 3; attempt++) {
+      for (let attempt = 0; ; attempt++) {
         try {
-          accept(
-            await call(environmentId, {
-              action: "append",
-              id: recording,
-              sequence: n,
-              audio: encoded,
-            }),
-          );
+          const next = await task();
+          registered.current = true;
+          accept(next);
           return;
         } catch (cause) {
-          if (attempt === 2) {
+          if (rejected(cause)) {
             failed.current = true;
-            failedSequence.current = n;
+            failedSequence.current = Math.max(0, n);
             if (active.current)
               setError(
                 `Upload interrupted. Download your recording before leaving. ${String(cause)}`,
               );
-          } else await new Promise((resolve) => setTimeout(resolve, 1000));
+            return;
+          }
+          if (active.current && attempt >= 2)
+            setError("Reconnecting to the speech service. Keep talking; your audio is kept.");
+          await new Promise((resolve) => setTimeout(resolve, Math.min(5000, 500 * 2 ** attempt)));
         }
       }
     });
+  }
+
+  function encode(samples: Int16Array) {
+    let binary = "";
+    for (const byte of new Uint8Array(samples.buffer)) binary += String.fromCharCode(byte);
+    return btoa(binary);
+  }
+
+  function enqueue(samples: Int16Array, recording: string) {
+    audio.current.push(samples);
+    const n = sequence.current++;
+    const encoded = encode(samples);
+    upload(n, () =>
+      call(environmentId, { action: "append", id: recording, sequence: n, audio: encoded }),
+    );
   }
 
   async function start() {
@@ -200,18 +232,31 @@ export function Dictation({
       context = new AudioContext({ sampleRate: 16000 });
       if (context.sampleRate !== 16000) throw new Error("This browser cannot capture at 16 kHz.");
       await context.resume();
-      const next = await call(environmentId, { action: "start", project: project ?? "" });
-      if (!active.current || !captureRequested.current) {
-        await call(environmentId, { action: "cancel", id: next.id });
+      if (!active.current || !captureRequested.current)
         throw new Error("Composer changed while starting the microphone.");
-      }
+      // Record now. The recording is named here so that registering it with
+      // the server can run (and be retried) behind the microphone.
+      const next: DictationState = {
+        id: crypto.randomUUID(),
+        status: "recording",
+        draft: "",
+        final: "",
+        error: "",
+        bytes: 0,
+      };
       id.current = next.id;
       localStorage.setItem(storageKey, next.id);
       audio.current = [];
       sequence.current = 0;
       failed.current = false;
+      registered.current = false;
       queue.current = Promise.resolve();
+      setCaptured(0);
       setState(next);
+      setStarting(false);
+      upload(-1, () =>
+        call(environmentId, { action: "start", id: next.id, project: project ?? "" }),
+      );
       const source = context.createMediaStreamSource(media);
       const processor = context.createScriptProcessor(4096, 1, 1);
       let pending: number[] = [];
@@ -230,6 +275,7 @@ export function Dictation({
         for (const sample of input.subarray(0, 16000 * 1800 - count))
           pending.push(Math.max(-32768, Math.min(32767, Math.round(sample * 32767))));
         count += input.length;
+        if (active.current) setCaptured(Math.min(count, 16000 * 1800));
         if (pending.length >= 16000) flush();
         if (count >= 16000 * 1800) void finish();
       };
@@ -306,26 +352,18 @@ export function Dictation({
     const recording = id.current;
     if (!recording) return;
     setError("");
-    try {
-      for (let n = failedSequence.current; n < audio.current.length; n++) {
-        failedSequence.current = n;
-        let binary = "";
-        for (const byte of new Uint8Array(audio.current[n]!.buffer))
-          binary += String.fromCharCode(byte);
-        accept(
-          await call(environmentId, {
-            action: "append",
-            id: recording,
-            sequence: n,
-            audio: btoa(binary),
-          }),
-        );
-      }
-      failed.current = false;
-      await finish();
-    } catch (cause) {
-      setError(`Retry failed; your audio is still available to download. ${String(cause)}`);
+    failed.current = false;
+    if (!registered.current)
+      upload(-1, () =>
+        call(environmentId, { action: "start", id: recording, project: project ?? "" }),
+      );
+    for (let n = failedSequence.current; n < audio.current.length; n++) {
+      const encoded = encode(audio.current[n]!);
+      upload(n, () =>
+        call(environmentId, { action: "append", id: recording, sequence: n, audio: encoded }),
+      );
     }
+    await finish();
   }
 
   function download() {
@@ -364,7 +402,7 @@ export function Dictation({
   const fallback = state?.status === "error" || state?.status === "cancelled" || stoppedWithError;
   const recording = state?.status === "recording" && !stoppedWithError;
   const refining = state?.status === "finalizing" && !stoppedWithError;
-  const seconds = Math.floor((state?.bytes ?? 0) / 32000);
+  const seconds = Math.floor(Math.max(captured, (state?.bytes ?? 0) / 2) / 16000);
   const elapsed = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
   return (
     <div className="px-3 py-2" data-testid="dictation">

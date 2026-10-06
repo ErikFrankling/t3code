@@ -5,16 +5,24 @@ Open T3 over HTTPS or localhost, allow microphone access, then click the button
 again when finished. Pauses do not stop recording. The live draft is provisional;
 the final recognizer receives the original audio and project context.
 
+Recording starts as soon as the microphone is granted. Audio is kept in the
+browser and uploaded behind the microphone, so a slow, restarting or busy speech
+service delays the live draft but never the recording; uploads are retried until
+they land. A new recording can start while an earlier one is still being
+transcribed.
+
 Dictation opens a larger workspace with a read-only live draft and refined text.
-**Stop sends the message automatically.** The server finishes transcription,
-retries refinement up to three times, and uses the live draft if refinement fails.
-Existing typed text and attachments travel with the dictated message.
+**Stop sends the message automatically**, once the full-quality transcript
+exists. The server waits for it for as long as it takes: the speech service
+retries through GPU contention and restarts by itself. The live draft is sent
+instead only when the recording no longer exists or the recogniser heard no
+speech. Existing typed text and attachments travel with the dictated message.
 
 You can switch chats after stopping. Delivery belongs to the original chat and
 continues independently of the browser. Closing the recording workspace stops
-and sends too; it does not discard your recording. Upload failures keep the audio
-available for retry and WAV download. Do not close the browser before an
-interrupted upload has been recovered.
+and sends too; it does not discard your recording. Do not close the browser
+while audio is still uploading; a refused upload keeps the audio available for
+retry and WAV download.
 
 Enter sends typed messages on desktop and mobile; Shift+Enter adds a newline.
 The composer keeps its expanded layout when focused and unfocused.
