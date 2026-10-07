@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off globalDate:off -- The on-disk queue is plain synchronous Node I/O so a recording survives a server restart.
 import { createHash } from "node:crypto";
 import { mkdir, open, readdir, readFile, rename } from "node:fs/promises";
 import { join } from "node:path";

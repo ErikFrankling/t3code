@@ -10,6 +10,7 @@ import {
   DownloadIcon,
 } from "lucide-react";
 
+import { randomUUID } from "../../lib/utils";
 import { readPreparedConnection } from "../../state/session";
 import { Dialog, DialogPopup, DialogTitle } from "../ui/dialog";
 
@@ -237,7 +238,7 @@ export function Dictation({
       // Record now. The recording is named here so that registering it with
       // the server can run (and be retried) behind the microphone.
       const next: DictationState = {
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         status: "recording",
         draft: "",
         final: "",

@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off -- Tests exercise the real on-disk queue in a temporary directory.
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";

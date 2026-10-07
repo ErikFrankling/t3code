@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off globalFetch:off globalConsole:off globalDate:off -- The delivery loop outlives any request fiber and talks to the local speech server directly.
 import { makeBootstrapTurnDispatcher } from "./orchestration/BootstrapTurn.ts";
 import { DictationState } from "@t3tools/contracts";
 import * as Context from "effect/Context";
