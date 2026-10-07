@@ -71,7 +71,22 @@ export const make = Effect.gen(function* () {
 
   return ElectronSafeStorage.of({
     isEncryptionAvailable: Effect.try({
-      try: () => Electron.safeStorage.isEncryptionAvailable(),
+      try: () => {
+        if (Electron.safeStorage.isEncryptionAvailable()) {
+          return true;
+        }
+        // A session launched with `--password-store=basic` has no keyring by
+        // choice. Electron still reports encryption as unavailable there until
+        // it is told to use its built-in key, so nothing could be saved at all.
+        if (
+          platform === "linux" &&
+          Electron.safeStorage.getSelectedStorageBackend() === "basic_text"
+        ) {
+          Electron.safeStorage.setUsePlainTextEncryption(true);
+          return Electron.safeStorage.isEncryptionAvailable();
+        }
+        return false;
+      },
       catch: (cause) => new ElectronSafeStorageAvailabilityError({ cause }),
     }),
     encryptString: (value) =>
