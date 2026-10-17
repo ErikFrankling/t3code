@@ -11,6 +11,7 @@ import { isLocalEnvironmentDisabled } from "../../localEnvironment";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useRightPanelStore } from "~/rightPanelStore";
 import { importPastedComposerText, readPastedComposerContext } from "../composerInlineTokenPaste";
+import { Dictation } from "./Dictation";
 import {
   questionAttachmentDraftId,
   trackOpenQuestionAttachmentDraft,
@@ -462,6 +463,7 @@ export interface ChatComposerProps {
   onRemoveEditingQueuedAttachment: (attachmentId: string) => void;
 
   onCompactContext: () => void;
+  onDictationSend: (id: string, draft: string, uploaded: Promise<void>) => Promise<void>;
   onSend: (
     e?: { preventDefault: () => void },
     dispatchMode?: ComposerDispatchMode,
@@ -575,6 +577,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     onPageScrollKeyUp,
     onPageScrollRelease,
     onCompactContext,
+    onDictationSend,
     onSend,
     onResume,
     onInterrupt,
@@ -918,7 +921,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     selectedProviderEntry?.snapshot,
     selectedModel,
   );
+  const [dictationBusy, setDictationBusy] = useState(false);
   const sendDisabledReason =
+    (dictationBusy ? "Finish dictation before sending" : null) ??
     externalSendDisabledReason ??
     (multipleModelSelections?.length === 0 ? "Select at least one model." : null) ??
     (activePendingProgress
@@ -3450,6 +3455,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   >
                     {composerControls}
                   </div>
+                  <Dictation
+                    key={composerDraftTargetKey}
+                    environmentId={environmentId}
+                    target={composerDraftTargetKey}
+                    project={gitCwd}
+                    onBusyChange={setDictationBusy}
+                    onSend={onDictationSend}
+                  />
                   <ComposerFooterPrimaryActions
                     compact={isComposerPrimaryActionsCompact}
                     canOperateThread={canOperateThread}
