@@ -224,13 +224,18 @@ describe("composerSubmissionIntentForKey", () => {
     },
   );
 
+  it("submits plain Enter with the software keyboard open", () => {
+    expect(
+      composerSubmissionIntentForKey({ ...input, event: enter, isSoftwareKeyboardOpen: true }),
+    ).toBe("foreground");
+  });
+
   it.each([
-    { isSoftwareKeyboardOpen: true },
     { event: { ...enter, isComposing: true } },
     { event: { ...enter, keyCode: 229 } },
     { event: { ...enter, repeat: true } },
   ])("does not submit with %j", (override) => {
-    expect(composerSubmissionIntentForKey({ ...input, event: enter, ...override })).toBeNull();
+    expect(composerSubmissionIntentForKey({ ...input, ...override })).toBeNull();
   });
 });
 
