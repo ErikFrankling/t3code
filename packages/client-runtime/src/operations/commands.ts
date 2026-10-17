@@ -12,6 +12,8 @@ import {
   type ModelSelection,
   type NodeId,
   type OrchestrationV2Command,
+  type OrchestrationV2ThreadLaunchInput,
+  type DictationTurn,
   type OrchestrationV2CreationSource,
   type PlanId,
   type ProjectId,
@@ -198,6 +200,11 @@ export interface StartThreadTurnInput extends ThreadCommandInput {
   readonly freshContext?: boolean;
   /** Defaults to true. Callers with their own retry queue opt out so a dead socket fails fast. */
   readonly resendAfterSocketLoss?: boolean;
+  /**
+   * A stopped recording: the server holds this turn until the final transcript
+   * replaces `[dictation:<id>]` in the message text, then sends it.
+   */
+  readonly dictation?: { readonly id: string; readonly draft: string };
 }
 
 export interface InterruptThreadTurnInput extends ThreadCommandInput {
@@ -347,6 +354,10 @@ const dispatchMessage = Effect.fn("EnvironmentCommands.dispatchMessage")(functio
     if (Option.isNone(replacement)) return yield* exit;
   }
 });
+const deliverDictatedTurn = (
+  dictation: NonNullable<StartThreadTurnInput["dictation"]>,
+  turn: DictationTurn,
+) => request(WS_METHODS.dictationDeliver, { ...dictation, turn });
 
 const getProjection = (threadId: ThreadId) =>
   request(ORCHESTRATION_V2_WS_METHODS.getThreadProjection, { threadId });
@@ -738,6 +749,14 @@ export const setThreadInteractionMode = Effect.fn("EnvironmentCommands.setThread
   },
 );
 
+const dispatchTurn = (
+  input: StartThreadTurnInput,
+  command: Extract<OrchestrationV2Command, { type: "message.dispatch" }>,
+) =>
+  input.dictation === undefined
+    ? dispatchMessage(command, input.resendAfterSocketLoss ?? true)
+    : deliverDictatedTurn(input.dictation, { method: "dispatchCommand", command });
+
 export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(function* (
   input: StartThreadTurnInput,
 ) {
@@ -780,7 +799,7 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
                 ? {}
                 : { branch: bootstrap.branch }),
             };
-    return yield* request(ORCHESTRATION_V2_WS_METHODS.launchThread, {
+    const launchInput = {
       commandId,
       creationSource: input.creationSource ?? "web",
       threadId: input.threadId,
@@ -798,69 +817,67 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
         ...(context ? { context } : {}),
         attachments,
       },
-    });
+    } satisfies OrchestrationV2ThreadLaunchInput;
+    if (input.dictation !== undefined) {
+      return yield* deliverDictatedTurn(input.dictation, {
+        method: "launchThread",
+        input: launchInput,
+      });
+    }
+    return yield* request(ORCHESTRATION_V2_WS_METHODS.launchThread, launchInput);
   }
 
   const requestedMode = input.dispatchMode ?? "auto";
-  const resendAfterSocketLoss = input.resendAfterSocketLoss ?? true;
   if (requestedMode === "start") {
-    return yield* dispatchMessage(
-      {
-        type: "message.dispatch",
-        commandId,
-        createdBy: "user",
-        creationSource: input.creationSource ?? "web",
-        threadId: input.threadId,
-        messageId: input.message.messageId,
-        ...(input.manualContinuationOfRunId === undefined
-          ? {}
-          : { manualContinuationOfRunId: input.manualContinuationOfRunId }),
-        text: input.message.text,
-        ...(context ? { context } : {}),
-        ...(input.message.idleCompaction === undefined
-          ? {}
-          : { idleCompaction: input.message.idleCompaction }),
-        attachments,
-        ...(input.modelSelection === undefined ? {} : { modelSelection: input.modelSelection }),
-        ...(input.sourceProposedPlan === undefined
-          ? {}
-          : { sourcePlanRef: input.sourceProposedPlan }),
-        ...(input.freshContext ? { freshContext: true } : {}),
-        dispatchMode: { type: "start_immediately" },
-      },
-      resendAfterSocketLoss,
-    );
-  }
-
-  const dispatchMode =
-    requestedMode === "queue"
-      ? ({ type: "queue_after_active" } as const)
-      : ({ type: "start_immediately" } as const);
-  return yield* dispatchMessage(
-    {
+    return yield* dispatchTurn(input, {
       type: "message.dispatch",
       commandId,
       createdBy: "user",
       creationSource: input.creationSource ?? "web",
       threadId: input.threadId,
       messageId: input.message.messageId,
+      ...(input.manualContinuationOfRunId === undefined
+        ? {}
+        : { manualContinuationOfRunId: input.manualContinuationOfRunId }),
       text: input.message.text,
       ...(context ? { context } : {}),
       ...(input.message.idleCompaction === undefined
         ? {}
         : { idleCompaction: input.message.idleCompaction }),
       attachments,
-      ...(input.titleSeed === undefined ? {} : { titleSeed: input.titleSeed }),
       ...(input.modelSelection === undefined ? {} : { modelSelection: input.modelSelection }),
       ...(input.sourceProposedPlan === undefined
         ? {}
         : { sourcePlanRef: input.sourceProposedPlan }),
       ...(input.freshContext ? { freshContext: true } : {}),
-      ...(requestedMode !== "queue" ? { deliveryIntent: requestedMode } : {}),
-      dispatchMode,
-    },
-    resendAfterSocketLoss,
-  );
+      dispatchMode: { type: "start_immediately" },
+    });
+  }
+
+  const dispatchMode =
+    requestedMode === "queue"
+      ? ({ type: "queue_after_active" } as const)
+      : ({ type: "start_immediately" } as const);
+  return yield* dispatchTurn(input, {
+    type: "message.dispatch",
+    commandId,
+    createdBy: "user",
+    creationSource: input.creationSource ?? "web",
+    threadId: input.threadId,
+    messageId: input.message.messageId,
+    text: input.message.text,
+    ...(context ? { context } : {}),
+    ...(input.message.idleCompaction === undefined
+      ? {}
+      : { idleCompaction: input.message.idleCompaction }),
+    attachments,
+    ...(input.titleSeed === undefined ? {} : { titleSeed: input.titleSeed }),
+    ...(input.modelSelection === undefined ? {} : { modelSelection: input.modelSelection }),
+    ...(input.sourceProposedPlan === undefined ? {} : { sourcePlanRef: input.sourceProposedPlan }),
+    ...(input.freshContext ? { freshContext: true } : {}),
+    ...(requestedMode !== "queue" ? { deliveryIntent: requestedMode } : {}),
+    dispatchMode,
+  });
 });
 
 export const interruptThreadTurn = Effect.fn("EnvironmentCommands.interruptThreadTurn")(function* (
