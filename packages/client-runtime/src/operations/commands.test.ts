@@ -16,6 +16,7 @@ import {
   WS_METHODS,
   type OrchestrationV2Command,
   type OrchestrationV2ThreadLaunchInput,
+  type DictationDeliverInput,
   type OrchestrationV2ThreadProjection,
   type ProjectMutation,
 } from "@t3tools/contracts";
@@ -62,6 +63,7 @@ const makeSupervisor = Effect.fn("TestEnvironmentCommands.makeSupervisor")(funct
   readonly commands: OrchestrationV2Command[];
   readonly projects: ProjectMutation[];
   readonly launches?: OrchestrationV2ThreadLaunchInput[];
+  readonly dictations?: DictationDeliverInput[];
   readonly projection?: OrchestrationV2ThreadProjection;
   readonly projectionRequests?: ThreadId[];
   readonly advertiseServerResolvedCommandContext?: boolean;
@@ -88,6 +90,11 @@ const makeSupervisor = Effect.fn("TestEnvironmentCommands.makeSupervisor")(funct
           projection: input.projection ?? v2Projection,
           resumed: false,
         };
+      }),
+    [WS_METHODS.dictationDeliver]: (deliverInput: DictationDeliverInput) =>
+      Effect.sync(() => {
+        input.dictations?.push(deliverInput);
+        return { id: deliverInput.id, delivery: "queued" as const };
       }),
     [WS_METHODS.projectsMutate]: (mutation: ProjectMutation) =>
       Effect.sync(() => {
@@ -297,6 +304,73 @@ describe("V2 environment commands", () => {
         });
       }
       expect(projectionRequests).toEqual([]);
+    }).pipe(Effect.provide(layerTestCrypto)),
+  );
+
+  it.effect("hands a dictated turn to the server instead of sending it", () =>
+    Effect.gen(function* () {
+      const commands: OrchestrationV2Command[] = [];
+      const launches: OrchestrationV2ThreadLaunchInput[] = [];
+      const dictations: DictationDeliverInput[] = [];
+      const supervisor = yield* makeSupervisor({ commands, projects: [], launches, dictations });
+      const message = {
+        messageId: MessageId.make("recording-1"),
+        role: "user" as const,
+        text: "Typed text\n[dictation:recording-1]",
+        attachments: [],
+      };
+      yield* startThreadTurn({
+        commandId: CommandId.make("recording-1"),
+        threadId: v2ThreadId,
+        message,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        dictation: { id: "recording-1", draft: "live draft" },
+      }).pipe(Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor));
+      yield* startThreadTurn({
+        commandId: CommandId.make("recording-2"),
+        threadId: v2ThreadId,
+        message: { ...message, messageId: MessageId.make("recording-2") },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        bootstrap: {
+          createThread: {
+            projectId: ProjectId.make("project-1"),
+            title: "New thread",
+            modelSelection: v2Projection.thread.modelSelection,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            branch: null,
+            worktreePath: null,
+            createdAt: "2026-06-06T00:00:00.000Z",
+          },
+        },
+        dictation: { id: "recording-2", draft: "" },
+      }).pipe(Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor));
+
+      expect(commands).toEqual([]);
+      expect(launches).toEqual([]);
+      expect(dictations).toMatchObject([
+        {
+          id: "recording-1",
+          draft: "live draft",
+          turn: {
+            method: "dispatchCommand",
+            command: {
+              type: "message.dispatch",
+              commandId: "recording-1",
+              text: "Typed text\n[dictation:recording-1]",
+            },
+          },
+        },
+        {
+          id: "recording-2",
+          turn: {
+            method: "launchThread",
+            input: { commandId: "recording-2", threadId: v2ThreadId },
+          },
+        },
+      ]);
     }).pipe(Effect.provide(layerTestCrypto)),
   );
 
