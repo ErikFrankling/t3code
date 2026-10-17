@@ -401,6 +401,37 @@ describe("AssetAccess", () => {
     }).pipe(Effect.provide(layerTest)),
   );
 
+  it.effect("saves any file as an exact download that never renders inline", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-media-download-" });
+      for (const name of ["notes.txt", "archive.zip", "page.html"]) {
+        const filePath = path.join(root, name);
+        yield* fs.writeFileString(filePath, `${name} bytes`);
+        const result = yield* issueAssetUrl({
+          resource: {
+            _tag: "media-file",
+            threadId: ThreadId.make("thread-1"),
+            path: filePath,
+            disposition: "attachment",
+          },
+        });
+        const suffix = result.relativeUrl.slice(`${ASSET_ROUTE_PREFIX}/`.length);
+        const token = suffix.slice(0, suffix.indexOf("/"));
+        const asset = yield* resolveAsset(token, name);
+        expect(asset).toMatchObject({ kind: "file", download: true, fileName: name });
+        if (asset?.kind !== "file") throw new Error("Expected a resolved download");
+        const response = HttpServerResponse.toWeb(yield* assetFileResponse(asset));
+        expect(response.headers.get("content-type")).toBe("application/octet-stream");
+        expect(response.headers.get("content-disposition")).toBe(`attachment; filename="${name}"`);
+        expect(yield* Effect.promise(() => response.text())).toBe(`${name} bytes`);
+        yield* fs.writeFileString(path.join(root, "sibling.txt"), "private sibling");
+        expect(yield* resolveAsset(token, "sibling.txt")).toBeNull();
+      }
+    }).pipe(Effect.provide(layerTest)),
+  );
+
   it.effect.skipIf(!symlinksSupported)(
     "rejects non-previewable files, disguised targets, and directories",
     () =>
