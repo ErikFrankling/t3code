@@ -290,7 +290,7 @@ export function resolveDevRedirectUrl(devUrl: URL, requestUrl: URL): string {
   return redirectUrl.toString();
 }
 
-const authenticateRawRouteWithScope = (
+export const authenticateRawRouteWithScope = (
   scope: typeof AuthOrchestrationReadScope | typeof AuthOrchestrationOperateScope,
 ) =>
   Effect.gen(function* () {
@@ -310,6 +310,7 @@ const authenticateRawRouteWithScope = (
     if (!session.scopes.includes(scope)) {
       return yield* failEnvironmentScopeRequired(scope);
     }
+    return session;
   });
 
 export const layerServerEnvironmentHttpApi = HttpApiBuilder.group(
