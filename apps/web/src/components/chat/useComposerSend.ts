@@ -17,7 +17,10 @@ import {
 import { isUsageLimitsCommand } from "@t3tools/shared/usageLimits";
 import {
   AuthOrchestrationOperateScope,
+  CommandId,
   DEFAULT_MODEL,
+  dictationMarker,
+  MessageId,
   type EnvironmentId,
   type ModelSelection,
   type PreviewAnnotationPayload,
@@ -410,7 +413,8 @@ export function useComposerSend(input: ComposerSendInput) {
       annotation: PreviewAnnotationPayload;
       image: ComposerImageAttachment | null;
     },
-  ) => {
+    dictation?: { id: string; draft: string; uploaded: Promise<void> },
+  ): Promise<boolean | void> => {
     e?.preventDefault();
     // What the user pressed send on; uploads below can take a while, and a redirect must not
     // decline approvals for a draft that changed meanwhile.
@@ -419,6 +423,7 @@ export function useComposerSend(input: ComposerSendInput) {
       usageLimitsOffered &&
       usageLimitsKey !== null &&
       !directAnnotation &&
+      !dictation &&
       !draftHasNonPromptContent(composerDraftTarget) &&
       isUsageLimitsCommand(promptRef.current)
     ) {
@@ -483,6 +488,7 @@ export function useComposerSend(input: ComposerSendInput) {
       return;
     }
     const sendCtx = composerRef.current?.getSendContext();
+<<<<<<< HEAD
     // `/side` beats an open question and a plan follow-up, which would send the text to main.
     const sideChatCommand =
       sendCtx && !directAnnotation && !queuedRunEdit.isEditing
@@ -535,6 +541,10 @@ export function useComposerSend(input: ComposerSendInput) {
     }
     if (answeringQuestion) {
       if (directAnnotation) {
+=======
+    if (activePendingProgress && sendCtx?.answeringPendingUserInput !== false) {
+      if (directAnnotation || dictation) {
+>>>>>>> 6da054ec8c (feat: local dictation with durable server-side delivery)
         notifyDirectAnnotationAttached();
         return;
       }
@@ -545,7 +555,7 @@ export function useComposerSend(input: ComposerSendInput) {
       notifyDirectAnnotationAttached();
       return;
     }
-    const multipleModelSelections = sendCtx.multipleModelSelections;
+    const multipleModelSelections = dictation ? null : sendCtx.multipleModelSelections;
     const approvalFeedbackTarget = pendingApprovalsRef.current.find(
       (approval) =>
         approval.supportsFeedback && approval.requestId === sendCtx.shownPendingApprovalIds[0],
@@ -602,11 +612,17 @@ export function useComposerSend(input: ComposerSendInput) {
       });
     // A direct "send annotation" writes the draft and sends in the same tick; the reference
     // must be in the text now, not after the next render.
+    // A recording travels as a marker the server replaces with its final transcript.
+    const dictationText = dictation ? dictationMarker(dictation.id) : "";
     const promptForSend = directAnnotation
       ? ensureInlineContextReferences(promptRef.current, [
           previewAnnotationContextReference(directAnnotation.annotation),
         ])
-      : promptRef.current;
+      : dictation
+        ? [promptRef.current, dictationText].filter(Boolean).join("\n")
+        : promptRef.current;
+    const withDictationDraft = (text: string, empty = "") =>
+      dictation ? text.replace(dictationText, () => dictation.draft || empty) : text;
     const strandedThread = threadContextsOutsideEnvironment({
       text: promptForSend,
       records: composerThreadContexts,
@@ -626,7 +642,7 @@ export function useComposerSend(input: ComposerSendInput) {
       );
       return;
     }
-    if (queuedRunEdit.isEditing) {
+    if (!dictation && queuedRunEdit.isEditing) {
       // Edit mode repurposes the composer: sending saves the queued message
       // in place instead of dispatching a new turn.
       await queuedRunEdit.saveEdit(
@@ -718,6 +734,7 @@ export function useComposerSend(input: ComposerSendInput) {
     }
     if (
       !directAnnotation &&
+      !dictation &&
       sendInteractionModeEnabled &&
       showPlanFollowUpPrompt &&
       activeProposedPlan &&
@@ -904,7 +921,7 @@ export function useComposerSend(input: ComposerSendInput) {
     const outgoingMessageContext = buildOutgoingMessageContext(
       composerAttachmentsSnapshot.map((attachment) => attachment.id),
     );
-    const messageIdForSend = newMessageId();
+    const messageIdForSend = dictation ? MessageId.make(dictation.id) : newMessageId();
     const messageCreatedAt = new Date().toISOString();
     const outgoingMessageText = formatOutgoingPrompt({
       provider: ctxSelectedProvider,
@@ -1201,7 +1218,7 @@ export function useComposerSend(input: ComposerSendInput) {
     const optimisticMessage: ChatMessage = {
       id: messageIdForSend,
       role: "user",
-      text: outgoingMessageText,
+      text: withDictationDraft(outgoingMessageText, "Processing recording…"),
       ...(optimisticAttachments.length > 0 ? { attachments: optimisticAttachments } : {}),
       ...(outgoingMessageContext !== undefined ? { context: outgoingMessageContext } : {}),
       runId: null,
@@ -1246,7 +1263,7 @@ export function useComposerSend(input: ComposerSendInput) {
     composerRef.current?.resetCursorState();
 
     const title = deriveThreadTitleSeed({
-      text: messageTextForSend,
+      text: withDictationDraft(messageTextForSend, "Voice message"),
       attachments: composerAttachmentsSnapshot,
       fallbackLabels: sendTitleFallbackLabels(sendSnapshot),
     });
@@ -1307,6 +1324,11 @@ export function useComposerSend(input: ComposerSendInput) {
       }
     }
 
+    if (failure === null && dictation) {
+      const uploadedResult = await settlePromise(() => dictation.uploaded);
+      if (uploadedResult._tag === "Failure") failure = uploadedResult;
+    }
+
     let backgroundDraftOpened = false;
     let turnStartSucceeded = false;
     if (failure === null && turnAttachmentsResult._tag === "Success") {
@@ -1347,6 +1369,12 @@ export function useComposerSend(input: ComposerSendInput) {
       const startPromise = startThreadTurn({
         environmentId,
         input: {
+          ...(dictation
+            ? {
+                commandId: CommandId.make(dictation.id),
+                dictation: { id: dictation.id, draft: dictation.draft },
+              }
+            : {}),
           threadId: threadIdForSend,
           message: {
             messageId: messageIdForSend,
@@ -1461,15 +1489,19 @@ export function useComposerSend(input: ComposerSendInput) {
         });
         // The restored draft clones its images, so the sent copies are no longer used.
         optimisticBlobPreviews.release(optimisticMessage);
-        const retryComposerImages = restoreComposerDraft(composerDraftTarget, sendSnapshot);
+        const restoredPrompt = withDictationDraft(messageTextForSend);
+        const retryComposerImages = restoreComposerDraft(composerDraftTarget, {
+          ...sendSnapshot,
+          messageText: restoredPrompt,
+        });
         if (currentRouteThreadKeyRef.current === routeThreadKey) {
-          promptRef.current = messageTextForSend;
+          promptRef.current = restoredPrompt;
           composerImagesRef.current = retryComposerImages;
           composerFilesRef.current = composerFilesSnapshot;
           composerTerminalContextsRef.current = composerTerminalContextsSnapshot;
           composerRef.current?.resetCursorState({
-            cursor: collapseExpandedComposerCursor(messageTextForSend, messageTextForSend.length),
-            prompt: messageTextForSend,
+            cursor: collapseExpandedComposerCursor(restoredPrompt, restoredPrompt.length),
+            prompt: restoredPrompt,
             detectTrigger: true,
           });
         }
@@ -1511,6 +1543,7 @@ export function useComposerSend(input: ComposerSendInput) {
       );
       if (!sendQueuesBehindSetup) resetLocalDispatch();
     }
+    return turnStartSucceeded;
   };
 
   return { onSend };
