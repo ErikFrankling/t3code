@@ -235,13 +235,18 @@ describe("composerSubmissionIntentForKey", () => {
     ).toBeNull();
   });
 
+  it("submits plain Enter on mobile", () => {
+    expect(composerSubmissionIntentForKey({ ...input, event: enter, isMobileViewport: true })).toBe(
+      "foreground",
+    );
+  });
+
   it.each([
-    { isMobileViewport: true },
     { event: { ...enter, isComposing: true } },
     { event: { ...enter, keyCode: 229 } },
     { event: { ...enter, repeat: true } },
   ])("does not submit with %j", (override) => {
-    expect(composerSubmissionIntentForKey({ ...input, event: enter, ...override })).toBeNull();
+    expect(composerSubmissionIntentForKey({ ...input, ...override })).toBeNull();
   });
 });
 

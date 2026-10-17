@@ -47,8 +47,8 @@ export function composerSubmissionIntentForKey(input: {
   prompt?: string;
 }): ComposerSubmissionIntent | null {
   const { event } = input;
-  if (input.isMobileViewport || event.isComposing || event.keyCode === 229 || event.repeat)
-    return null;
+  // This fork sends on Enter on phones too; Shift+Enter still adds a newline.
+  if (event.isComposing || event.keyCode === 229 || event.repeat) return null;
   const command = resolveShortcutCommand(event, input.keybindings, {
     ...(input.platform === undefined ? {} : { platform: input.platform }),
     context: {
