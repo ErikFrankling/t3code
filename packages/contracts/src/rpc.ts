@@ -395,6 +395,7 @@ import {
   SourceControlSignInResult,
 } from "./sourceControl.ts";
 import { DictationDeliverInput, DictationDeliverResult } from "./dictation.ts";
+import { PersonalAgentEnsureInput, PersonalAgentEnsureResult } from "./personalAgent.ts";
 import { VcsError } from "./vcs.ts";
 import { Project, ProjectMutation, ProjectMutationError } from "./project.ts";
 
@@ -411,6 +412,7 @@ export const WS_METHODS = {
   projectsCreateFromThread: "projects.createFromThread",
 
   dictationDeliver: "dictation.deliver",
+  personalAgentEnsure: "personalAgent.ensure",
 
   shellOpenInEditor: "shell.openInEditor",
 
@@ -1319,6 +1321,12 @@ const WsDictationDeliverRpc = Rpc.make(WS_METHODS.dictationDeliver, {
   error: Schema.Union([OrchestrationDispatchCommandError, EnvironmentAuthorizationError]),
 });
 
+const WsPersonalAgentEnsureRpc = Rpc.make(WS_METHODS.personalAgentEnsure, {
+  payload: PersonalAgentEnsureInput,
+  success: PersonalAgentEnsureResult,
+  error: Schema.Union([OrchestrationDispatchCommandError, EnvironmentAuthorizationError]),
+});
+
 const WsProjectsCreateNewRpc = Rpc.make(WS_METHODS.projectsCreateNew, {
   payload: ProjectCreateNewInput,
   success: ProjectCreateNewResult,
@@ -2061,11 +2069,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsSearchEntriesRpc,
   WsProjectsEnsureScratchRpc,
   WsProjectsCreateNewRpc,
-<<<<<<< HEAD
   WsProjectsCreateFromThreadRpc,
-=======
   WsDictationDeliverRpc,
->>>>>>> 431f88e2b8 (feat: local dictation with durable server-side delivery)
+  WsPersonalAgentEnsureRpc,
   WsProjectsWriteFileRpc,
   WsProjectsMutateRpc,
   WsShellOpenInEditorRpc,

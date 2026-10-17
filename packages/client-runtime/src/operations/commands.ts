@@ -7,6 +7,7 @@ import {
   ORCHESTRATION_V2_WS_METHODS,
   OrchestrationV2CheckpointUnavailableError,
   WS_METHODS,
+  PERSONAL_AGENT_THREAD_ID,
   type ChatAttachment,
   MessageId,
   type ModelSelection,
@@ -780,7 +781,10 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
       ? {}
       : { idleCompaction: input.message.idleCompaction }),
     attachments,
-    ...(input.titleSeed === undefined ? {} : { titleSeed: input.titleSeed }),
+    // The personal agent keeps its name; its first message is not a topic.
+    ...(input.titleSeed === undefined || input.threadId === PERSONAL_AGENT_THREAD_ID
+      ? {}
+      : { titleSeed: input.titleSeed }),
     ...(input.modelSelection === undefined ? {} : { modelSelection: input.modelSelection }),
     ...(input.sourceProposedPlan === undefined ? {} : { sourcePlanRef: input.sourceProposedPlan }),
     ...(requestedMode !== "queue" ? { deliveryIntent: requestedMode } : {}),
