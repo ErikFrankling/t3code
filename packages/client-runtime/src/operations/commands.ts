@@ -9,6 +9,7 @@ import {
   ORCHESTRATION_V2_WS_METHODS,
   OrchestrationV2CheckpointUnavailableError,
   WS_METHODS,
+  PERSONAL_AGENT_THREAD_ID,
   type ChatAttachment,
   MessageId,
   type ModelSelection,
@@ -793,10 +794,9 @@ const MANUAL_CONTINUATION_FALLBACK_TEXT = "Continue where you left off.";
 const dispatchTurn = (
   input: StartThreadTurnInput,
   command: Extract<OrchestrationV2Command, { type: "message.dispatch" }>,
-  resend: boolean,
 ) =>
   input.dictation === undefined
-    ? dispatchMessage(command, resend)
+    ? dispatchMessage(command, input.resendAfterSocketLoss ?? true)
     : deliverDictatedTurn(input.dictation, { method: "dispatchCommand", command });
 
 export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(function* (
@@ -876,47 +876,7 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
 
   const requestedMode = input.dispatchMode ?? "auto";
   if (requestedMode === "start") {
-    return yield* dispatchTurn(
-    input,
-      {
-        type: "message.dispatch",
-        commandId,
-        createdBy: "user",
-        creationSource: input.creationSource ?? "web",
-        threadId: input.threadId,
-        messageId: input.message.messageId,
-        ...(input.manualContinuationOfRunId === undefined
-          ? {}
-          : { manualContinuationOfRunId: input.manualContinuationOfRunId }),
-        text:
-          input.manualContinuationOfRunId !== undefined &&
-          input.message.text.trim().length === 0 &&
-          attachments.length === 0
-            ? MANUAL_CONTINUATION_FALLBACK_TEXT
-            : input.message.text,
-        ...(context ? { context } : {}),
-        ...(input.message.idleCompaction === undefined
-          ? {}
-          : { idleCompaction: input.message.idleCompaction }),
-        attachments,
-        ...(input.modelSelection === undefined ? {} : { modelSelection: input.modelSelection }),
-        ...(input.sourceProposedPlan === undefined
-          ? {}
-          : { sourcePlanRef: input.sourceProposedPlan }),
-        ...(input.freshContext ? { freshContext: true } : {}),
-        dispatchMode: { type: "start_immediately" },
-      },
-      resend,
-    );
-  }
-
-  const dispatchMode =
-    requestedMode === "queue"
-      ? ({ type: "queue_after_active" } as const)
-      : ({ type: "start_immediately" } as const);
-  return yield* dispatchTurn(
-    input,
-    {
+    return yield* dispatchTurn(input, {
       type: "message.dispatch",
       commandId,
       createdBy: "user",
@@ -942,11 +902,37 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
         ? {}
         : { sourcePlanRef: input.sourceProposedPlan }),
       ...(input.freshContext ? { freshContext: true } : {}),
-      ...(requestedMode !== "queue" ? { deliveryIntent: requestedMode } : {}),
-      dispatchMode,
-    },
-    resend,
-  );
+      dispatchMode: { type: "start_immediately" },
+    });
+  }
+
+  const dispatchMode =
+    requestedMode === "queue"
+      ? ({ type: "queue_after_active" } as const)
+      : ({ type: "start_immediately" } as const);
+  return yield* dispatchTurn(input, {
+    type: "message.dispatch",
+    commandId,
+    createdBy: "user",
+    creationSource: input.creationSource ?? "web",
+    threadId: input.threadId,
+    messageId: input.message.messageId,
+    text: input.message.text,
+    ...(context ? { context } : {}),
+    ...(input.message.idleCompaction === undefined
+      ? {}
+      : { idleCompaction: input.message.idleCompaction }),
+    attachments,
+    // The personal agent keeps its name; its first message is not a topic.
+    ...(input.titleSeed === undefined || input.threadId === PERSONAL_AGENT_THREAD_ID
+      ? {}
+      : { titleSeed: input.titleSeed }),
+    ...(input.modelSelection === undefined ? {} : { modelSelection: input.modelSelection }),
+    ...(input.sourceProposedPlan === undefined ? {} : { sourcePlanRef: input.sourceProposedPlan }),
+    ...(input.freshContext ? { freshContext: true } : {}),
+    ...(requestedMode !== "queue" ? { deliveryIntent: requestedMode } : {}),
+    dispatchMode,
+  });
 });
 
 export const interruptThreadTurn = Effect.fn("EnvironmentCommands.interruptThreadTurn")(function* (
