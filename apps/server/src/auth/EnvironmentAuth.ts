@@ -759,7 +759,7 @@ export const make = Effect.gen(function* () {
     ...config.devAllowedOrigins,
   ]);
 
-  const authenticateRequest = (
+  const authenticateRequestStrict = (
     request: HttpServerRequest.HttpServerRequest,
   ): Effect.Effect<AuthenticatedSession, ServerAuthCredentialError | ServerAuthInternalError> => {
     const dpopToken = parseDpopToken(request);
@@ -810,6 +810,47 @@ export const make = Effect.gen(function* () {
       }),
     );
   };
+
+  // Explicit opt-in for trusted LAN deployments. Keep a real stored session so
+  // websocket tickets and access-management routes share the same principal.
+  const noAuthEnabled = process.env.T3CODE_UNSAFE_NO_AUTH === "1";
+  let noAuthPrincipal: AuthenticatedSession | null = null;
+  const loadNoAuthSession = Effect.gen(function* () {
+    const active = yield* sessions.listActive();
+    const existing = active.find((session) => session.subject === "no-auth");
+    const session =
+      existing ??
+      (yield* sessions.issue({
+        method: "browser-session-cookie",
+        subject: "no-auth",
+        scopes: AuthStandardClientScopes,
+        client: { deviceType: "unknown", label: "unauthenticated LAN access" },
+        ttl: Duration.days(3650),
+      }));
+    noAuthPrincipal = {
+      sessionId: session.sessionId,
+      subject: "no-auth",
+      method: session.method,
+      scopes: session.scopes,
+      ...(session.expiresAt ? { expiresAt: session.expiresAt } : {}),
+    };
+    return noAuthPrincipal;
+  }).pipe(mapSessionVerificationErrors);
+  const noAuthSession = Effect.suspend(() =>
+    noAuthPrincipal === null ? loadNoAuthSession : Effect.succeed(noAuthPrincipal),
+  );
+  // Sessions stored by an older server keep that release's scope set, which
+  // clients flag as legacy and refuse. Under unsafe-no-auth everyone is an
+  // administrator anyway, so always report the current full set.
+  const withNoAuthScopes = (session: AuthenticatedSession): AuthenticatedSession =>
+    noAuthEnabled ? { ...session, scopes: AuthStandardClientScopes } : session;
+  const authenticateRequest: typeof authenticateRequestStrict = noAuthEnabled
+    ? (request) =>
+        authenticateRequestStrict(request).pipe(
+          Effect.catchIf(isServerAuthCredentialError, () => noAuthSession),
+          Effect.map(withNoAuthScopes),
+        )
+    : authenticateRequestStrict;
 
   const getSessionState: EnvironmentAuth["Service"]["getSessionState"] = (request) =>
     authenticateRequest(request).pipe(
@@ -911,7 +952,7 @@ export const make = Effect.gen(function* () {
     ServerAuthInvalidCredentialError | ServerAuthInternalError | ServerAuthScopeNotGrantedError
   > => {
     if (!devAuth?.matches(credential)) {
-      return bootstrapCredentials
+      const consumed = bootstrapCredentials
         .consume(credential, input)
         .pipe(
           Effect.mapError((cause) =>
@@ -920,6 +961,19 @@ export const make = Effect.gen(function* () {
               : toBootstrapExchangeError(cause),
           ),
         );
+      // Clients that insist on a pairing code (the mobile app) accept any code
+      // under unsafe-no-auth, and get the same administrative scopes.
+      return noAuthEnabled
+        ? consumed.pipe(
+            Effect.catchIf(isServerAuthCredentialError, () =>
+              Effect.succeed({
+                method: "one-time-token",
+                scopes: AuthStandardClientScopes,
+                subject: "no-auth",
+              } satisfies ResolvedBootstrapGrant),
+            ),
+          )
+        : consumed;
     }
     return sessions.verify(credential).pipe(
       mapSessionVerificationErrors,
@@ -1263,7 +1317,7 @@ export const make = Effect.gen(function* () {
               Effect.provideService(Crypto.Crypto, crypto),
             );
           }
-          return {
+          return withNoAuthScopes({
             sessionId: session.sessionId,
             subject: session.subject,
             method: session.method,
@@ -1272,7 +1326,7 @@ export const make = Effect.gen(function* () {
               ? { proofKeyThumbprint: session.proofKeyThumbprint }
               : {}),
             ...(session.expiresAt ? { expiresAt: session.expiresAt } : {}),
-          };
+          });
         }
       }
 
