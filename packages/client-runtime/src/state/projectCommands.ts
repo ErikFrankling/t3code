@@ -195,6 +195,13 @@ export function createProjectEnvironmentAtoms<R, E>(
       scheduler: projectScheduler,
       concurrency: { mode: "serial", key: ({ environmentId }) => environmentId },
     }),
+    // Finds or creates the personal agent's folder, project and pinned thread.
+    ensurePersonalAgent: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:projects:ensure-personal-agent",
+      tag: WS_METHODS.personalAgentEnsure,
+      scheduler: projectScheduler,
+      concurrency: { mode: "serial", key: ({ environmentId }) => environmentId },
+    }),
     createNew: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:projects:create-new",
       tag: WS_METHODS.projectsCreateNew,
