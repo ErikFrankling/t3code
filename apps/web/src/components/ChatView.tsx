@@ -64,7 +64,8 @@ import {
   DEFAULT_MODEL,
   isProviderNativeSubagentThread,
   type EnvironmentId,
-  type MessageId,
+  MessageId,
+  dictationMarker,
   type ModelSelection,
   type ProjectScript,
   type PreviewAnnotationPayload,
@@ -5986,12 +5987,14 @@ export default function ChatView(props: ChatViewProps) {
       annotation: PreviewAnnotationPayload;
       image: ComposerImageAttachment | null;
     },
+    dictation?: { id: string; draft: string; uploaded: Promise<void> },
   ) => {
     e?.preventDefault();
     if (
       usageLimitsOffered &&
       usageLimitsKey !== null &&
       !directAnnotation &&
+      !dictation &&
       !composerHasNonPromptContent &&
       isUsageLimitsCommand(promptRef.current)
     ) {
@@ -6056,7 +6059,7 @@ export default function ChatView(props: ChatViewProps) {
     }
     const sendCtx = composerRef.current?.getSendContext();
     if (activePendingProgress && sendCtx?.answeringPendingUserInput !== false) {
-      if (directAnnotation) {
+      if (directAnnotation || dictation) {
         notifyDirectAnnotationAttached();
         return;
       }
@@ -6067,7 +6070,7 @@ export default function ChatView(props: ChatViewProps) {
       notifyDirectAnnotationAttached();
       return;
     }
-    const multipleModelSelections = sendCtx.multipleModelSelections;
+    const multipleModelSelections = dictation ? null : sendCtx.multipleModelSelections;
     if (
       multipleModelSelections !== null &&
       serverConfig?.environment.capabilities.requiredWorktreeBootstrap !== true
@@ -6116,12 +6119,18 @@ export default function ChatView(props: ChatViewProps) {
       });
     // A direct "send annotation" writes the draft and sends in the same tick; the reference
     // must be in the text now, not after the next render.
+    // A recording travels as a marker the server replaces with its final transcript.
+    const dictationText = dictation ? dictationMarker(dictation.id) : "";
     const promptForSend = directAnnotation
       ? ensureInlineContextReferences(promptRef.current, [
           previewAnnotationContextReference(directAnnotation.annotation),
         ])
-      : promptRef.current;
-    if (queuedRunEdit.isEditing) {
+      : dictation
+        ? [promptRef.current, dictationText].filter(Boolean).join("\n")
+        : promptRef.current;
+    const withDictationDraft = (text: string, empty = "") =>
+      dictation ? text.replace(dictationText, () => dictation.draft || empty) : text;
+    if (!dictation && queuedRunEdit.isEditing) {
       // Edit mode repurposes the composer: sending saves the queued message
       // in place instead of dispatching a new turn.
       await queuedRunEdit.saveEdit(
@@ -6210,6 +6219,7 @@ export default function ChatView(props: ChatViewProps) {
     }
     if (
       !directAnnotation &&
+      !dictation &&
       sendInteractionModeEnabled &&
       showPlanFollowUpPrompt &&
       activeProposedPlan &&
@@ -6369,7 +6379,7 @@ export default function ChatView(props: ChatViewProps) {
     const outgoingMessageContext = buildOutgoingMessageContext(
       composerAttachmentsSnapshot.map((attachment) => attachment.id),
     );
-    const messageIdForSend = newMessageId();
+    const messageIdForSend = dictation ? MessageId.make(dictation.id) : newMessageId();
     const messageCreatedAt = new Date().toISOString();
     // A stale Claude session compacts before this message so the turn does not re-read the
     // old history. The message queues behind the /compact run, since steering into it is
@@ -6819,7 +6829,7 @@ export default function ChatView(props: ChatViewProps) {
       {
         id: messageIdForSend,
         role: "user",
-        text: outgoingMessageText,
+        text: withDictationDraft(outgoingMessageText, "Processing recording…"),
         ...(optimisticAttachments.length > 0 ? { attachments: optimisticAttachments } : {}),
         ...(outgoingMessageContext !== undefined ? { context: outgoingMessageContext } : {}),
         runId: null,
@@ -6858,7 +6868,10 @@ export default function ChatView(props: ChatViewProps) {
         firstComposerImageName = firstComposerImage.name;
       }
     }
-    let titleSeed = assistantCitationsToPlainText(stripInlineContextReferences(trimmed)).trim();
+    let titleSeed = withDictationDraft(
+      assistantCitationsToPlainText(stripInlineContextReferences(trimmed)).trim(),
+      "Voice message",
+    );
     if (!titleSeed) {
       if (firstComposerImageName) {
         titleSeed = `Image: ${firstComposerImageName}`;
@@ -6926,6 +6939,11 @@ export default function ChatView(props: ChatViewProps) {
       }
     }
 
+    if (failure === null && dictation) {
+      const uploadedResult = await settlePromise(() => dictation.uploaded);
+      if (uploadedResult._tag === "Failure") failure = uploadedResult;
+    }
+
     let backgroundDraftOpened = false;
     let turnStartSucceeded = false;
     if (failure === null && turnAttachmentsResult._tag === "Success") {
@@ -6966,6 +6984,12 @@ export default function ChatView(props: ChatViewProps) {
       const startPromise = startThreadTurn({
         environmentId,
         input: {
+          ...(dictation
+            ? {
+                commandId: CommandId.make(dictation.id),
+                dictation: { id: dictation.id, draft: dictation.draft },
+              }
+            : {}),
           threadId: threadIdForSend,
           message: {
             messageId: messageIdForSend,
@@ -7111,12 +7135,13 @@ export default function ChatView(props: ChatViewProps) {
           const next = existing.filter((message) => message.id !== messageIdForSend);
           return next.length === existing.length ? existing : next;
         });
-        promptRef.current = messageTextForSend;
+        const restoredPrompt = withDictationDraft(messageTextForSend);
+        promptRef.current = restoredPrompt;
         const retryComposerImages = composerImagesSnapshot.map(cloneComposerImageForRetry);
         composerImagesRef.current = retryComposerImages;
         composerFilesRef.current = composerFilesSnapshot;
         composerTerminalContextsRef.current = composerTerminalContextsSnapshot;
-        setComposerDraftPrompt(composerDraftTarget, messageTextForSend);
+        setComposerDraftPrompt(composerDraftTarget, restoredPrompt);
         addComposerDraftImages(composerDraftTarget, retryComposerImages);
         addComposerDraftFiles(composerDraftTarget, composerFilesSnapshot);
         setComposerDraftTerminalContexts(composerDraftTarget, composerTerminalContextsSnapshot);
@@ -7124,8 +7149,8 @@ export default function ChatView(props: ChatViewProps) {
         setComposerDraftReviewComments(composerDraftTarget, composerReviewCommentsSnapshot);
         setComposerDraftThreadContexts(composerDraftTarget, composerThreadContextsSnapshot);
         composerRef.current?.resetCursorState({
-          cursor: collapseExpandedComposerCursor(messageTextForSend, messageTextForSend.length),
-          prompt: messageTextForSend,
+          cursor: collapseExpandedComposerCursor(restoredPrompt, restoredPrompt.length),
+          prompt: restoredPrompt,
           detectTrigger: true,
         });
       }
@@ -7160,6 +7185,7 @@ export default function ChatView(props: ChatViewProps) {
       );
       if (!sendQueuesBehindSetup) resetLocalDispatch();
     }
+    return turnStartSucceeded;
   };
 
   async function onSubmitPlanFollowUp({
@@ -7581,6 +7607,15 @@ export default function ChatView(props: ChatViewProps) {
   const sendPreviewAnnotationStable = useStableCallback(sendPreviewAnnotation);
   const onComposerResumeStable = useStableCallback(onResume);
   const onComposerCompactContextStable = useStableCallback(onCompactContext);
+  const onComposerDictationSendStable = useStableCallback(
+    async (id: string, draft: string, uploaded: Promise<void>) => {
+      if (!(await onSend(undefined, "auto", "foreground", undefined, { id, draft, uploaded }))) {
+        throw new Error(
+          "The recording is saved, but this chat could not accept the message. Retry sending.",
+        );
+      }
+    },
+  );
   const queuedRunsControl =
     isServerThread && activeThread ? (
       <QueuedRunsControl
@@ -8318,6 +8353,7 @@ export default function ChatView(props: ChatViewProps) {
                               onPageScrollRelease={onComposerPageScrollReleaseStable}
                               onCompactContext={onComposerCompactContextStable}
                               onSend={onComposerSendStable}
+                              onDictationSend={onComposerDictationSendStable}
                               onResume={onComposerResumeStable}
                               onInterrupt={onInterruptStable}
                               onImplementPlanInNewThread={onImplementPlanInNewThreadStable}
