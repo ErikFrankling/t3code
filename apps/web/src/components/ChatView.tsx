@@ -2915,6 +2915,15 @@ export default function ChatView(props: ChatViewProps) {
       .some((id) => id !== "" && !previousIds.has(id));
     if (hasNewMessage && timelineLiveFollowEnabled) scrollToEnd(true);
   }, [routeThreadKey, pendingGuestMessageKey, timelineLiveFollowEnabled, scrollToEnd]);
+  const onComposerDictationSendStable = useStableCallback(
+    async (id: string, draft: string, uploaded: Promise<void>) => {
+      if (!(await onSend(undefined, "auto", "foreground", undefined, { id, draft, uploaded }))) {
+        throw new Error(
+          "The recording is saved, but this chat could not accept the message. Retry sending.",
+        );
+      }
+    },
+  );
   const queuedRunsControl =
     isServerThread && activeThread ? (
       <>
@@ -3581,6 +3590,7 @@ export default function ChatView(props: ChatViewProps) {
                               onPageScrollRelease={onComposerPageScrollReleaseStable}
                               onCompactContext={onComposerCompactContextStable}
                               onSend={onComposerSendStable}
+                              onDictationSend={onComposerDictationSendStable}
                               onResume={onComposerResumeStable}
                               onInterrupt={onInterruptStable}
                               onImplementPlanInNewThread={onImplementPlanInNewThreadStable}

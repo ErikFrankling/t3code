@@ -288,7 +288,7 @@ function resolveDevRedirectUrl(devUrl: URL, requestUrl: URL): string {
   return redirectUrl.toString();
 }
 
-const authenticateRawRouteWithScope =
+export const authenticateRawRouteWithScope =
   /* Request instrumentation already owns the span; keep this helper in that context. */
   Effect.fnUntraced(function* (
     scope: typeof AuthOrchestrationReadScope | typeof AuthOrchestrationOperateScope,
@@ -309,6 +309,7 @@ const authenticateRawRouteWithScope =
     if (!session.scopes.includes(scope)) {
       return yield* failEnvironmentScopeRequired(scope);
     }
+    return session;
   });
 
 export const layerServerEnvironmentHttpApi = HttpApiBuilder.group(
