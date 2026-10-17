@@ -38,7 +38,7 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import { mediaFileReference } from "@t3tools/client-runtime/media-reference";
-import { FolderTree, Globe2, WrapTextIcon } from "lucide-react";
+import { DownloadIcon, FolderTree, Globe2, WrapTextIcon } from "lucide-react";
 import { Code2, Eye, Table2 } from "lucide";
 import * as Schema from "effect/Schema";
 import { useEffect, useRef, useState } from "react";
@@ -1209,6 +1209,51 @@ export default function FilePreviewPanel({
     })();
   };
 
+  const downloadResource =
+    absolutePath && previewPath !== null && attachment === undefined
+      ? ({
+          _tag: "media-file",
+          threadId: threadRef.threadId,
+          path: absolutePath,
+          disposition: "attachment",
+        } as const)
+      : null;
+  const prepareDownload = useAssetUrlRefresh(environmentId, downloadResource);
+  const [saving, setSaving] = useState(false);
+  const handleSave = () => {
+    if (!absolutePath) return;
+    setSaving(true);
+    void (async () => {
+      try {
+        const target = await prepareDownload();
+        if (!target) throw new Error("Reconnect to the environment and try again.");
+        const response = await fetch(target);
+        if (!response.ok) throw new Error("The file could not be loaded. Try again.");
+        // A Blob keeps cross-origin downloads inside the desktop client instead of
+        // navigating its custom app scheme to an external browser.
+        const downloadUrl = URL.createObjectURL(await response.blob());
+        try {
+          const anchor = document.createElement("a");
+          anchor.href = downloadUrl;
+          anchor.download = absolutePath.split(/[\\/]/).pop() ?? "file";
+          anchor.click();
+        } finally {
+          setTimeout(() => URL.revokeObjectURL(downloadUrl), 30_000);
+        }
+      } catch (cause) {
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Could not save file",
+            description: cause instanceof Error ? cause.message : "Please try again.",
+          }),
+        );
+      } finally {
+        setSaving(false);
+      }
+    })();
+  };
+
   if (attachment === undefined && !canReadFiles) {
     if (fileAccess.isPending) {
       return (
@@ -1295,6 +1340,15 @@ export default function FilePreviewPanel({
           {canOpenInBrowser ? (
             <FileSurfaceAction label="Open file in preview browser" onPress={handleOpenInBrowser}>
               <Globe2 className="size-3.5" />
+            </FileSurfaceAction>
+          ) : null}
+          {downloadResource ? (
+            <FileSurfaceAction
+              label={saving ? "Preparing file…" : "Save file"}
+              disabled={saving}
+              onPress={handleSave}
+            >
+              <DownloadIcon className="size-3.5" />
             </FileSurfaceAction>
           ) : null}
           {!isHostFile && previewPath !== null ? (
