@@ -12,6 +12,8 @@ import {
   type ModelSelection,
   type NodeId,
   type OrchestrationV2Command,
+  type OrchestrationV2ThreadLaunchInput,
+  type DictationTurn,
   type OrchestrationV2CreationSource,
   type PlanId,
   type ProjectId,
@@ -179,6 +181,11 @@ export interface StartThreadTurnInput extends ThreadCommandInput {
   readonly bootstrap?: StartThreadBootstrap;
   readonly sourceProposedPlan?: { readonly threadId: ThreadId; readonly planId: PlanId };
   readonly dispatchMode?: "auto" | "queue" | "steer" | "restart" | "start";
+  /**
+   * A stopped recording: the server holds this turn until the final transcript
+   * replaces `[dictation:<id>]` in the message text, then sends it.
+   */
+  readonly dictation?: { readonly id: string; readonly draft: string };
 }
 
 export interface InterruptThreadTurnInput extends ThreadCommandInput {
@@ -271,6 +278,11 @@ const allocateCommandId = Effect.fn("EnvironmentCommands.allocateCommandId")(fun
 
 const dispatch = (command: OrchestrationV2Command) =>
   request(ORCHESTRATION_V2_WS_METHODS.dispatchCommand, command);
+
+const deliverDictatedTurn = (
+  dictation: NonNullable<StartThreadTurnInput["dictation"]>,
+  turn: DictationTurn,
+) => request(WS_METHODS.dictationDeliver, { ...dictation, turn });
 
 const getProjection = (threadId: ThreadId) =>
   request(ORCHESTRATION_V2_WS_METHODS.getThreadProjection, { threadId });
@@ -669,6 +681,11 @@ export const setThreadInteractionMode = Effect.fn("EnvironmentCommands.setThread
   },
 );
 
+const dispatchTurn = (input: StartThreadTurnInput, command: OrchestrationV2Command) =>
+  input.dictation === undefined
+    ? dispatch(command)
+    : deliverDictatedTurn(input.dictation, { method: "dispatchCommand", command });
+
 export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(function* (
   input: StartThreadTurnInput,
 ) {
@@ -711,7 +728,7 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
                 ? {}
                 : { branch: bootstrap.branch }),
             };
-    return yield* request(ORCHESTRATION_V2_WS_METHODS.launchThread, {
+    const launchInput = {
       commandId,
       creationSource: input.creationSource ?? "web",
       threadId: input.threadId,
@@ -729,12 +746,19 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
         ...(context ? { context } : {}),
         attachments,
       },
-    });
+    } satisfies OrchestrationV2ThreadLaunchInput;
+    if (input.dictation !== undefined) {
+      return yield* deliverDictatedTurn(input.dictation, {
+        method: "launchThread",
+        input: launchInput,
+      });
+    }
+    return yield* request(ORCHESTRATION_V2_WS_METHODS.launchThread, launchInput);
   }
 
   const requestedMode = input.dispatchMode ?? "auto";
   if (requestedMode === "start") {
-    return yield* dispatch({
+    return yield* dispatchTurn(input, {
       type: "message.dispatch",
       commandId,
       createdBy: "user",
@@ -801,7 +825,7 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
   const shouldSendTitleSeed =
     input.titleSeed !== undefined &&
     (serverResolvesCommandContext || projection?.messages.length === 0);
-  return yield* dispatch({
+  return yield* dispatchTurn(input, {
     type: "message.dispatch",
     commandId,
     createdBy: "user",
