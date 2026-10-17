@@ -1,4 +1,4 @@
-import { OrchestrationDispatchCommandError } from "@t3tools/contracts";
+import { OrchestrationDispatchCommandError, dictationMarker } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
 
@@ -115,6 +115,7 @@ import * as McpAppRequests from "./mcpApps/McpAppRequests.ts";
 import * as ProviderSessionManager from "./orchestration-v2/ProviderSessionManager.ts";
 import * as ThreadLaunchService from "./orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadMessageIntake from "./orchestration-v2/ThreadMessageIntake.ts";
+import * as DictationDelivery from "./DictationDelivery.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
 import * as SecretRequests from "./secrets/SecretRequests.ts";
@@ -1219,6 +1220,7 @@ export const layerWsRpc = (
         }
       };
       const threadLaunch = yield* ThreadLaunchService.ThreadLaunchService;
+      const dictationDeliveries = yield* DictationDelivery.DictationDelivery;
       const commandOutputHub = yield* CommandOutputHub.CommandOutputHub;
       const providerSessionManager = yield* ProviderSessionManager.ProviderSessionManagerV2;
       const scheduledTasks = yield* ScheduledTasks.ScheduledTaskService;
@@ -2591,6 +2593,30 @@ export const layerWsRpc = (
               (cause) => new OrchestrationDispatchCommandError({ message: cause.message, cause }),
             ),
           ),
+        [WS_METHODS.dictationDeliver]: (input) =>
+          Effect.gen(function* () {
+            const invalid = DictationDelivery.invalidDictationTurn(input);
+            if (invalid !== undefined) {
+              return yield* new OrchestrationDispatchCommandError({ message: invalid });
+            }
+            const job = yield* Effect.tryPromise({
+              try: () =>
+                dictationDeliveries.enqueue({
+                  id: input.id,
+                  owner: currentSession.subject,
+                  turn: input.turn,
+                  marker: dictationMarker(input.id),
+                  draft: input.draft,
+                }),
+              catch: (cause) =>
+                new OrchestrationDispatchCommandError({
+                  message:
+                    cause instanceof Error ? cause.message : "Could not queue the recording.",
+                  cause,
+                }),
+            });
+            return { id: job.id, delivery: job.status };
+          }),
         [WS_METHODS.projectsCreateNew]: (input) =>
           managedFolders
             .createNamedProject(input)
@@ -3138,6 +3164,7 @@ export const layer = Layer.unwrap(
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
     const pullRequests = yield* PullRequestService.PullRequestService;
     const reviewGuides = yield* PullRequestReviewGuideService.PullRequestReviewGuideService;
+    const dictationDeliveries = yield* DictationDelivery.DictationDelivery;
     const sql = yield* SqlClient.SqlClient;
     return HttpRouter.add(
       "GET",
@@ -3222,6 +3249,9 @@ export const layer = Layer.unwrap(
               // One server-lifetime service means clients share the same PR caches, and a WS
               // mutation invalidates the HTTP diff cache that every client reads from.
               Layer.provide(Layer.succeed(PullRequestService.PullRequestService, pullRequests)),
+              Layer.provide(
+                Layer.succeed(DictationDelivery.DictationDelivery, dictationDeliveries),
+              ),
               Layer.provide(OtlpEndpointCheck.layer),
               Layer.provide(
                 Layer.succeed(
