@@ -1,8 +1,9 @@
-import { ArrowLeftIcon, ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react";
+import { ArrowLeftIcon, ChartNoAxesColumnIcon, SettingsIcon, SparklesIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { memo } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 
+import { usePersonalAgent } from "../../hooks/usePersonalAgent";
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
 import { usePullRequestsSupported } from "../../state/environments";
@@ -228,6 +229,25 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   );
 });
 
+const SidebarPersonalAgentItem = memo(function SidebarPersonalAgentItem() {
+  const { openPersonalAgent, isPersonalAgentOpen } = usePersonalAgent();
+  const { isMobile, setOpenMobile } = useSidebar();
+  const handleClick = () => {
+    if (isMobile) setOpenMobile(false);
+    void openPersonalAgent();
+  };
+  return (
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <SidebarMenuButton isActive={isPersonalAgentOpen} onClick={handleClick}>
+          <SparklesIcon />
+          <span>Personal agent</span>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    </SidebarMenu>
+  );
+});
+
 export const SidebarChromeFooter = memo(function SidebarChromeFooter({
   showUndoNotice = false,
 }: {
@@ -238,6 +258,7 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter({
       {showUndoNotice ? <SidebarThreadUndoNotice /> : null}
       <SidebarProviderUpdatePill />
       <SidebarUpdateArchitectureWarning />
+      <SidebarPersonalAgentItem />
       <SidebarUtilityMenu />
     </SidebarFooter>
   );
