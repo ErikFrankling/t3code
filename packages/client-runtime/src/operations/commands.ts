@@ -14,6 +14,8 @@ import {
   type ModelSelection,
   type NodeId,
   type OrchestrationV2Command,
+  type OrchestrationV2ThreadLaunchInput,
+  type DictationTurn,
   type OrchestrationV2CreationSource,
   type PlanId,
   type ProjectId,
@@ -211,6 +213,11 @@ export interface StartThreadTurnInput extends ThreadCommandInput {
   readonly freshContext?: boolean;
   /** Defaults to true. Callers with their own retry queue opt out so a dead socket fails fast. */
   readonly resendAfterSocketLoss?: boolean;
+  /**
+   * A stopped recording: the server holds this turn until the final transcript
+   * replaces `[dictation:<id>]` in the message text, then sends it.
+   */
+  readonly dictation?: { readonly id: string; readonly draft: string };
 }
 
 export interface InterruptThreadTurnInput extends ThreadCommandInput {
@@ -349,6 +356,10 @@ const resendAfterSocketLoss = Effect.fn("EnvironmentCommands.resendAfterSocketLo
     if (Option.isNone(replacement)) return yield* exit;
   }
 });
+const deliverDictatedTurn = (
+  dictation: NonNullable<StartThreadTurnInput["dictation"]>,
+  turn: DictationTurn,
+) => request(WS_METHODS.dictationDeliver, { ...dictation, turn });
 
 const dispatchMessage = Effect.fn("EnvironmentCommands.dispatchMessage")(function* (
   command: Extract<OrchestrationV2Command, { type: "message.dispatch" }>,
@@ -779,6 +790,15 @@ export const setThreadInteractionMode = Effect.fn("EnvironmentCommands.setThread
 // it when manualContinuationOfRunId is set.
 const MANUAL_CONTINUATION_FALLBACK_TEXT = "Continue where you left off.";
 
+const dispatchTurn = (
+  input: StartThreadTurnInput,
+  command: Extract<OrchestrationV2Command, { type: "message.dispatch" }>,
+  resend: boolean,
+) =>
+  input.dictation === undefined
+    ? dispatchMessage(command, resend)
+    : deliverDictatedTurn(input.dictation, { method: "dispatchCommand", command });
+
 export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(function* (
   input: StartThreadTurnInput,
 ) {
@@ -825,7 +845,7 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
                 ? {}
                 : { branch: bootstrap.branch }),
             };
-    const launch = request(ORCHESTRATION_V2_WS_METHODS.launchThread, {
+    const launchInput = {
       commandId,
       creationSource: input.creationSource ?? "web",
       threadId: input.threadId,
@@ -843,13 +863,21 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
         ...(context ? { context } : {}),
         attachments,
       },
-    });
+    } satisfies OrchestrationV2ThreadLaunchInput;
+    if (input.dictation !== undefined) {
+      return yield* deliverDictatedTurn(input.dictation, {
+        method: "launchThread",
+        input: launchInput,
+      });
+    }
+    const launch = request(ORCHESTRATION_V2_WS_METHODS.launchThread, launchInput);
     return yield* resend ? resendAfterSocketLoss(launch) : launch;
   }
 
   const requestedMode = input.dispatchMode ?? "auto";
   if (requestedMode === "start") {
-    return yield* dispatchMessage(
+    return yield* dispatchTurn(
+    input,
       {
         type: "message.dispatch",
         commandId,
@@ -887,7 +915,8 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
     requestedMode === "queue"
       ? ({ type: "queue_after_active" } as const)
       : ({ type: "start_immediately" } as const);
-  return yield* dispatchMessage(
+  return yield* dispatchTurn(
+    input,
     {
       type: "message.dispatch",
       commandId,
@@ -895,13 +924,20 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
       creationSource: input.creationSource ?? "web",
       threadId: input.threadId,
       messageId: input.message.messageId,
-      text: input.message.text,
+      ...(input.manualContinuationOfRunId === undefined
+        ? {}
+        : { manualContinuationOfRunId: input.manualContinuationOfRunId }),
+      text:
+        input.manualContinuationOfRunId !== undefined &&
+        input.message.text.trim().length === 0 &&
+        attachments.length === 0
+          ? MANUAL_CONTINUATION_FALLBACK_TEXT
+          : input.message.text,
       ...(context ? { context } : {}),
       ...(input.message.idleCompaction === undefined
         ? {}
         : { idleCompaction: input.message.idleCompaction }),
       attachments,
-      ...(input.titleSeed === undefined ? {} : { titleSeed: input.titleSeed }),
       ...(input.modelSelection === undefined ? {} : { modelSelection: input.modelSelection }),
       ...(input.sourceProposedPlan === undefined
         ? {}
