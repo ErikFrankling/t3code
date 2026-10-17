@@ -1,4 +1,4 @@
-import { GitCommandError, OrchestrationDispatchCommandError } from "@t3tools/contracts";
+import { GitCommandError, OrchestrationDispatchCommandError, dictationMarker } from "@t3tools/contracts";
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- A synchronous digest inside the pure provider mapping.
 import * as NodeCrypto from "node:crypto";
 import * as FeatureFlags from "@t3tools/shared/FeatureFlags";
@@ -134,6 +134,8 @@ import * as ProviderSessionManager from "./orchestration-v2/ProviderSessionManag
 import * as ThreadLaunchService from "./orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadMessageIntake from "./orchestration-v2/ThreadMessageIntake.ts";
 import * as DocumentText from "./provider/DocumentText.ts";
+import * as DictationDelivery from "./DictationDelivery.ts";
+import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
 import * as Workflows from "./workflows/Workflows.ts";
 import * as WorkflowRuntime from "./workflows/WorkflowRuntime.ts";
@@ -1506,6 +1508,7 @@ export const layerWsRpc = (
         ).pipe(Effect.ignore);
       };
       const threadLaunch = yield* ThreadLaunchService.ThreadLaunchService;
+      const dictationDeliveries = yield* DictationDelivery.DictationDelivery;
       const commandOutputHub = yield* CommandOutputHub.CommandOutputHub;
       const threadViewers = yield* ThreadViewers.ThreadViewers;
       const providerSessionManager = yield* ProviderSessionManager.ProviderSessionManagerV2;
@@ -3078,6 +3081,30 @@ export const layerWsRpc = (
               (cause) => new OrchestrationDispatchCommandError({ message: cause.message, cause }),
             ),
           ),
+        [WS_METHODS.dictationDeliver]: (input) =>
+          Effect.gen(function* () {
+            const invalid = DictationDelivery.invalidDictationTurn(input);
+            if (invalid !== undefined) {
+              return yield* new OrchestrationDispatchCommandError({ message: invalid });
+            }
+            const job = yield* Effect.tryPromise({
+              try: () =>
+                dictationDeliveries.enqueue({
+                  id: input.id,
+                  owner: currentSession.subject,
+                  turn: input.turn,
+                  marker: dictationMarker(input.id),
+                  draft: input.draft,
+                }),
+              catch: (cause) =>
+                new OrchestrationDispatchCommandError({
+                  message:
+                    cause instanceof Error ? cause.message : "Could not queue the recording.",
+                  cause,
+                }),
+            });
+            return { id: job.id, delivery: job.status };
+          }),
         [WS_METHODS.projectsCreateNew]: (input) =>
           managedFolders
             .createNamedProject(input)
@@ -3824,6 +3851,7 @@ export const layer = Layer.unwrap(
     const peerLinkRequests = yield* PeerLinkRequests.PeerLinkRequests;
     const peerThreadRelay = yield* PeerThreadRelay.PeerThreadRelay;
     const peerClientPairing = yield* PeerClientPairing.PeerClientPairing;
+    const dictationDeliveries = yield* DictationDelivery.DictationDelivery;
     const sql = yield* SqlClient.SqlClient;
     return HttpRouter.add(
       "GET",
@@ -3920,6 +3948,9 @@ export const layer = Layer.unwrap(
               Layer.provide(Layer.succeed(ThreadIssueService.ThreadIssueService, threadIssues)),
               Layer.provide(
                 Layer.succeed(IssueTrackerConnections.IssueTrackerConnections, issueTrackers),
+              ),
+              Layer.provide(
+                Layer.succeed(DictationDelivery.DictationDelivery, dictationDeliveries),
               ),
               Layer.provide(OtlpEndpointCheck.layer),
               Layer.provide(
