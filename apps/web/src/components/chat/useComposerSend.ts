@@ -643,8 +643,7 @@ export function useComposerSend(input: ComposerSendInput) {
       );
       return;
     }
-<<<<<<< HEAD
-    if (queuedRunEdit.isEditing) {
+    if (!dictation && queuedRunEdit.isEditing) {
       // A queued message stays in its thread, so saving `/side` would send it to main.
       if (!directAnnotation && parseSideChatCommand(promptAtSend)) {
         toastManager.add(
@@ -657,9 +656,6 @@ export function useComposerSend(input: ComposerSendInput) {
         );
         return;
       }
-=======
-    if (!dictation && queuedRunEdit.isEditing) {
->>>>>>> 3eddcd52c5 (feat: local dictation with durable server-side delivery)
       // Edit mode repurposes the composer: sending saves the queued message
       // in place instead of dispatching a new turn.
       await queuedRunEdit.saveEdit(
@@ -1488,8 +1484,7 @@ export function useComposerSend(input: ComposerSendInput) {
         )
       ) {
         // A draft typed meanwhile keeps the composer, so the failed text stays reachable here.
-<<<<<<< HEAD
-        const failedText = sendSnapshot.draftText;
+        const failedText = withDictationDraft(sendSnapshot.draftText);
         const hasText = failedText.trim().length > 0;
         // An image-only message has nothing to copy, but its failure still needs a notice.
         toastManager.add(
@@ -1518,29 +1513,6 @@ export function useComposerSend(input: ComposerSendInput) {
               : {}),
           }),
         );
-=======
-        const failedText = withDictationDraft(sendSnapshot.draftText);
-        if (failedText.trim().length > 0) {
-          toastManager.add(
-            stackedThreadToast({
-              type: "error",
-              title: isAtomCommandInterrupted(failure)
-                ? "Message may not have been sent"
-                : "Message not sent",
-              description: "Your new draft was kept. Copy the failed message to send it again.",
-              // The toast holds the only copy of the failed text, so it stays until dismissed.
-              timeout: 0,
-              data: { hideCopyButton: true },
-              actionProps: {
-                children: "Copy message",
-                onClick: () => {
-                  void writeTextToClipboard(failedText, "failed message").catch(() => undefined);
-                },
-              },
-            }),
-          );
-        }
->>>>>>> 3eddcd52c5 (feat: local dictation with durable server-side delivery)
       } else {
         const restoredPrompt = withDictationDraft(sendSnapshot.draftText);
         const retryComposerImages = restoreComposerDraft(composerDraftTarget, {
