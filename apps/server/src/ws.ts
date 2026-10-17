@@ -121,6 +121,7 @@ import * as ProviderSessionManager from "./orchestration-v2/ProviderSessionManag
 import * as ThreadLaunchService from "./orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadMessageIntake from "./orchestration-v2/ThreadMessageIntake.ts";
 import * as DictationDelivery from "./DictationDelivery.ts";
+import { ensurePersonalAgent } from "./project/PersonalAgent.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
 import * as SecretRequests from "./secrets/SecretRequests.ts";
@@ -2580,6 +2581,12 @@ const layerWsRpc = (
             });
             return { id: job.id, delivery: job.status };
           }),
+        [WS_METHODS.personalAgentEnsure]: (input) =>
+          ensurePersonalAgent(input).pipe(
+            Effect.mapError(
+              (cause) => new OrchestrationDispatchCommandError({ message: cause.message, cause }),
+            ),
+          ),
         [WS_METHODS.projectsCreateNew]: (input) =>
           managedFolders
             .createNamedProject(input)
