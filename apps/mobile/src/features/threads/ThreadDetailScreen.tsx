@@ -224,7 +224,10 @@ export interface ThreadDetailScreenProps {
   readonly onStopThread: () => void;
   /** Present while the thread's queue is held. */
   readonly onResumeQueue: (() => Promise<void>) | null;
-  readonly onSendMessage: (followUp?: ActiveTurnComposerAction) => Promise<MessageId | null>;
+  readonly onSendMessage: (
+    followUp?: ActiveTurnComposerAction,
+    dictation?: { readonly id: string; readonly draft: string },
+  ) => Promise<MessageId | null>;
   readonly onReconnectEnvironment: () => void;
   readonly canSwitchThreadProvider: boolean;
   readonly onUpdateThreadModelSelection: (modelSelection: ModelSelection) => void;
@@ -934,12 +937,15 @@ export const ThreadDetailScreen = function ThreadDetailScreen(props: ThreadDetai
     selectedThreadKey,
   ]);
 
-  const handleSendMessage = async (followUp?: ActiveTurnComposerAction) => {
+  const handleSendMessage = async (
+    followUp?: ActiveTurnComposerAction,
+    dictation?: { readonly id: string; readonly draft: string },
+  ) => {
     const targetThreadKey = selectedThreadKey;
     const hasUserMessage = selectedThreadFeed.some(
       (entry) => entry.type === "message" && entry.message.role === "user",
     );
-    const messageId = await props.onSendMessage(followUp);
+    const messageId = await props.onSendMessage(followUp, dictation);
     if (messageId === null || selectedThreadKeyRef.current !== targetThreadKey) {
       return messageId;
     }
