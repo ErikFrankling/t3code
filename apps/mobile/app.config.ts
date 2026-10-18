@@ -374,7 +374,15 @@ const config: ExpoConfig = {
         recordAudioAndroid: false,
       },
     ],
-    ["expo-image-picker", { photosPermission: false, microphonePermission: false }],
+    [
+      "expo-image-picker",
+      {
+        photosPermission: false,
+        // `false` adds RECORD_AUDIO to the removed permissions, which breaks
+        // Android dictation; match expo-audio's text instead.
+        microphonePermission: "Allow T3 Code to use your microphone for voice input.",
+      },
+    ],
     [
       "expo-splash-screen",
       {
