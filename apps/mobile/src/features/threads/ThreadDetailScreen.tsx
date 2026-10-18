@@ -264,6 +264,7 @@ export interface ThreadDetailScreenProps {
       text: string,
       hasAttachmentsOrContext: boolean,
     ) => Promise<boolean | "responded">,
+    dictation?: { readonly id: string; readonly draft: string },
   ) => Promise<MessageId | null>;
   readonly onReconnectEnvironment: () => void;
   readonly canSwitchThreadProvider: boolean;
@@ -1207,6 +1208,7 @@ export const ThreadDetailScreen = function ThreadDetailScreen(props: ThreadDetai
   const handleSendMessage = async (
     followUp?: ActiveTurnComposerAction,
     stillSendable?: () => boolean,
+    dictation?: { readonly id: string; readonly draft: string },
   ) => {
     const targetThreadKey = selectedThreadKey;
     const hasUserMessage = selectedThreadFeed.some(
@@ -1252,7 +1254,7 @@ export const ThreadDetailScreen = function ThreadDetailScreen(props: ThreadDetai
             );
           }
         : undefined;
-    const messageId = await props.onSendMessage(followUp, declineBeforeDispatch);
+    const messageId = await props.onSendMessage(followUp, declineBeforeDispatch, dictation);
     if (messageId === null || selectedThreadKeyRef.current !== targetThreadKey) {
       return messageId;
     }
