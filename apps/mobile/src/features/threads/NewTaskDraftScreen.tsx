@@ -79,6 +79,7 @@ import {
   ComposerDictationStatus,
   ComposerDictationToolbar,
 } from "../voice-input/ComposerDictationControl";
+import { DictationLivePreview } from "../voice-input/DictationLivePreview";
 import { useVoiceInputController } from "../voice-input/useVoiceInputController";
 import { resolveVoiceComposerPresentation } from "../voice-input/voiceInputPresentation";
 import {
@@ -1625,6 +1626,7 @@ export function NewTaskDraftScreen(props: {
         </Pressable>
       ) : null}
 
+      <DictationLivePreview visible={isVoiceInputPresented} />
       <ComposerSurface
         style={{
           borderRadius: 26,
