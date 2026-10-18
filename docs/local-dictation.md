@@ -38,10 +38,19 @@ server (`apps/server/src/dictationAudio.ts`) decodes the whole stream with ffmpe
 part to the speech service as ordinary `append` actions, holding back the last
 quarter second because the newest AAC frame may be incomplete. A 409 carries the
 offset the server expects. Stop uploads the rest with `final=1`, which asks for
-the final transcript; the app polls `status`. While recording, the live draft
-shows above the composer (`DictationLivePreview.tsx`), then the final text, and
-the final transcript is inserted into the composer. Composers pass their
-environment as `dictation` to `useVoiceInputController`.
+the final transcript. While recording, the live draft and the refined text show
+above the composer (`DictationLivePreview.tsx`), as in the web workspace.
+
+In a chat, stop sends the message as on the web: the composer queues it in the
+outbox with `[dictation:<id>]` after any typed text and `dictation` set, the
+drain hands it to `dictation.deliver`, and the server sends it once the final
+transcript exists. The app can be left or closed after that (only the last
+second of audio has to upload first). The preview keeps following the
+refinement while the composer stays open. Where nothing can be sent (new task,
+scheduled task prompt) or the composer refuses the send, the final transcript is
+inserted into the draft instead. Composers pass their environment, and the chat
+composer its `send`, as `dictation` to `useVoiceInputController`; the shared
+controller calls the transcriber's optional `deliver` instead of `transcribe`.
 
 The fork's Android build is published by `.github/workflows/erik-android.yml`
 as `android-v*` GitHub releases (the newest is marked latest), which the phone
