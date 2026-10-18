@@ -18,3 +18,8 @@ export function getLocalVoiceTranscriber(
 ): VoiceTranscriber | null {
   return null;
 }
+
+/** Android streams the recording to the environment while it is made; elsewhere a no-op. */
+export function beginDictationStream(_uri: string | null): void {}
+
+export function endDictationStream(): void {}
