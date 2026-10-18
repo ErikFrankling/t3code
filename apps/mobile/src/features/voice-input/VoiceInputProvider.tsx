@@ -30,7 +30,11 @@ import {
   preferredMicrophoneInput,
   rememberMicrophones,
 } from "../../lib/microphonePriority";
-import { getLocalVoiceTranscriber } from "../../native/voiceTranscription";
+import {
+  beginDictationStream,
+  endDictationStream,
+  getLocalVoiceTranscriber,
+} from "../../native/voiceTranscription";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
 import { environmentSession } from "../../state/session";
 import { getNativeShowcaseScene } from "../showcase/nativeShowcaseScene";
@@ -56,6 +60,18 @@ const VOICE_RECORDING_OPTIONS = {
   bitRate: RecordingPresets.HIGH_QUALITY.bitRate,
   isMeteringEnabled: true,
   ...(Platform.OS === "ios" ? IOS_RECORDING_OPTIONS : ANDROID_RECORDING_OPTIONS),
+  // Android dictation uploads the file while it grows, which needs AAC in ADTS
+  // (MPEG-4 is unreadable until stopped). Speech needs no more than 16 kHz mono.
+  ...(Platform.OS === "android"
+    ? {
+        extension: ".aac",
+        outputFormat: "aac_adts",
+        audioEncoder: "aac",
+        sampleRate: 16000,
+        numberOfChannels: 1,
+        bitRate: 48000,
+      }
+    : {}),
 };
 
 async function releaseVoiceRecordingAudio(): Promise<void> {
@@ -254,6 +270,11 @@ function useVoiceInputRuntime() {
     const intervalId = setInterval(sampleRecording, VOICE_METERING_INTERVAL_MS);
     return () => clearInterval(intervalId);
   }, [audioLevels, controller, recorder, state.phase]);
+
+  useEffect(() => {
+    if (state.phase === "recording") beginDictationStream(recorder.uri);
+    else if (state.phase === "idle" || state.phase === "error") endDictationStream();
+  }, [recorder, state.phase]);
 
   const stop = useCallback(() => controller.stop(), [controller]);
   const cancel = useCallback(() => controller.cancel(), [controller]);
