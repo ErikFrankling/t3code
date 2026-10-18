@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# Create (if missing) and boot the T3 Code Android emulator.
+#
+#   android-emulator            window on the desktop (Wayland via XWayland)
+#   android-emulator --headless no window, for agents (screenshot with android-screenshot)
+#   android-emulator stop       shut the emulator down
+#
+# Env: T3_AVD (AVD name, default t3code-api$T3_ANDROID_EMULATOR_API),
+#      T3_AVD_RAM_MB (default 3072), T3_EMULATOR_GPU (default host with a
+#      window, swiftshader_indirect headless). Log: $XDG_STATE_HOME/t3code-android/emulator.log
+set -euo pipefail
+
+: "${ANDROID_HOME:?run inside: nix develop .#android}"
+api="${T3_ANDROID_EMULATOR_API:-36}"
+avd="${T3_AVD:-t3code-api$api}"
+ram="${T3_AVD_RAM_MB:-3072}"
+state="${XDG_STATE_HOME:-$HOME/.local/state}/t3code-android"
+mkdir -p "$state"
+# Start the adb server detached from our stdout, or it holds a caller's pipe
+# (e.g. `android-emulator | tail`) open forever.
+adb start-server >/dev/null 2>&1
+
+if [[ "${1:-}" == stop ]]; then
+  for serial in $(adb devices | awk '/^emulator-/{print $1}'); do
+    adb -s "$serial" emu kill || true
+  done
+  exit 0
+fi
+
+headless=0
+[[ "${1:-}" == --headless ]] && headless=1
+
+image="system-images;android-$api;google_apis;x86_64"
+if ! emulator -list-avds 2>/dev/null | grep -qx "$avd"; then
+  echo "Creating AVD $avd ($image)"
+  echo no | avdmanager create avd --force --name "$avd" --package "$image" --device pixel_7
+fi
+# Settings that avdmanager has no flags for. Rewritten every start so the
+# file stays the source of truth.
+config="$HOME/.android/avd/$avd.avd/config.ini"
+sed -i -E '/^(hw\.ramSize|hw\.keyboard|hw\.gpu\.enabled|disk\.dataPartition\.size|vm\.heapSize)=/d' "$config"
+cat >> "$config" <<CFG
+hw.ramSize=$ram
+hw.keyboard=yes
+hw.gpu.enabled=yes
+disk.dataPartition.size=6G
+vm.heapSize=512
+CFG
+
+if adb devices | grep -q '^emulator-'; then
+  echo "An emulator is already running:"; adb devices
+  exit 0
+fi
+
+args=(-avd "$avd" -no-snapshot-save -no-boot-anim -no-audio -netdelay none -netspeed full)
+if ((headless)); then
+  args+=(-no-window -gpu "${T3_EMULATOR_GPU:-swiftshader_indirect}")
+else
+  # The bundled Qt has no Wayland plugin worth using; XWayland works.
+  export QT_QPA_PLATFORM=xcb
+  args+=(-gpu "${T3_EMULATOR_GPU:-host}")
+fi
+
+echo "Starting emulator ${args[*]} (log: $state/emulator.log)"
+nohup emulator "${args[@]}" </dev/null >"$state/emulator.log" 2>&1 &
+disown
+
+adb wait-for-device
+for _ in $(seq 1 180); do
+  [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == 1 ]] && break
+  sleep 1
+done
+[[ "$(adb shell getprop sys.boot_completed | tr -d '\r')" == 1 ]] || { echo "Emulator did not boot, see $state/emulator.log"; exit 1; }
+adb shell settings put global window_animation_scale 0 || true
+adb shell settings put global transition_animation_scale 0 || true
+adb shell settings put global animator_duration_scale 0 || true
+adb shell input keyevent 82 || true # dismiss the lock screen
+echo "Emulator booted: $(adb devices | awk '/^emulator-/{print $1}')"
