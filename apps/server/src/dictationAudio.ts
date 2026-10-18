@@ -81,6 +81,9 @@ type Upload = {
 };
 
 const uploads = new Map<string, Upload>();
+// Finished recordings by owner, so a retried final upload (clients and HTTP
+// stacks resend after a lost response) gets the state instead of an error.
+const finished = new Map<string, { readonly owner: string; readonly at: number }>();
 
 export type RecordingUploadResult =
   | { readonly kind: "state"; readonly state: DictationState }
@@ -105,6 +108,16 @@ export function submitRecording(input: {
   const now = Date.now();
   for (const [id, upload] of uploads) {
     if (now - upload.touched > ABANDONED_AFTER_MS) uploads.delete(id);
+  }
+  for (const [id, entry] of finished) {
+    if (now - entry.at > ABANDONED_AFTER_MS) finished.delete(id);
+  }
+  const done = finished.get(input.id);
+  if (done && done.owner === input.owner) {
+    return speech(input.owner, { action: "status", id: input.id }).then((state) => ({
+      kind: "state" as const,
+      state,
+    }));
   }
   const existing = uploads.get(input.id);
   if (existing && existing.owner !== input.owner) {
@@ -164,7 +177,9 @@ async function receive(
   if (!input.final) {
     return { kind: "state", state: await speech(input.owner, { action: "status", id: input.id }) };
   }
-  uploads.delete(input.id);
   if (upload.pcmSent === 0) throw new Error("The recording contains no audio.");
-  return { kind: "state", state: await speech(input.owner, { action: "finish", id: input.id }) };
+  const state = await speech(input.owner, { action: "finish", id: input.id });
+  uploads.delete(input.id);
+  finished.set(input.id, { owner: input.owner, at: Date.now() });
+  return { kind: "state", state };
 }
