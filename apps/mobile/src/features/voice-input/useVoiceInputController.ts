@@ -6,6 +6,7 @@ import {
 } from "@t3tools/client-runtime/voice-input";
 
 import type { ComposerEditorSelection } from "../../components/ComposerEditor";
+import type { VoiceDictationTarget } from "../../native/voiceTranscription";
 import { useGlobalVoiceInput } from "./VoiceInputProvider";
 import { createVoiceInputTarget } from "./voiceInputSession";
 
@@ -14,6 +15,7 @@ const IDLE_STATE: VoiceInputState = { phase: "idle", error: null, errorAction: n
 export function useVoiceInputController(input: {
   readonly ownerKey: string | null;
   readonly label: string;
+  readonly dictation?: VoiceDictationTarget;
   readonly readDraftMessage: () => string | null;
   readonly subscribeToDraftChanges: (onChange: () => void) => () => void;
   readonly selection: ComposerEditorSelection;
@@ -61,6 +63,7 @@ export function useVoiceInputController(input: {
         captured.subscribeToDraftChanges,
       ),
       label: captured.label,
+      ...(captured.dictation ? { dictation: captured.dictation } : {}),
     });
   }, [session]);
   const state = global.ownerKey === input.ownerKey ? global.state : IDLE_STATE;

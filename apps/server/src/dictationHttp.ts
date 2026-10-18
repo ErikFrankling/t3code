@@ -3,17 +3,21 @@ import {
   DictationRequest,
   DictationState,
 } from "@t3tools/contracts";
+import * as ByteSize from "effect/ByteSize";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import {
   HttpBody,
   HttpClient,
+  HttpIncomingMessage,
   HttpRouter,
   HttpServerRequest,
   HttpServerRespondable,
   HttpServerResponse,
 } from "effect/http";
+import { DICTATION_AUDIO_MAX_BYTES, submitRecording } from "./dictationAudio.ts";
 import { DictationDelivery, speechServiceUrl } from "./DictationDelivery.ts";
 import { authenticateRawRouteWithScope } from "./http.ts";
 
@@ -70,4 +74,58 @@ export const layerDictationRoute = Layer.unwrap(
       ),
     );
   }),
+);
+
+const RECORDING_ID = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
+
+/** A finished recording as one file, for the Android app (see `dictationAudio.ts`). */
+export const layerDictationAudioRoute = HttpRouter.add(
+  "POST",
+  "/api/dictation/audio",
+  Effect.gen(function* () {
+    const session = yield* authenticateRawRouteWithScope(AuthOrchestrationOperateScope);
+    const request = yield* HttpServerRequest.HttpServerRequest;
+    const query = new URL(request.url, "http://localhost").searchParams;
+    const id = query.get("id") ?? "";
+    if (!RECORDING_ID.test(id)) {
+      return HttpServerResponse.text("Invalid recording identifier.", { status: 400 });
+    }
+    const audio = yield* request.arrayBuffer.pipe(
+      Effect.map((buffer) => new Uint8Array(buffer)),
+      Effect.provideService(
+        HttpIncomingMessage.MaxBodySize,
+        ByteSize.bytes(DICTATION_AUDIO_MAX_BYTES),
+      ),
+      Effect.option,
+    );
+    if (Option.isNone(audio) || audio.value.byteLength > DICTATION_AUDIO_MAX_BYTES) {
+      return HttpServerResponse.text("The recording is too large.", { status: 413 });
+    }
+    const state = yield* Effect.tryPromise(() =>
+      submitRecording({
+        owner: session.subject,
+        id,
+        project: query.get("project") ?? "",
+        audio: audio.value,
+      }),
+    ).pipe(
+      Effect.tapError((cause) =>
+        Effect.logWarning("dictation.audio_submit_failed", { recordingId: id, cause }),
+      ),
+    );
+    return HttpServerResponse.jsonUnsafe(state);
+  }).pipe(
+    Effect.catchTags({
+      EnvironmentAuthInvalidError: HttpServerRespondable.toResponse,
+      EnvironmentInternalError: HttpServerRespondable.toResponse,
+      EnvironmentScopeRequiredError: HttpServerRespondable.toResponse,
+    }),
+    Effect.catch(() =>
+      Effect.succeed(
+        HttpServerResponse.text("The local speech service could not take the recording.", {
+          status: 502,
+        }),
+      ),
+    ),
+  ),
 );
