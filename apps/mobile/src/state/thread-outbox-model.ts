@@ -61,6 +61,7 @@ export const QueuedThreadMessageSchema = Schema.Struct({
   runtimeMode: Schema.optional(RuntimeMode),
   interactionMode: Schema.optional(ProviderInteractionMode),
   creation: Schema.optional(QueuedThreadCreationSchema),
+  dictation: Schema.optional(Schema.Struct({ id: Schema.String, draft: Schema.String })),
   createdAt: IsoDateTime,
 });
 
@@ -96,6 +97,11 @@ export interface QueuedThreadMessage {
   /** Starts a new provider session (`/clear`). */
   readonly freshContext?: boolean;
   readonly creation?: QueuedThreadCreation;
+  /**
+   * A stopped recording: `text` carries `[dictation:<id>]`, which the server
+   * replaces with the final transcript before it sends the message.
+   */
+  readonly dictation?: { readonly id: string; readonly draft: string };
   readonly createdAt: string;
 }
 
