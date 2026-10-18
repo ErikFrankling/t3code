@@ -100,6 +100,7 @@ import IconPin from "@tabler/icons-react-native/IconPin";
 import IconPinnedOff from "@tabler/icons-react-native/IconPinnedOff";
 import IconPlayerPlay from "@tabler/icons-react-native/IconPlayerPlay";
 import IconPlayerStopFilled from "@tabler/icons-react-native/IconPlayerStopFilled";
+import IconVolume from "@tabler/icons-react-native/IconVolume";
 import IconPlus from "@tabler/icons-react-native/IconPlus";
 import IconQrcode from "@tabler/icons-react-native/IconQrcode";
 import IconRefresh from "@tabler/icons-react-native/IconRefresh";
@@ -299,6 +300,8 @@ const ANDROID_ICON_BY_MATERIAL_NAME = {
   close: IconX,
   construction: IconHammer,
   content_copy: IconCopy,
+  stop_circle: IconPlayerStopFilled,
+  volume_up: IconVolume,
   desktop_windows: IconDeviceDesktop,
   edit: IconEdit,
   error: IconAlertCircle,
