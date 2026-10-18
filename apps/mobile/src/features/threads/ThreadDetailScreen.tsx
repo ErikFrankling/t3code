@@ -196,6 +196,7 @@ import {
   THREAD_COMPOSER_BOTTOM_GUTTER,
   ThreadComposer,
 } from "./ThreadComposer";
+import { ReadAloudDock } from "./ReadAloudButton";
 import { ComposerPopoverHost } from "./ComposerPopoverHost";
 import { ThreadFeed, type ThreadFeedHistoryControls } from "./ThreadFeed";
 import { WorkspaceMutationIdProvider } from "./WorkspaceMutationIdProvider";
@@ -331,6 +332,19 @@ function ColumnWidth(props: { readonly width: number | null; readonly children: 
     </WorkspaceSettledContentWidthContext>
   );
 }
+/** The newest finished assistant reply, for the pinned "Read latest" button. */
+function latestReadableAssistantMessage(
+  feed: ReadonlyArray<ThreadFeedEntry>,
+): { readonly id: string; readonly text: string } | null {
+  for (let index = feed.length - 1; index >= 0; index -= 1) {
+    const entry = feed[index];
+    if (entry?.type !== "message" || entry.message.role !== "assistant") continue;
+    if (entry.message.streaming || !entry.message.text) continue;
+    return { id: entry.message.id, text: entry.message.text };
+  }
+  return null;
+}
+
 const USAGE_LIMITS_PANEL_GAP = 12;
 const USAGE_LIMITS_PANEL_MIN_HEIGHT = 44;
 
@@ -1832,6 +1846,13 @@ function ThreadDetailBody(
                     </View>
                   ) : (
                     <>
+                      {/* Zero-height anchor: the dock floats above the composer. */}
+                      <View style={{ height: 0, zIndex: 5 }}>
+                        <ReadAloudDock
+                          environmentId={props.environmentId}
+                          latest={latestReadableAssistantMessage(props.selectedThreadFeed)}
+                        />
+                      </View>
                       <ThreadComposer
                         isDraft={Boolean(props.draftMode)}
                         canOperateThread={props.canOperateThread}

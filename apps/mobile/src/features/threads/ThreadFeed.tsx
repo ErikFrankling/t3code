@@ -2258,6 +2258,8 @@ function renderFeedEntry(
               iconSize={props.replyActionSize.icon}
             />
             <ReadAloudButton
+              environmentId={props.environmentId}
+              messageId={message.id}
               text={renderedText}
               tintColor={iconSubtleColor}
               buttonSize={28}
