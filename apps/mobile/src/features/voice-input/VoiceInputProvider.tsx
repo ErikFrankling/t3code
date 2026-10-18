@@ -113,7 +113,7 @@ const voiceInputAtom = Atom.make((get) => {
     const connection = Option.getOrNull(
       registry.get(environmentSession.preparedConnectionValueAtom(target.environmentId)),
     );
-    return connection ? { connection, project: target.project } : null;
+    return connection ? { connection, target } : null;
   };
   const session: VoiceInputSession = new VoiceInputSession({
     recorder,
@@ -158,7 +158,7 @@ const voiceInputAtom = Atom.make((get) => {
     const phase = session.getSnapshot().state.phase;
     if (phase === streamPhase) return;
     streamPhase = phase;
-    if (phase === "recording") beginDictationStream(recorder.uri);
+    if (phase === "recording") beginDictationStream(recorder.uri, session.ownerKey);
     else if (phase === "idle" || phase === "error") endDictationStream();
   });
   get.addFinalizer(() => {
