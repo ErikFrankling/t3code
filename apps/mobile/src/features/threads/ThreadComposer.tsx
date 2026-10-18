@@ -183,7 +183,10 @@ export interface ThreadComposerProps {
   readonly onStopThread: () => void;
   /** Present while the thread's queue is held. */
   readonly onResumeQueue: (() => Promise<void>) | null;
-  readonly onSendMessage: (followUp?: ActiveTurnComposerAction) => Promise<MessageId | null>;
+  readonly onSendMessage: (
+    followUp?: ActiveTurnComposerAction,
+    dictation?: { readonly id: string; readonly draft: string },
+  ) => Promise<MessageId | null>;
   readonly onShowUsageLimits: (report: UsageLimitsReport | null) => void;
   readonly canSwitchProvider: boolean;
   readonly onUpdateModelSelection: (modelSelection: ModelSelection) => void;
@@ -491,7 +494,12 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
   const voiceInput = useVoiceInputController({
     ownerKey: composerDraftKey,
     label: props.selectedThread.title || "Untitled thread",
-    dictation: { environmentId: props.environmentId, project: project?.workspaceRoot ?? "" },
+    dictation: {
+      environmentId: props.environmentId,
+      project: project?.workspaceRoot ?? "",
+      // Sent like the web composer: the server sends it once the transcript is final.
+      send: async (recording) => (await onSendMessage(undefined, recording)) !== null,
+    },
     readDraftMessage: () => getComposerDraftSnapshot(composerDraftKey).text,
     subscribeToDraftChanges: (onChange) => appAtomRegistry.subscribe(composerDraftsAtom, onChange),
     selection: composerMenu.selection,
@@ -852,7 +860,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
           />
         ) : null}
 
-        <DictationLivePreview visible={isVoiceInputPresented} />
+        <DictationLivePreview ownerKey={composerDraftKey} />
         <ComposerSurface
           style={
             usesCard

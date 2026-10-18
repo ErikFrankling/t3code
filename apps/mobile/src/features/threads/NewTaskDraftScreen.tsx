@@ -1642,7 +1642,7 @@ export function NewTaskDraftScreen(props: {
         />
       ) : null}
 
-      <DictationLivePreview visible={isVoiceInputPresented} />
+      <DictationLivePreview ownerKey={flow.draftKey} />
       <ComposerSurface
         style={{
           borderRadius: 26,

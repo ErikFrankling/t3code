@@ -175,7 +175,7 @@ function useVoiceInputRuntime() {
       const connection = Option.getOrNull(
         registry.get(environmentSession.preparedConnectionValueAtom(target.environmentId)),
       );
-      return connection ? { connection, project: target.project } : null;
+      return connection ? { connection, target } : null;
     };
     sessionRef.current = new VoiceInputSession({
       recorder,
@@ -272,9 +272,9 @@ function useVoiceInputRuntime() {
   }, [audioLevels, controller, recorder, state.phase]);
 
   useEffect(() => {
-    if (state.phase === "recording") beginDictationStream(recorder.uri);
+    if (state.phase === "recording") beginDictationStream(recorder.uri, session.ownerKey);
     else if (state.phase === "idle" || state.phase === "error") endDictationStream();
-  }, [recorder, state.phase]);
+  }, [recorder, session, state.phase]);
 
   const stop = useCallback(() => controller.stop(), [controller]);
   const cancel = useCallback(() => controller.cancel(), [controller]);
