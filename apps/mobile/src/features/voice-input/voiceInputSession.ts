@@ -4,10 +4,13 @@ import {
   type VoiceDraftSnapshot,
   type VoiceInputControllerDependencies,
 } from "@t3tools/client-runtime/voice-input";
+import type { VoiceDictationTarget } from "../../native/voiceTranscription";
 
 export type VoiceInputTarget = {
   readonly ownerKey: string;
   readonly label?: string;
+  /** Where server-side dictation (Android) sends the recording. */
+  readonly dictation?: VoiceDictationTarget;
   readonly readDraft: () => VoiceDraftSnapshot | null;
   readonly commitDraft: VoiceInputControllerDependencies["commitDraft"];
   readonly subscribe: () => () => void;
@@ -68,6 +71,10 @@ export class VoiceInputSession {
 
   get label(): string | null {
     return this.target?.label ?? null;
+  }
+
+  get dictation(): VoiceDictationTarget | null {
+    return this.target?.dictation ?? null;
   }
 
   cancel(ownerKey: string | null): void {
