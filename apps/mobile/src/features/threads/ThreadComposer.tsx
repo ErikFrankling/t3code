@@ -116,6 +116,7 @@ import {
   ComposerDictationStatus,
   ComposerDictationToolbar,
 } from "../voice-input/ComposerDictationControl";
+import { DictationLivePreview } from "../voice-input/DictationLivePreview";
 import { useVoiceInputController } from "../voice-input/useVoiceInputController";
 import { resolveVoiceComposerPresentation } from "../voice-input/voiceInputPresentation";
 import {
@@ -778,6 +779,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
           </Pressable>
         ) : null}
 
+        <DictationLivePreview visible={isVoiceInputPresented} />
         <ComposerSurface
           style={
             isExpanded
