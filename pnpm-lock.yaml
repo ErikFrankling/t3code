@@ -9114,11 +9114,6 @@ packages:
       react: '*'
       react-native: '*'
 
-  expo-speech@58.0.3:
-    resolution: {integrity: sha512-jdMTqWL6ciDM8aVJe2/l2g6GTVaK7i/zBOVUhTq+l0Y+DOCz3Nh4HqNrMwmIKzXrlsxRv3ejmjSQPlX1lfOTOA==}
-    peerDependencies:
-      expo: '*'
-
   expo-splash-screen@58.0.10:
     resolution: {integrity: sha512-rjzCLKo7SHSOkaFnVnh+bYWK/pO/vC05qvJe++AjaQidTSGLxD2buj7zWFLlbEEpkqP+wZYQHRyx2mvHyZrUQw==}
     peerDependencies:
@@ -19861,10 +19856,6 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
       - typescript
-
-  expo-speech@58.0.3(expo@58.0.14):
-    dependencies:
-      expo: 58.0.14(1106b1d11fc0fad6d0556b6a93329d99)
 
   expo-splash-screen@58.0.10(expo@58.0.14)(typescript@7.0.2):
     dependencies:
