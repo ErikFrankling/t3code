@@ -78,7 +78,7 @@ export const layerDictationRoute = Layer.unwrap(
 
 const RECORDING_ID = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
 
-/** A finished recording as one file, for the Android app (see `dictationAudio.ts`). */
+/** Compressed recordings from the Android app, streamed or whole (see `dictationAudio.ts`). */
 export const layerDictationAudioRoute = HttpRouter.add(
   "POST",
   "/api/dictation/audio",
@@ -101,19 +101,28 @@ export const layerDictationAudioRoute = HttpRouter.add(
     if (Option.isNone(audio) || audio.value.byteLength > DICTATION_AUDIO_MAX_BYTES) {
       return HttpServerResponse.text("The recording is too large.", { status: 413 });
     }
-    const state = yield* Effect.tryPromise(() =>
+    const offset = Number(query.get("offset") ?? "0");
+    if (!Number.isSafeInteger(offset) || offset < 0) {
+      return HttpServerResponse.text("Invalid offset.", { status: 400 });
+    }
+    const result = yield* Effect.tryPromise(() =>
       submitRecording({
         owner: session.subject,
         id,
         project: query.get("project") ?? "",
         audio: audio.value,
+        offset,
+        final: query.get("final") !== "0",
       }),
     ).pipe(
       Effect.tapError((cause) =>
         Effect.logWarning("dictation.audio_submit_failed", { recordingId: id, cause }),
       ),
     );
-    return HttpServerResponse.jsonUnsafe(state);
+    if (result.kind === "gap") {
+      return HttpServerResponse.jsonUnsafe({ expected: result.expected }, { status: 409 });
+    }
+    return HttpServerResponse.jsonUnsafe(result.state);
   }).pipe(
     Effect.catchTags({
       EnvironmentAuthInvalidError: HttpServerRespondable.toResponse,
