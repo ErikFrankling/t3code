@@ -1580,6 +1580,7 @@ export default function ChatView(props: ChatViewProps) {
       (candidate) => candidate.role === "assistant" && !candidate.streaming && candidate.text,
     );
     return message ? { id: message.id, text: message.text } : null;
+  })();
   const displayedThreadRef = parseScopedThreadKey(displayedTimelineKey);
   const {
     worktreeSetup,
