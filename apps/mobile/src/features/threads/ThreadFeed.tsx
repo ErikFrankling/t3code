@@ -213,6 +213,15 @@ import {
   type MediaVideoPreviewSource,
 } from "../../lib/videoPreviewSource";
 import { CopyTextButton } from "./CopyTextButton";
+<<<<<<< HEAD
+||||||| parent of c28ac42ec0 (feat(mobile): Android dictation through the local speech service, read aloud, APK release)
+import { getReviewSectionIdForCheckpoint } from "../review/reviewModel";
+import { setReviewSelectedSectionId } from "../review/reviewState";
+=======
+import { getReviewSectionIdForCheckpoint } from "../review/reviewModel";
+import { setReviewSelectedSectionId } from "../review/reviewState";
+import { ReadAloudButton } from "./ReadAloudButton";
+>>>>>>> c28ac42ec0 (feat(mobile): Android dictation through the local speech service, read aloud, APK release)
 import { Menu } from "../../components/ui/Menu";
 import { useAndroidControlSizing } from "../../components/ui/useAndroidControlSizing";
 import { useBarInset, useContentTopInset } from "../../components/ui/useBarInset";
@@ -2710,6 +2719,12 @@ function renderFeedEntry(
               tintColor={iconSubtleColor}
               buttonSize={props.replyActionSize.button}
               iconSize={props.replyActionSize.icon}
+            />
+            <ReadAloudButton
+              text={renderedText}
+              tintColor={iconSubtleColor}
+              buttonSize={28}
+              iconSize={13}
             />
             {message.projectedItem ? (
               <AssistantForkButton
