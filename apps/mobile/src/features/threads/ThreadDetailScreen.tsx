@@ -223,7 +223,10 @@ export interface ThreadDetailScreenProps {
   readonly onNativePasteText: (paste: ComposerTextPaste) => Promise<void>;
   readonly onRemoveDraftImage: (imageId: string) => void;
   readonly onStopThread: () => void;
-  readonly onSendMessage: (followUp?: ActiveTurnComposerAction) => Promise<MessageId | null>;
+  readonly onSendMessage: (
+    followUp?: ActiveTurnComposerAction,
+    dictation?: { readonly id: string; readonly draft: string },
+  ) => Promise<MessageId | null>;
   readonly onReconnectEnvironment: () => void;
   readonly canSwitchThreadProvider: boolean;
   readonly onUpdateThreadModelSelection: (modelSelection: ModelSelection) => void;
@@ -936,12 +939,15 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   ]);
 
   const handleSendMessage = useCallback(
-    async (followUp?: ActiveTurnComposerAction) => {
+    async (
+      followUp?: ActiveTurnComposerAction,
+      dictation?: { readonly id: string; readonly draft: string },
+    ) => {
       const targetThreadKey = selectedThreadKey;
       const hasUserMessage = selectedThreadFeed.some(
         (entry) => entry.type === "message" && entry.message.role === "user",
       );
-      const messageId = await props.onSendMessage(followUp);
+      const messageId = await props.onSendMessage(followUp, dictation);
       if (messageId === null || selectedThreadKeyRef.current !== targetThreadKey) {
         return messageId;
       }
