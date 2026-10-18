@@ -22,6 +22,7 @@ import {
 } from "react";
 import { AppState, Platform } from "react-native";
 import { AsyncResult } from "effect/reactivity";
+import * as Option from "effect/Option";
 import { useSharedValue } from "react-native-reanimated";
 
 import {
@@ -31,6 +32,7 @@ import {
 } from "../../lib/microphonePriority";
 import { getLocalVoiceTranscriber } from "../../native/voiceTranscription";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
+import { environmentSession } from "../../state/session";
 import { getNativeShowcaseScene } from "../showcase/nativeShowcaseScene";
 import {
   VOICE_RECORDING_LIMIT_SECONDS,
@@ -151,9 +153,17 @@ function useVoiceInputRuntime() {
       },
     });
     recorderRef.current = recorder;
+    const resolveDictationConnection = () => {
+      const target = sessionRef.current?.dictation;
+      if (!target) return null;
+      const connection = Option.getOrNull(
+        registry.get(environmentSession.preparedConnectionValueAtom(target.environmentId)),
+      );
+      return connection ? { connection, project: target.project } : null;
+    };
     sessionRef.current = new VoiceInputSession({
       recorder,
-      getTranscriber: getLocalVoiceTranscriber,
+      getTranscriber: () => getLocalVoiceTranscriber(resolveDictationConnection),
       requestPermission: async () => {
         const permission = await requestRecordingPermissionsAsync();
         return { granted: permission.granted, canAskAgain: permission.canAskAgain };
