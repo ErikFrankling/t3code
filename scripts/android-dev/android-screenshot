@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Save a PNG of the emulator (or ANDROID_SERIAL device) screen.
+#   android-screenshot [out.png]     default: ./android-screenshot-<time>.png
+set -euo pipefail
+adb start-server >/dev/null 2>&1 # detached from our stdout (see android-emulator)
+out="${1:-android-screenshot-$(date +%Y%m%d-%H%M%S).png}"
+serial="${ANDROID_SERIAL:-$(adb devices | awk '/^emulator-/{print $1; exit}')}"
+[[ -n "$serial" ]] || { echo "No emulator running (start one with android-emulator --headless)" >&2; exit 1; }
+adb -s "$serial" exec-out screencap -p >"$out"
+echo "$out"
