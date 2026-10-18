@@ -255,6 +255,7 @@ import {
 } from "./chat/ChatOverlayHosts";
 import type { AssistantCitationRequest } from "./chat/AssistantCitationSource";
 import { MessagesTimeline, type MessagesTimelineHistoryControls } from "./chat/MessagesTimeline";
+import { ReadAloudDock } from "./chat/ReadAloud";
 import { ProviderSubagentBar } from "./chat/ProviderSubagentBar";
 import { getTriggerDisplayModelName } from "./chat/providerIconUtils";
 import {
@@ -1481,6 +1482,12 @@ export default function ChatView(props: ChatViewProps) {
   const timelineMessages = timelineEntries.flatMap((entry) =>
     entry.kind === "message" ? [entry.message] : [],
   );
+  const latestReadAloudMessage = (() => {
+    const message = timelineMessages.findLast(
+      (candidate) => candidate.role === "assistant" && !candidate.streaming && candidate.text,
+    );
+    return message ? { id: message.id, text: message.text } : null;
+  })();
   const displayedTimeline = resolveThreadSwitchTimeline({
     loading: timelineEntries.length === 0 && threadSyncPhase !== null,
     activeThreadKey,
@@ -3407,6 +3414,12 @@ export default function ChatView(props: ChatViewProps) {
                   data-chat-composer-stack="true"
                   className="group/composer-stack pointer-events-auto relative z-10 mx-auto w-full max-w-(--chat-content-max-width)"
                 >
+                  {isDraftHeroState ? null : (
+                    <ReadAloudDock
+                      environmentId={activeThread.environmentId}
+                      latest={latestReadAloudMessage}
+                    />
+                  )}
                   {isDraftHeroState ? (
                     <div className="absolute inset-x-0 bottom-full">
                       <div
