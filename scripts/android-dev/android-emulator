@@ -52,7 +52,14 @@ if adb devices | grep -q '^emulator-'; then
   exit 0
 fi
 
-args=(-avd "$avd" -no-snapshot-save -no-boot-anim -no-audio -netdelay none -netspeed full)
+args=(-avd "$avd" -no-snapshot-save -no-boot-anim -netdelay none -netspeed full)
+# T3_EMULATOR_AUDIO=1 gives the emulator the host microphone (dictation tests).
+# Point it at a file instead of a real mic with PULSE_SOURCE, see docs/android-dev.md.
+if [[ ${T3_EMULATOR_AUDIO:-0} == 1 ]]; then
+  args+=(-allow-host-audio)
+else
+  args+=(-no-audio)
+fi
 if ((headless)); then
   args+=(-no-window -gpu "${T3_EMULATOR_GPU:-swiftshader_indirect}")
 else
