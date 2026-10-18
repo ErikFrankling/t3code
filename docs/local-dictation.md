@@ -41,14 +41,31 @@ offset the server expects. Stop uploads the rest with `final=1`, which asks for
 the final transcript; the app polls `status`. While recording, the live draft
 shows above the composer (`DictationLivePreview.tsx`), then the final text, and
 the final transcript is inserted into the composer. Composers pass their
-environment as `dictation` to `useVoiceInputController`. Assistant messages also
-get a read-aloud button (`ReadAloudButton.tsx`, `expo-speech`, the device's own
-voice).
+environment as `dictation` to `useVoiceInputController`.
 
 The fork's Android build is published by `.github/workflows/erik-android.yml`
 as `android-v*` GitHub releases (the newest is marked latest), which the phone
 follows with Obtainium. Signing key: repo secrets `ANDROID_KEYSTORE_*`, backed up
 in the dotfiles sops secrets as `t3code-android-keystore`.
+
+## Read aloud
+
+Every client (web, desktop, Android) has a speaker button on assistant messages,
+a pinned **Read latest** button above the composer, and a subtitle panel with
+pause, skip, speed and _full message_. A local LLM rewrites the message as a
+short spoken briefing and a local TTS server speaks it sentence by sentence,
+so audio starts before the summary is finished. It never enters the thread.
+
+`POST /api/read-aloud` (`apps/server/src/readAloud.ts`) starts or polls a job;
+`packages/client-runtime/src/readAloud.ts` is the shared player. Endpoints are
+environment variables: `T3CODE_READ_ALOUD_LLM_URL` and `_LLM_MODEL` (an
+OpenAI-compatible chat endpoint, default llama-swap `read-aloud-summary`),
+`_SMALL_TTS_URL`, `_SMALL_VOICE`, `_SMALL_SPEED` (an OpenAI-style
+`/v1/audio/speech`, default Kokoro-FastAPI on `127.0.0.1:8880`, voice
+`af_heart`, speed 1.2) and `_BIG_TTS_URL`, `_BIG_VOICE`, `_BIG_SPEED`,
+`_BIG_MODEL` (default Higgs TTS through llama-swap, voice `erik`). The big voice
+is used only while llama-swap reports `_BIG_MODEL` loaded; the host decides when
+to lend it the GPU. The client's speed multiplies the voice's own speed.
 
 ## How it works
 
