@@ -1,4 +1,4 @@
-// @effect-diagnostics nodeBuiltinImport:off globalFetch:off -- Same plain Node calls to the local speech server as DictationDelivery.ts, plus one ffmpeg run.
+// @effect-diagnostics nodeBuiltinImport:off globalFetch:off globalDate:off -- Same plain Node calls to the local speech server as DictationDelivery.ts, plus one ffmpeg run.
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
@@ -64,28 +64,107 @@ async function speech(owner: string, body: Record<string, unknown>): Promise<Dic
   return decodeDictationState(await response.json());
 }
 
+// Decoding the whole stream again on every upload keeps the PCM prefix
+// identical between uploads; the tail is held back because the last AAC frame
+// may still be incomplete.
+const HOLD_BACK_BYTES = 8000;
+const ABANDONED_AFTER_MS = 30 * 60_000;
+
+type Upload = {
+  readonly owner: string;
+  started: boolean;
+  bytes: Buffer;
+  pcmSent: number;
+  sequence: number;
+  touched: number;
+  queue: Promise<unknown>;
+};
+
+const uploads = new Map<string, Upload>();
+
+export type RecordingUploadResult =
+  | { readonly kind: "state"; readonly state: DictationState }
+  | { readonly kind: "gap"; readonly expected: number };
+
 /**
- * A whole recording in one request, for clients that cannot stream PCM (the
- * Android app records a compressed file). Registers it with the speech service,
- * uploads it as ordinary chunks and asks for the final transcript; the client
- * polls `status` until it is complete.
+ * Compressed audio for clients that cannot stream PCM (the Android app records
+ * AAC). Uploads arrive in order as byte ranges of one growing file (`offset`),
+ * so the speech service sees the recording while it is made and its live draft
+ * works as in the web composer; `final` asks for the final transcript, which the
+ * client then polls with `status`. A single upload with offset 0 and `final`
+ * sends a whole recording, in any container ffmpeg reads.
  */
-export async function submitRecording(input: {
+export function submitRecording(input: {
   readonly owner: string;
   readonly id: string;
   readonly project: string;
   readonly audio: Uint8Array;
-}): Promise<DictationState> {
-  const pcm = await decodeToPcm(input.audio);
-  if (pcm.byteLength === 0) throw new Error("The recording contains no audio.");
-  await speech(input.owner, { action: "start", id: input.id, project: input.project });
-  for (let offset = 0, sequence = 0; offset < pcm.byteLength; offset += CHUNK_BYTES, sequence++) {
-    await speech(input.owner, {
-      action: "append",
-      id: input.id,
-      sequence,
-      audio: pcm.subarray(offset, offset + CHUNK_BYTES).toString("base64"),
-    });
+  readonly offset: number;
+  readonly final: boolean;
+}): Promise<RecordingUploadResult> {
+  const now = Date.now();
+  for (const [id, upload] of uploads) {
+    if (now - upload.touched > ABANDONED_AFTER_MS) uploads.delete(id);
   }
-  return speech(input.owner, { action: "finish", id: input.id });
+  const existing = uploads.get(input.id);
+  if (existing && existing.owner !== input.owner) {
+    return Promise.reject(new Error("Recording identifier is already in use."));
+  }
+  const upload: Upload = existing ?? {
+    owner: input.owner,
+    started: false,
+    bytes: Buffer.alloc(0),
+    pcmSent: 0,
+    sequence: 0,
+    touched: now,
+    queue: Promise.resolve(),
+  };
+  uploads.set(input.id, upload);
+  const result = upload.queue.then(() => receive(upload, input));
+  upload.queue = result.catch(() => undefined);
+  return result;
+}
+
+async function receive(
+  upload: Upload,
+  input: Parameters<typeof submitRecording>[0],
+): Promise<RecordingUploadResult> {
+  upload.touched = Date.now();
+  if (input.offset > upload.bytes.byteLength) {
+    return { kind: "gap", expected: upload.bytes.byteLength };
+  }
+  if (!upload.started) {
+    await speech(input.owner, { action: "start", id: input.id, project: input.project });
+    upload.started = true;
+  }
+  const fresh = input.audio.subarray(upload.bytes.byteLength - input.offset);
+  if (fresh.byteLength > 0) upload.bytes = Buffer.concat([upload.bytes, fresh]);
+
+  let pcm: Buffer | null = null;
+  try {
+    pcm = await decodeToPcm(upload.bytes);
+  } catch (cause) {
+    // Too little audio for a whole frame yet; the next upload decodes it.
+    if (input.final) throw cause;
+  }
+  if (pcm) {
+    const end = input.final
+      ? pcm.byteLength
+      : Math.max(upload.pcmSent, (pcm.byteLength - HOLD_BACK_BYTES) & ~1);
+    for (let offset = upload.pcmSent; offset < end; offset += CHUNK_BYTES) {
+      await speech(input.owner, {
+        action: "append",
+        id: input.id,
+        sequence: upload.sequence++,
+        audio: pcm.subarray(offset, Math.min(offset + CHUNK_BYTES, end)).toString("base64"),
+      });
+    }
+    upload.pcmSent = end;
+  }
+  if (!input.final) {
+    return { kind: "state", state: await speech(input.owner, { action: "status", id: input.id }) };
+  }
+  uploads.delete(input.id);
+  if (upload.pcmSent === 0) throw new Error("The recording contains no audio.");
+  return { kind: "state", state: await speech(input.owner, { action: "finish", id: input.id }) };
 }
