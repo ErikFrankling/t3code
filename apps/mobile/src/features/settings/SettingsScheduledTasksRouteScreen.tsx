@@ -517,6 +517,7 @@ function SettingsScheduledTaskEditorScreen({ title }: { readonly title: string }
   const voiceInput = useVoiceInputController({
     ownerKey,
     label: editor?.draft.title.trim() || title,
+    ...(editor ? { dictation: { environmentId: editor.environmentId, project: "" } } : {}),
     selection,
     readDraftMessage: () => {
       const current = readEditor();
