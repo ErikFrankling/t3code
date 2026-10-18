@@ -1,6 +1,8 @@
 import AppleTranscription from "@react-native-ai/apple/src/NativeAppleTranscription";
 import { File } from "expo-file-system";
 
+import type { ResolveDictationConnection } from "./voiceTranscription";
+
 import {
   VoiceTranscriptionError,
   throwIfVoiceTranscriptionAborted,
@@ -33,7 +35,9 @@ function getNativeErrorCode(error: unknown): string | undefined {
   return typeof error.code === "string" ? error.code : undefined;
 }
 
-export function getLocalVoiceTranscriber(): VoiceTranscriber | null {
+export function getLocalVoiceTranscriber(
+  _resolveConnection?: ResolveDictationConnection,
+): VoiceTranscriber | null {
   const locale = getDeviceLocale();
   if (!AppleTranscription.isAvailable(locale)) return null;
   return { prepare: (options) => prepareVoiceTranscription(locale, options) };
