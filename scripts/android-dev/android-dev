@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# Build/install the development dev client (com.t3tools.t3code.dev) and run
+# Metro so JS edits hot-reload.
+#
+#   android-dev                  build+install if needed, then Metro (foreground) and open the app
+#   android-dev --phone          same, but Metro advertises https://pc-8081.erikfrankling.duckdns.org
+#                                so a phone on home Wi-Fi/Tailscale can load and hot-reload JS
+#   android-dev build            prebuild (if apps/mobile/android is missing) + gradle installDebug
+#   android-dev build --clean    force `expo prebuild --clean` first (after native/config changes)
+#   android-dev metro [--phone]  only Metro
+#   android-dev open [--phone]   (re)open the app on the device, pointed at Metro
+#
+# Target device: ANDROID_SERIAL, else the only adb device (emulator or USB/wifi phone).
+# The build targets only that device's ABI (x86_64 for the emulator).
+set -euo pipefail
+adb start-server >/dev/null 2>&1 # detached from our stdout (see android-emulator)
+
+: "${ANDROID_HOME:?run inside: nix develop .#android}"
+root="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel)"
+mobile="$root/apps/mobile"
+port="${T3_METRO_PORT:-8081}"
+proxy_url="https://pc-$port.erikfrankling.duckdns.org"
+package=com.t3tools.t3code.dev
+export APP_VARIANT=development EXPO_NO_GIT_STATUS=1 T3CODE_MOBILE_UPDATES_ENABLED=0
+# Gradle and Kotlin daemons together stay around 4-5 GB with this.
+export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=4096}"
+
+phone=0
+args=()
+for a in "$@"; do
+  case "$a" in
+    --phone) phone=1 ;;
+    *) args+=("$a") ;;
+  esac
+done
+cmd="${args[0]:-all}"
+
+serial() {
+  if [[ -n "${ANDROID_SERIAL:-}" ]]; then echo "$ANDROID_SERIAL"; return; fi
+  local devs
+  devs="$(adb devices | awk 'NR>1 && $2=="device"{print $1}')"
+  [[ -n "$devs" ]] || { echo "No adb device. Start one: android-emulator --headless" >&2; exit 1; }
+  [[ "$(wc -l <<<"$devs")" == 1 ]] || { echo "Several devices, set ANDROID_SERIAL to one of: $devs" >&2; exit 1; }
+  echo "$devs"
+}
+
+build() {
+  local s abi
+  s="$(serial)"
+  abi="$(adb -s "$s" shell getprop ro.product.cpu.abi | tr -d '\r')"
+  cd "$mobile"
+  if [[ ! -d android || "${args[1]:-}" == --clean ]]; then
+    npx expo prebuild --clean --platform android --no-install
+  fi
+  cd android
+  echo "Building debug dev client for $abi and installing on $s"
+  # Capped workers: the NDK builds of native modules otherwise use all 16
+  # threads and several GB on the desktop Erik is using.
+  ANDROID_SERIAL="$s" ./gradlew app:installDebug -PreactNativeArchitectures="$abi" \
+    --max-workers="${T3_GRADLE_WORKERS:-4}"
+  # The Gradle + Kotlin daemons hold ~6 GB afterwards; JS work never needs them.
+  [[ -n "${T3_KEEP_GRADLE_DAEMON:-}" ]] || ./gradlew --stop >/dev/null
+}
+
+metro() {
+  cd "$mobile"
+  if ((phone)); then
+    # The PC's dev-preview proxy forwards this to localhost:$port over HTTPS
+    # (LAN + Tailscale), so no firewall port is needed.
+    export EXPO_PACKAGER_PROXY_URL="$proxy_url"
+  fi
+  # Not CI=1: Expo disables file watching (hot reload) in CI mode.
+  exec npx expo start --dev-client --scheme t3code-dev --port "$port"
+}
+
+open_app() {
+  local s url
+  s="$(serial)"
+  if ((phone)); then
+    url="$proxy_url"
+  else
+    # Works for the emulator and USB phones alike.
+    adb -s "$s" reverse "tcp:$port" "tcp:$port" >/dev/null
+    url="http://localhost:$port"
+  fi
+  adb -s "$s" shell am start -a android.intent.action.VIEW \
+    -d "t3code-dev://expo-development-client/?url=$(printf %s "$url" | jq -sRr @uri)" "$package" >/dev/null
+  echo "Opened $package on $s -> $url"
+}
+
+wait_and_open() {
+  for _ in $(seq 1 120); do
+    curl -fs "http://localhost:$port/status" >/dev/null 2>&1 && { open_app; return; }
+    sleep 1
+  done
+  echo "Metro did not come up on :$port" >&2
+}
+
+case "$cmd" in
+  build) build ;;
+  metro) metro ;;
+  open) open_app ;;
+  all)
+    if ! adb -s "$(serial)" shell pm path "$package" >/dev/null 2>&1; then build; fi
+    wait_and_open &
+    metro
+    ;;
+  *) sed -n '2,16p' "${BASH_SOURCE[0]}"; exit 1 ;;
+esac
