@@ -11,39 +11,19 @@ import {
 } from "lucide-react";
 
 import { randomUUID } from "../../lib/utils";
-import { readPreparedConnection } from "../../state/session";
+import { environmentFetch } from "./environmentFetch";
 import { Button } from "../ui/button";
 import { Dialog, DialogPopup, DialogTitle } from "../ui/dialog";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
 const decodeDictationState = Schema.decodeUnknownSync(DictationState);
 
-/**
- * The web client is same-origin with its server, but the desktop renderer is
- * served from t3code://app, so the request has to go to the environment's own
- * HTTP origin with its credential.
- */
-export async function dictationFetch(
+export function dictationFetch(
   environmentId: EnvironmentId,
   body: DictationRequest,
   timeoutMs: number,
 ): Promise<Response> {
-  const connection = readPreparedConnection(environmentId);
-  const authorization = connection?.httpAuthorization ?? null;
-  if (authorization?._tag === "Dpop")
-    throw new Error("Dictation is not available over a relay connection.");
-  const sameOrigin =
-    !connection || new URL(connection.httpBaseUrl).origin === window.location.origin;
-  return fetch(sameOrigin ? "/api/dictation" : new URL("/api/dictation", connection.httpBaseUrl), {
-    signal: AbortSignal.timeout(timeoutMs),
-    method: "POST",
-    credentials: authorization ? "omit" : sameOrigin ? "same-origin" : "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(authorization ? { Authorization: `Bearer ${authorization.token}` } : {}),
-    },
-    body: JSON.stringify(body),
-  });
+  return environmentFetch(environmentId, "/api/dictation", body, timeoutMs);
 }
 
 class DictationHttpError extends Error {
