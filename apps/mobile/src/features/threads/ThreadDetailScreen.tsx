@@ -306,6 +306,7 @@ export interface ThreadDetailScreenProps {
       hasAttachmentsOrContext: boolean,
     ) => Promise<boolean | "responded">,
     onWillEnqueue?: () => void,
+    dictation?: { readonly id: string; readonly draft: string },
   ) => Promise<MessageId | null>;
   readonly onReconnectEnvironment: () => void;
   readonly canSwitchThreadProvider: boolean;
@@ -1252,6 +1253,7 @@ function ThreadDetailBody(
   const handleSendMessage = async (
     followUp?: ActiveTurnComposerAction,
     stillSendable?: () => boolean,
+    dictation?: { readonly id: string; readonly draft: string },
   ) => {
     const scope = threadScope.current.signal;
     const targetThreadKey = selectedThreadKey;
@@ -1305,7 +1307,7 @@ function ThreadDetailBody(
         return;
       setSendingWithKeyboard(true);
       dismissingKeyboard = true;
-    });
+    }, dictation);
     if (messageId === null || scope.aborted) {
       return messageId;
     }
