@@ -264,6 +264,7 @@ import {
 import type { AssistantCitationRequest } from "./chat/AssistantCitationSource";
 import { useCitedHistory } from "./chat/citationProcedure";
 import type { MessagesTimelineHistoryControls } from "./chat/MessagesTimeline";
+import { ReadAloudDock } from "./chat/ReadAloud";
 import { ThreadTimeline } from "./chat/ThreadTimeline";
 import { ProviderSubagentBar } from "./chat/ProviderSubagentBar";
 import { getTriggerDisplayModelName } from "./chat/providerIconUtils";
@@ -1503,7 +1504,27 @@ export default function ChatView(props: ChatViewProps) {
     entry.kind === "message" ? [entry.message] : [],
   );
   const timelineEmpty = timelineEntries.length === 0 && !hasStreamedTimelineRows;
+<<<<<<< HEAD
   const displayedTimelineKey = activeThreadKey ?? routeThreadKey;
+=======
+  const latestReadAloudMessage = (() => {
+    const message = timelineMessages.findLast(
+      (candidate) => candidate.role === "assistant" && !candidate.streaming && candidate.text,
+    );
+    return message ? { id: message.id, text: message.text } : null;
+  })();
+  const displayedTimeline = resolveThreadSwitchTimeline({
+    loading: timelineEmpty && threadSyncPhase !== null,
+    activeThreadKey,
+    nextEntries: timelineEntries,
+    rememberedForActive: peekRememberedThreadTimeline<typeof timelineEntries>(activeThreadKey),
+  });
+  const displayedTimelineKey = displayedTimeline.displayThreadKey ?? routeThreadKey;
+  const paintOnlyDisplayedTimeline = isPaintOnlyThreadTimeline(
+    displayedTimeline.displayThreadKey,
+    activeThreadKey,
+  );
+>>>>>>> e55a4c354d (feat: read aloud on web, desktop and Android with local models)
   const displayedThreadRef = parseScopedThreadKey(displayedTimelineKey);
   const {
     worktreeSetup,
@@ -3402,6 +3423,12 @@ export default function ChatView(props: ChatViewProps) {
                   data-chat-composer-stack="true"
                   className="group/composer-stack pointer-events-auto relative z-10 mx-auto w-full max-w-(--chat-content-max-width)"
                 >
+                  {isDraftHeroState ? null : (
+                    <ReadAloudDock
+                      environmentId={activeThread.environmentId}
+                      latest={latestReadAloudMessage}
+                    />
+                  )}
                   {isDraftHeroState ? (
                     <div className="absolute inset-x-0 bottom-full">
                       <div
