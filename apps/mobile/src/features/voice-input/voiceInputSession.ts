@@ -7,6 +7,7 @@ import {
   type VoiceInputPhase,
   type VoiceInputState,
 } from "@t3tools/client-runtime/voice-input";
+import type { VoiceDictationTarget } from "../../native/voiceTranscription";
 
 import { normalizeVoiceInputDecibels, VOICE_WAVEFORM_SAMPLE_COUNT } from "./voiceInputMetering";
 
@@ -17,6 +18,8 @@ const SILENT_LEVELS: ReadonlyArray<number> = Array<number>(VOICE_WAVEFORM_SAMPLE
 export type VoiceInputTarget = {
   readonly ownerKey: string;
   readonly label?: string;
+  /** Where server-side dictation (Android) sends the recording. */
+  readonly dictation?: VoiceDictationTarget;
   readonly readDraft: () => VoiceDraftSnapshot | null;
   readonly commitDraft: VoiceInputControllerDependencies["commitDraft"];
   readonly subscribe: () => () => void;
@@ -113,6 +116,10 @@ export class VoiceInputSession {
 
   get label(): string | null {
     return this.target?.label ?? null;
+  }
+
+  get dictation(): VoiceDictationTarget | null {
+    return this.target?.dictation ?? null;
   }
 
   readonly subscribe = (listener: () => void): (() => void) => {
