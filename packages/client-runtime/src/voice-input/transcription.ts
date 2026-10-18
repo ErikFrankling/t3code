@@ -6,6 +6,13 @@ export type VoiceTranscriptionOptions = {
 export type PreparedVoiceTranscription = {
   readonly locale: string;
   readonly transcribe: (uri: string, options: VoiceTranscriptionOptions) => Promise<string>;
+  /**
+   * Hands the stopped recording to the environment, which transcribes it and
+   * sends the message itself (as the web composer does). When present it
+   * replaces `transcribe`: it resolves `null` once the environment owns the
+   * message, or a transcript to insert into the draft when sending was refused.
+   */
+  readonly deliver?: (uri: string, options: VoiceTranscriptionOptions) => Promise<string | null>;
 };
 
 export type VoiceTranscriber = {
