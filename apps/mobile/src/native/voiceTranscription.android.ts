@@ -132,6 +132,10 @@ class DictationStream {
         const state = await this.upload(true);
         if (state) return state;
       } catch (error) {
+        // A retried request (or a lost response) can find the recording already
+        // finished; then the first one worked.
+        const state = await this.status().catch(() => null);
+        if (state && state.status !== "recording" && state.status !== "cancelled") return state;
         if (attempt >= 4) throw error;
       }
       await wait(1_000 * (attempt + 1));
@@ -168,7 +172,7 @@ class DictationStream {
     const state = await this.close(uri, signal);
     if (!(await send({ id: this.id, draft: state.draft }))) {
       // The composer refused the message; keep the words in the draft instead.
-      return this.transcribe(uri, signal);
+      return DictationStream.text(await this.poll(state, signal));
     }
     // The server owns the message now. Keep showing the refinement for as long
     // as the composer is open; leaving loses nothing.
