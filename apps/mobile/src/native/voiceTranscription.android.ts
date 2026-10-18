@@ -1,88 +1,113 @@
-import { requireOptionalNativeModule } from "expo";
+import { fetch } from "expo/fetch";
+import { File } from "expo-file-system";
 
+import { DictationState } from "@t3tools/contracts";
 import {
   VoiceTranscriptionError,
   throwIfVoiceTranscriptionAborted,
+  type PreparedVoiceTranscription,
   type VoiceTranscriber,
+  type VoiceTranscriptionOptions,
 } from "@t3tools/client-runtime/voice-input";
+import * as Schema from "effect/Schema";
 
-type PreparedGoogleTranscription = { readonly locale: string; readonly mode: number };
+import { uuidv4 } from "../lib/uuid";
+import type { ResolveDictationConnection } from "./voiceTranscription";
 
-type GoogleTranscriptionModule = {
-  checkAvailability(): Promise<boolean>;
-  prepare(id: number): Promise<PreparedGoogleTranscription>;
-  transcribe(id: number, uri: string, locale: string, mode: number): Promise<string>;
-  cancel(id: number): Promise<void>;
-};
+export type { ResolveDictationConnection, VoiceDictationTarget } from "./voiceTranscription";
 
-const native = requireOptionalNativeModule<GoogleTranscriptionModule>("T3VoiceTranscription");
+const decodeDictationState = Schema.decodeUnknownSync(DictationState);
+const POLL_INTERVAL_MS = 1_000;
+// The final recogniser waits out GPU contention and restarts on the PC.
+const FINAL_TIMEOUT_MS = 10 * 60_000;
 
-const nativeErrorMessages: Readonly<Record<string, string>> = {
-  unavailable: "On-device voice transcription is not available for this device language.",
-  storage: "Not enough storage for on-device dictation. Free device storage and retry.",
-  quota: "On-device speech quota reached. Let the device rest or charge it, then retry.",
-  "no-speech": "No speech was detected. Speak again and retry dictation.",
-  busy: "On-device speech is busy. Wait for it to finish, then retry dictation.",
-  "needs-update": "Update Android and its on-device speech services, then retry dictation.",
-  "download-failed": "Speech model download failed. Check your network connection and retry.",
-  "audio-overflow":
-    "The speech engine could not process the complete recording. No text was added. Retry dictation.",
-  "incomplete-audio":
-    "Speech recognition could not process the complete recording. No text was added. Retry dictation.",
-};
-
-let nextOperationId = 0;
-
-export async function getLocalVoiceTranscriber(): Promise<VoiceTranscriber | null> {
-  if (!native || !(await native.checkAvailability())) return null;
-  const module = native;
+/**
+ * Android has no on-device recogniser here. The recording goes to the
+ * environment's own speech service (`/api/dictation/audio`, the same one the web
+ * composer's microphone uses), which returns the final transcript.
+ */
+export async function getLocalVoiceTranscriber(
+  resolveConnection?: ResolveDictationConnection,
+): Promise<VoiceTranscriber> {
   return {
     prepare: async ({ signal }) => {
-      const prepared = await runOperation(module, signal, "preparation-failed", (id) =>
-        module.prepare(id),
-      );
+      throwIfVoiceTranscriptionAborted(signal);
+      const resolved = resolveConnection?.() ?? null;
+      const authorization = resolved?.connection.httpAuthorization ?? null;
+      if (!resolved || authorization?._tag === "Dpop") {
+        throw new VoiceTranscriptionError(
+          "unavailable",
+          "Dictation needs a direct connection to your computer.",
+        );
+      }
+      const headers: Record<string, string> = authorization
+        ? { Authorization: `Bearer ${authorization.token}` }
+        : {};
       return {
-        locale: prepared.locale,
-        transcribe: (uri, { signal }) =>
-          runOperation(module, signal, "transcription-failed", (id) =>
-            module.transcribe(id, uri, prepared.locale, prepared.mode),
-          ),
-      };
+        locale: "auto",
+        transcribe: (uri, options) =>
+          transcribe(uri, resolved.connection.httpBaseUrl, headers, resolved.project, options),
+      } satisfies PreparedVoiceTranscription;
     },
   };
 }
 
-async function runOperation<T>(
-  module: GoogleTranscriptionModule,
-  signal: AbortSignal,
-  fallbackCode: "preparation-failed" | "transcription-failed",
-  operation: (id: number) => Promise<T>,
-): Promise<T> {
-  throwIfVoiceTranscriptionAborted(signal);
-  const id = ++nextOperationId;
-  let cancellation: Promise<void> | undefined;
-  const abort = () => {
-    cancellation = module.cancel(id).catch(() => {});
-  };
-  signal.addEventListener("abort", abort, { once: true });
+async function call(
+  baseUrl: string,
+  headers: Record<string, string>,
+  body: Record<string, unknown>,
+): Promise<DictationState> {
+  const response = await fetch(new URL("/api/dictation", baseUrl).toString(), {
+    method: "POST",
+    headers: { ...headers, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+  return decodeDictationState(await response.json());
+}
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function transcribe(
+  uri: string,
+  baseUrl: string,
+  headers: Record<string, string>,
+  project: string,
+  { signal }: VoiceTranscriptionOptions,
+): Promise<string> {
+  const id = uuidv4().toLowerCase();
   try {
-    const result = await operation(id);
     throwIfVoiceTranscriptionAborted(signal);
-    return result;
+    const audio = new Uint8Array(await new File(uri).arrayBuffer());
+    throwIfVoiceTranscriptionAborted(signal);
+    const url = new URL("/api/dictation/audio", baseUrl);
+    url.searchParams.set("id", id);
+    url.searchParams.set("project", project);
+    const response = await fetch(url.toString(), {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/octet-stream" },
+      body: audio,
+      signal,
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+    let state = decodeDictationState(await response.json());
+    const deadline = Date.now() + FINAL_TIMEOUT_MS;
+    while (state.status === "recording" || state.status === "finalizing") {
+      throwIfVoiceTranscriptionAborted(signal);
+      if (Date.now() > deadline) throw new Error("The speech service took too long.");
+      await wait(POLL_INTERVAL_MS);
+      state = await call(baseUrl, headers, { action: "status", id });
+    }
+    if (state.status !== "complete") throw new Error(state.error || `Dictation ${state.status}.`);
+    return (state.final || state.draft).trim();
   } catch (error) {
-    throwIfVoiceTranscriptionAborted(signal);
-    const code =
-      typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
-    throw new VoiceTranscriptionError(
-      code === "unavailable" || code === "unsupported-locale" ? code : fallbackCode,
-      (typeof code === "string" ? nativeErrorMessages[code] : undefined) ??
-        (fallbackCode === "preparation-failed"
-          ? "Voice transcription could not prepare this language. Check Google speech services and try again."
-          : "Voice transcription failed."),
-      { cause: error },
-    );
-  } finally {
-    signal.removeEventListener("abort", abort);
-    await cancellation;
+    if (signal.aborted) {
+      void call(baseUrl, headers, { action: "cancel", id }).catch(() => {});
+      throwIfVoiceTranscriptionAborted(signal);
+    }
+    if (error instanceof VoiceTranscriptionError) throw error;
+    throw new VoiceTranscriptionError("transcription-failed", "Dictation failed.", {
+      cause: error,
+    });
   }
 }

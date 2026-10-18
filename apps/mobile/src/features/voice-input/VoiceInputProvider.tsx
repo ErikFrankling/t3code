@@ -5,6 +5,7 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import { useSyncExternalStore } from "react";
 import { Platform } from "react-native";
 import { Atom, AsyncResult } from "effect/reactivity";
+import * as Option from "effect/Option";
 import { makeMutable } from "react-native-reanimated";
 
 import {
@@ -13,8 +14,12 @@ import {
   preferredMicrophoneInput,
   rememberMicrophones,
 } from "../../lib/microphonePriority";
-import { getLocalVoiceTranscriber } from "../../native/voiceTranscription";
+import {
+  getLocalVoiceTranscriber,
+  type ResolveDictationConnection,
+} from "../../native/voiceTranscription";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
+import { environmentSession } from "../../state/session";
 import { getNativeShowcaseScene } from "../showcase/nativeShowcaseScene";
 import {
   voiceInputBlocksSubmission,
@@ -53,13 +58,20 @@ function keepScreenAwake(tag: string): () => void {
 export const deviceMicrophoneOrder = (saved?: ReadonlyArray<MicrophoneEntry>) =>
   microphoneOrder(saved, Platform.OS === "android" ? "android" : "ios");
 
+/**
+ * The composer dictating now, set by the voice input session. Android hands the
+ * recording to the environment's speech service, so its transcriber asks this
+ * for the connection when a dictation starts.
+ */
+let currentDictationConnection: ResolveDictationConnection = () => null;
+
 /** "checking" until the first availability probe settles; re-probed on foreground. */
 export const localVoiceTranscriberAtom = makePermissionStatusAtom<
   VoiceTranscriber | null | "checking"
 >({
   label: "mobile:voice-input:transcriber",
   initial: "checking",
-  read: () => getLocalVoiceTranscriber().catch(() => null),
+  read: () => getLocalVoiceTranscriber(() => currentDictationConnection()).catch(() => null),
 }).pipe(Atom.keepAlive);
 
 // Each foreground re-probe yields a new transcriber; composers re-render only when availability flips.
@@ -112,6 +124,15 @@ const voiceInputAtom = Atom.make((get) => {
       return preferredMicrophoneInput(inputs, order);
     },
   });
+  const resolveDictationConnection = () => {
+    const target = session.dictation;
+    if (!target) return null;
+    const connection = Option.getOrNull(
+      registry.get(environmentSession.preparedConnectionValueAtom(target.environmentId)),
+    );
+    return connection ? { connection, project: target.project } : null;
+  };
+  currentDictationConnection = resolveDictationConnection;
   const session: VoiceInputSession = new VoiceInputSession({
     recorder,
     getTranscriber: () => {
