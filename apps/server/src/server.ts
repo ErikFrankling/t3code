@@ -31,7 +31,7 @@ import * as ServerConfig from "./config.ts";
 import { withUntracedRequests } from "./http.ts";
 import * as ServerHttp from "./http.ts";
 import * as DictationDelivery from "./DictationDelivery.ts";
-import { layerDictationRoute } from "./dictationHttp.ts";
+import { layerDictationAudioRoute, layerDictationRoute } from "./dictationHttp.ts";
 import { guardHttpResponseWriteErrors } from "./httpResponseErrorGuard.ts";
 import { fixPath } from "./os-jank.ts";
 import * as Ws from "./ws.ts";
@@ -682,6 +682,7 @@ const layerMakeRoutes = Layer.mergeAll(
     ServerHttp.layerAssetRoute,
     ServerHttp.layerAttachmentUploadRoute,
     layerDictationRoute,
+    layerDictationAudioRoute,
     DeviceHubProxy.layer,
     ServerBrowserStream.routeLayer,
     ServerHttp.layerStaticAndDevRoute,
