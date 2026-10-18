@@ -1,6 +1,6 @@
 import { useComposerAttachmentActions } from "./use-composer-attachment-actions";
 import * as Dialog from "../components/ui/Dialog";
-import { AuthOrchestrationOperateScope } from "@t3tools/contracts";
+import { AuthOrchestrationOperateScope, dictationMarker } from "@t3tools/contracts";
 import { readEnvironmentScope } from "./session";
 import { useAtomValue } from "@effect/atom-react";
 import { threadRuntimeIsActive } from "@t3tools/client-runtime/state/shell";
@@ -527,6 +527,7 @@ export function useThreadComposerState() {
   const onSendMessage = async (
     followUpOverride?: ActiveTurnComposerAction,
     beforeDispatch?: () => Promise<boolean>,
+    dictation?: { readonly id: string; readonly draft: string },
   ) => {
     if (
       selectedThreadShell &&
@@ -554,7 +555,11 @@ export function useThreadComposerState() {
     const draft = getComposerDraftSnapshot(threadKey);
     if (appAtomRegistry.get(composerContextImportsAtom)[threadKey]) return null;
     const thread = selectedThreadShell;
-    const text = draft.text.trim();
+    // A stopped recording travels as a marker the server replaces with its
+    // final transcript, after whatever was typed.
+    const text = dictation
+      ? [draft.text.trim(), dictationMarker(dictation.id)].filter(Boolean).join("\n")
+      : draft.text.trim();
     const attachments = draft.attachments;
     if (
       composerAttachmentUploadBlockReason({
@@ -703,6 +708,7 @@ export function useThreadComposerState() {
         draft.interactionMode ?? thread.interactionMode,
       ),
       ...(followUpDispatchMode === null ? {} : { dispatchMode: followUpDispatchMode }),
+      ...(dictation ? { dictation } : {}),
       createdAt: metadata.createdAt,
     });
     clearComposerDraftContent(threadKey, { deferAttachmentCleanup: true });
