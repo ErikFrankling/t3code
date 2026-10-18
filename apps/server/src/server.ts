@@ -46,6 +46,7 @@ import {
 import { resolveLauncherPath } from "./cloud/pinnedRuntime.ts";
 import * as DictationDelivery from "./DictationDelivery.ts";
 import { layerDictationAudioRoute, layerDictationRoute } from "./dictationHttp.ts";
+import { layerReadAloudRoute } from "./readAloudHttp.ts";
 import { fixPath } from "./os-jank.ts";
 import * as Ws from "./ws.ts";
 import * as AgentScopeLive from "./process/agentScope.ts";
@@ -909,6 +910,7 @@ const layerMakeRoutes = Layer.mergeAll(
     LinkThreadHttp.layer,
     layerDictationRoute,
     layerDictationAudioRoute,
+    layerReadAloudRoute,
     DeviceHubProxy.layer,
     ServerBrowserStream.routeLayer,
     PreviewTunnel.routeLayer,
