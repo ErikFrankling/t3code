@@ -10,6 +10,7 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import { useSyncExternalStore } from "react";
 import { AppState, Platform } from "react-native";
 import { Atom, AsyncResult } from "effect/reactivity";
+import * as Option from "effect/Option";
 import { makeMutable } from "react-native-reanimated";
 
 import {
@@ -19,6 +20,7 @@ import {
 } from "../../lib/microphonePriority";
 import { getLocalVoiceTranscriber } from "../../native/voiceTranscription";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
+import { environmentSession } from "../../state/session";
 import { getNativeShowcaseScene } from "../showcase/nativeShowcaseScene";
 import { voiceInputBlocksSubmission } from "@t3tools/client-runtime/voice-input";
 import { createLazyVoiceRecorder } from "./lazyVoiceRecorder";
@@ -89,9 +91,17 @@ const voiceInputAtom = Atom.make((get) => {
       return preferredMicrophoneInput(inputs, order);
     },
   });
+  const resolveDictationConnection = () => {
+    const target = session.dictation;
+    if (!target) return null;
+    const connection = Option.getOrNull(
+      registry.get(environmentSession.preparedConnectionValueAtom(target.environmentId)),
+    );
+    return connection ? { connection, project: target.project } : null;
+  };
   const session: VoiceInputSession = new VoiceInputSession({
     recorder,
-    getTranscriber: getLocalVoiceTranscriber,
+    getTranscriber: () => getLocalVoiceTranscriber(resolveDictationConnection),
     requestPermission: async () => {
       const permission = await requestRecordingPermissionsAsync();
       return { granted: permission.granted, canAskAgain: permission.canAskAgain };
