@@ -2,6 +2,7 @@ import { useAtomValue } from "@effect/atom-react";
 import {
   AudioModule,
   RecordingPresets,
+  getRecordingPermissionsAsync,
   requestRecordingPermissionsAsync,
   type RecordingStatus,
 } from "expo-audio";
@@ -80,6 +81,7 @@ const voiceInputAtom = Atom.make((get) => {
     Array<number>(VOICE_WAVEFORM_SAMPLE_COUNT).fill(0),
   );
   let keepAwakeSequence = 0;
+  let permissionPrompt = false;
   let audioToken: ReturnType<typeof acquireAudioSession> | null = null;
   const recorder = createLazyVoiceRecorder({
     create: () => new AudioModule.AudioRecorder(VOICE_RECORDING_OPTIONS),
@@ -119,8 +121,17 @@ const voiceInputAtom = Atom.make((get) => {
     recorder,
     getTranscriber: () => getLocalVoiceTranscriber(resolveDictationConnection),
     requestPermission: async () => {
-      const permission = await requestRecordingPermissionsAsync();
-      return { granted: permission.granted, canAskAgain: permission.canAskAgain };
+      // Android shows its permission activity even for a granted permission,
+      // which pauses the app; ask only when needed and ignore that pause.
+      const current = await getRecordingPermissionsAsync();
+      if (current.granted) return { granted: true, canAskAgain: current.canAskAgain };
+      permissionPrompt = true;
+      try {
+        const permission = await requestRecordingPermissionsAsync();
+        return { granted: permission.granted, canAskAgain: permission.canAskAgain };
+      } finally {
+        permissionPrompt = false;
+      }
     },
     configureRecording: async () => {
       const token = acquireAudioSession("recording");
@@ -150,7 +161,9 @@ const voiceInputAtom = Atom.make((get) => {
   // background state cancels preparation; recorder status handles calls and
   // route interruptions during capture.
   const appStateSubscription = AppState.addEventListener("change", (nextState) => {
-    if (nextState === "background") void session.controller.appMovedToBackground();
+    if (nextState === "background" && !permissionPrompt) {
+      void session.controller.appMovedToBackground();
+    }
   });
   // Android uploads the growing recording so the live draft shows while you talk.
   let streamPhase = session.getSnapshot().state.phase;
