@@ -105,6 +105,9 @@ jobs:
             --ks-pass env:ANDROID_KEYSTORE_PASSWORD --ks-key-alias "$ANDROID_KEY_ALIAS" \
             --out "$RUNNER_TEMP/t3code-erik.apk" "$RUNNER_TEMP/aligned.apk"
           "$build_tools/apksigner" verify "$RUNNER_TEMP/t3code-erik.apk"
+          # Without it the microphone button records nothing (an upstream
+          # plugin option once removed it).
+          "$build_tools/aapt2" dump permissions "$RUNNER_TEMP/t3code-erik.apk" | grep -q RECORD_AUDIO
           rm "$RUNNER_TEMP/release.jks"
 
       - name: Publish
