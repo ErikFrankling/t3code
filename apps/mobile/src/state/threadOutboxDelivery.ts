@@ -1016,6 +1016,7 @@ export function createThreadOutboxDelivery(): {
         dispatchMode: queuedMessage.dispatchMode ?? "start",
         ...(queuedMessage.freshContext ? { freshContext: true } : {}),
         resendAfterSocketLoss: false,
+        ...(queuedMessage.dictation ? { dictation: queuedMessage.dictation } : {}),
       },
     });
     if (AsyncResult.isFailure(deliveryResult) && !hasAccess()) return;
