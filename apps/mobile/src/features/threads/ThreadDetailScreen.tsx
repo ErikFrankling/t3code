@@ -293,6 +293,7 @@ export interface ThreadDetailScreenProps {
       text: string,
       hasAttachmentsOrContext: boolean,
     ) => Promise<boolean | "responded">,
+    dictation?: { readonly id: string; readonly draft: string },
   ) => Promise<MessageId | null>;
   readonly onReconnectEnvironment: () => void;
   readonly canSwitchThreadProvider: boolean;
@@ -1237,6 +1238,7 @@ function ThreadDetailBody(
   const handleSendMessage = async (
     followUp?: ActiveTurnComposerAction,
     stillSendable?: () => boolean,
+    dictation?: { readonly id: string; readonly draft: string },
   ) => {
     const scope = threadScope.current.signal;
     const targetThreadKey = selectedThreadKey;
@@ -1279,7 +1281,7 @@ function ThreadDetailBody(
             );
           }
         : undefined;
-    const messageId = await props.onSendMessage(followUp, declineBeforeDispatch);
+    const messageId = await props.onSendMessage(followUp, declineBeforeDispatch, dictation);
     if (messageId === null || scope.aborted) {
       return messageId;
     }
