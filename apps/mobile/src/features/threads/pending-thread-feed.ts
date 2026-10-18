@@ -1,4 +1,5 @@
 import {
+  dictationMarker,
   isCompactionCommandMessage,
   type ThreadGuestMessage,
   type ThreadGuestShare,
@@ -91,7 +92,14 @@ export function appendPendingThreadMessages(
         message: {
           id: pendingMessage.messageId,
           role: "user",
-          text: pendingMessage.text,
+          // A dictated message shows its live draft until the server sends the
+          // final transcript in place of the marker.
+          text: pendingMessage.dictation
+            ? pendingMessage.text.replace(
+                dictationMarker(pendingMessage.dictation.id),
+                () => pendingMessage.dictation?.draft || "Transcribing…",
+              )
+            : pendingMessage.text,
           attachments: [],
           context: pendingMessage.context,
           createdAt: pendingMessage.createdAt,
