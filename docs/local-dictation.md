@@ -26,6 +26,24 @@ retry and WAV download.
 
 Enter sends typed messages on desktop and mobile; Shift+Enter adds a newline.
 
+## Android app
+
+Upstream's mobile voice input transcribes on the device and exists only on iOS.
+This fork gives Android the same microphone button
+(`apps/mobile/src/native/voiceTranscription.android.ts`): the recording (AAC)
+goes to `POST /api/dictation/audio?id=<uuid>&project=<path>`, the server decodes
+it with ffmpeg (`T3CODE_FFMPEG`, default `ffmpeg` on `PATH`) to 16 kHz PCM,
+feeds it to the speech service as ordinary `start`/`append`/`finish` actions
+(`apps/server/src/dictationAudio.ts`), and the app polls `status` until the final
+transcript is inserted into the composer. Composers pass their environment as
+`dictation` to `useVoiceInputController`. Assistant messages also get a read-aloud
+button (`ReadAloudButton.tsx`, `expo-speech`, the device's own voice).
+
+The fork's Android build is published by `.github/workflows/erik-android.yml`
+as `android-v*` GitHub releases (the newest is marked latest), which the phone
+follows with Obtainium. Signing key: repo secrets `ANDROID_KEYSTORE_*`, backed up
+in the dotfiles sops secrets as `t3code-android-keystore`.
+
 ## How it works
 
 The host forwards authenticated `POST /api/dictation` speech actions to the
