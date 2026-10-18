@@ -100,3 +100,7 @@ async function transcribeVoiceRecording(
     throw wrapError("transcription-failed", "Voice transcription failed.", error);
   }
 }
+
+export function beginDictationStream(_uri: string | null): void {}
+
+export function endDictationStream(): void {}
