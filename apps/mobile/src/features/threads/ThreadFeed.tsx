@@ -1794,6 +1794,8 @@ function renderFeedEntry(
               iconSize={13}
             />
             <ReadAloudButton
+              environmentId={props.environmentId}
+              messageId={message.id}
               text={renderedText}
               tintColor={iconSubtleColor}
               buttonSize={28}
