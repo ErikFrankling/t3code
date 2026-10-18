@@ -506,6 +506,16 @@ export class VoiceInputController {
           const result = await this.liveTranscription;
           if ("error" in result) throw result.error;
           transcript = result.text;
+        } else if (transcription.deliver) {
+          const deliver = transcription.deliver;
+          const fallback = await runTranscriptionOperation(() =>
+            deliver(recordingUri!, { signal }),
+          );
+          if (fallback === null) {
+            if (this.isCurrent(operationToken)) this.setState(IDLE_STATE);
+            return;
+          }
+          transcript = fallback;
         } else {
           transcript = await runTranscriptionOperation(() =>
             transcription.streaming
