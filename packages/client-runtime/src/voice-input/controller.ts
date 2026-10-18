@@ -506,13 +506,25 @@ export class VoiceInputController {
       try {
         const live = this.liveTranscription ? await this.liveTranscription : null;
         if (live && "error" in live) throw live.error;
-        transcript =
-          live?.text ??
-          (await runTranscriptionOperation(() =>
+        if (live?.text != null) {
+          transcript = live.text;
+        } else if (transcription.deliver) {
+          const deliver = transcription.deliver;
+          const fallback = await runTranscriptionOperation(() =>
+            deliver(recordingUri!, { signal }),
+          );
+          if (fallback === null) {
+            if (this.isCurrent(operationToken)) this.setState(IDLE_STATE);
+            return;
+          }
+          transcript = fallback;
+        } else {
+          transcript = await runTranscriptionOperation(() =>
             transcription.streaming
               ? transcription.streaming.finish({ signal })
               : transcription.transcribe(recordingUri!, { signal }),
-          ));
+          );
+        }
       } catch (error) {
         if (this.isCurrent(operationToken)) {
           if (
