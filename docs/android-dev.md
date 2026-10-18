@@ -84,3 +84,24 @@ preview build.
 Native dependencies, `app.config.ts`, or plugins changed:
 `android-dev build --clean` (runs `expo prebuild --clean`). JS-only changes
 never need a rebuild.
+
+## Testing dictation with a recorded voice (agents)
+
+The headless emulator binary has no audio; dictation tests need the windowed
+one (it opens on the desktop). Feed it a file instead of a real microphone
+through a PipeWire null sink:
+
+```sh
+pactl load-module module-null-sink sink_name=t3emu_mic          # prints a module id
+PULSE_SOURCE=t3emu_mic.monitor PULSE_SINK=t3emu_mic T3_EMULATOR_AUDIO=1 \
+  T3_EMULATOR_GPU=swiftshader_indirect android-emulator
+adb emu avd hostmicon                                             # off by default
+adb shell pm grant com.t3tools.t3code.dev android.permission.RECORD_AUDIO
+espeak-ng -w say.wav "..." && paplay --device=t3emu_mic say.wav    # while recording
+adb shell screenrecord /sdcard/demo.mp4                            # no audio track
+pactl unload-module <id>                                          # afterwards
+```
+
+Run the emulator and Metro outside T3 Code's cgroup
+(`systemd-run --user --scope ...`), or a T3 Code restart kills them. Set
+`ANDROID_SERIAL` when another agent's emulator is up.
