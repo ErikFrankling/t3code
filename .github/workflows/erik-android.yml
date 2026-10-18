@@ -1,0 +1,121 @@
+name: Erik Android APK
+
+# Fork-only: builds the Android app from erik/main (Android dictation, read
+# aloud) and publishes it as a GitHub release that Obtainium follows. The
+# nightly rebase force-pushes erik/main, so each upstream nightly yields one APK.
+on:
+  push:
+    branches:
+      - erik/main
+  workflow_dispatch:
+
+concurrency:
+  group: erik-android
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    name: Build and publish
+    if: github.repository == 'ErikFrankling/t3code'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      actions: write
+      contents: write
+    env:
+      APP_VARIANT: preview
+      # The fork's JS must not be replaced by upstream's over-the-air updates.
+      T3CODE_MOBILE_UPDATES_ENABLED: "0"
+      EXPO_NO_GIT_STATUS: "1"
+      EXPO_NO_TELEMETRY: "1"
+      NODE_OPTIONS: --max-old-space-size=8192
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      # The fork carries upstream's workflows, which need upstream's runners and
+      # secrets. Keep only this one enabled; new ones arrive with each rebase.
+      - name: Disable upstream workflows
+        run: |
+          gh api "repos/$GH_REPO/actions/workflows" --paginate \
+            --jq '.workflows[] | select(.state == "active") | select(.path != ".github/workflows/erik-android.yml") | .id' |
+            while read -r id; do gh workflow disable "$id" || true; done
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: |
+            args:
+              - --filter=@t3tools/mobile...
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - id: version
+        name: Version
+        run: |
+          base="$(sed -nE 's/.*T3CODE_MOBILE_VERSION \?\? "([^"]+)".*/\1/p' apps/mobile/app.config.ts | head -1)"
+          # Android only installs an update with a higher versionCode.
+          code="$(( $(date +%s) / 60 ))"
+          name="${base}-erik.$(date -u +%Y%m%d%H%M).${GITHUB_SHA::7}"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - name: Prebuild
+        working-directory: apps/mobile
+        run: npx expo prebuild --clean --platform android --no-install
+
+      - name: Build
+        working-directory: apps/mobile/android
+        env:
+          VERSION_CODE: ${{ steps.version.outputs.code }}
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+        run: |
+          sed -i -E "s/versionCode [0-9]+/versionCode $VERSION_CODE/; s/versionName \"[^\"]*\"/versionName \"$VERSION_NAME\"/" app/build.gradle
+          grep -nE 'versionCode|versionName' app/build.gradle
+          ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
+
+      - name: Sign
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          build_tools="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          echo "$ANDROID_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          "$build_tools/zipalign" -f -p 4 \
+            apps/mobile/android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/aligned.apk"
+          "$build_tools/apksigner" sign --ks "$RUNNER_TEMP/release.jks" \
+            --ks-pass env:ANDROID_KEYSTORE_PASSWORD --ks-key-alias "$ANDROID_KEY_ALIAS" \
+            --out "$RUNNER_TEMP/t3code-erik.apk" "$RUNNER_TEMP/aligned.apk"
+          "$build_tools/apksigner" verify "$RUNNER_TEMP/t3code-erik.apk"
+          rm "$RUNNER_TEMP/release.jks"
+
+      - name: Publish
+        env:
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+        run: |
+          tag="android-v$VERSION_NAME"
+          gh release create "$tag" "$RUNNER_TEMP/t3code-erik.apk" \
+            --target "$GITHUB_SHA" --title "Android $VERSION_NAME" --latest \
+            --notes "Android build of erik/main at ${GITHUB_SHA::7} (upstream nightly plus the fork's changes)."
+          # Keep the five newest builds.
+          gh release list --limit 100 --json tagName,createdAt \
+            --jq '[.[] | select(.tagName | startswith("android-v"))] | sort_by(.createdAt) | reverse | .[5:] | .[].tagName' |
+            while read -r old; do gh release delete "$old" --cleanup-tag --yes; done
