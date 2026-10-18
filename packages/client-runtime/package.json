@@ -119,6 +119,10 @@
       "types": "./src/voice-input/index.ts",
       "default": "./src/voice-input/index.ts"
     },
+    "./read-aloud": {
+      "types": "./src/readAloud.ts",
+      "default": "./src/readAloud.ts"
+    },
     "./t3ToolSummary": {
       "types": "./src/t3ToolSummary.ts",
       "default": "./src/t3ToolSummary.ts"
