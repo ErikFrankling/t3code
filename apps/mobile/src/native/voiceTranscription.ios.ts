@@ -101,6 +101,6 @@ async function transcribeVoiceRecording(
   }
 }
 
-export function beginDictationStream(_uri: string | null): void {}
+export function beginDictationStream(_uri: string | null, _ownerKey: string | null): void {}
 
 export function endDictationStream(): void {}

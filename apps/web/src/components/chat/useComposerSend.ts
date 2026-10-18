@@ -482,15 +482,11 @@ export function useComposerSend(input: ComposerSendInput) {
       notifyDirectAnnotationAttached();
       return;
     }
-<<<<<<< HEAD
-    const multipleModelSelections = sendCtx.multipleModelSelections;
+    const multipleModelSelections = dictation ? null : sendCtx.multipleModelSelections;
     const approvalFeedbackTarget = pendingApprovalsRef.current.find(
       (approval) =>
         approval.supportsFeedback && approval.requestId === sendCtx.shownPendingApprovalIds[0],
     );
-=======
-    const multipleModelSelections = dictation ? null : sendCtx.multipleModelSelections;
->>>>>>> 142997fe65 (feat: local dictation with durable server-side delivery)
     const multipleModelBlock =
       multipleModelSelections === null
         ? null
