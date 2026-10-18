@@ -112,6 +112,7 @@ import {
   ComposerDictationStatus,
   ComposerDictationToolbar,
 } from "../voice-input/ComposerDictationControl";
+import { DictationLivePreview } from "../voice-input/DictationLivePreview";
 import { useVoiceInputController } from "../voice-input/useVoiceInputController";
 import { resolveVoiceComposerPresentation } from "../voice-input/voiceInputPresentation";
 import type { ExistingThreadSettingsRouteParams } from "./ThreadSettingsSheet";
@@ -873,6 +874,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
           />
         ) : null}
 
+        <DictationLivePreview visible={isVoiceInputPresented} />
         <ComposerSurface
           animateLayout={false}
           style={{
