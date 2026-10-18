@@ -5,6 +5,8 @@ import { msg } from "gt-react-native";
 import { Settings } from "react-native";
 import { m } from "../i18n/messages";
 
+import type { ResolveDictationConnection } from "./voiceTranscription";
+
 import {
   VoiceTranscriptionError,
   throwIfVoiceTranscriptionAborted,
@@ -46,7 +48,9 @@ function getNativeErrorCode(error: unknown): string | undefined {
   return typeof error.code === "string" ? error.code : undefined;
 }
 
-export async function getLocalVoiceTranscriber(): Promise<VoiceTranscriber | null> {
+export async function getLocalVoiceTranscriber(
+  _resolveConnection?: ResolveDictationConnection,
+): Promise<VoiceTranscriber | null> {
   const locales = getPreferredLocales();
   // Availability is a device and OS check; which languages have a model only `prepare` knows.
   if (!AppleTranscription.isAvailable(locales[0]!)) return null;
