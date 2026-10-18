@@ -1,6 +1,6 @@
 import { useComposerAttachmentActions } from "./use-composer-attachment-actions";
 import * as Dialog from "../components/ui/Dialog";
-import { AuthOrchestrationOperateScope } from "@t3tools/contracts";
+import { AuthOrchestrationOperateScope, dictationMarker } from "@t3tools/contracts";
 import { readEnvironmentScope } from "./session";
 import { useAtomValue } from "@effect/atom-react";
 import { compactBeforeSendTokens } from "@t3tools/client-runtime/state/context-window";
@@ -570,6 +570,7 @@ export function useThreadComposerState(input: {
       hasAttachmentsOrContext: boolean,
     ) => Promise<boolean | "responded">,
     onWillEnqueue?: () => void,
+    dictation?: { readonly id: string; readonly draft: string },
   ) => {
     if (
       selectedThreadShell &&
@@ -595,7 +596,11 @@ export function useThreadComposerState(input: {
     const draft = getComposerDraftSnapshot(threadKey);
     if (appAtomRegistry.get(composerContextImportsAtom)[threadKey]) return null;
     const thread = selectedThreadShell;
-    const text = draft.text.trim();
+    // A stopped recording travels as a marker the server replaces with its
+    // final transcript, after whatever was typed.
+    const text = dictation
+      ? [draft.text.trim(), dictationMarker(dictation.id)].filter(Boolean).join("\n")
+      : draft.text.trim();
     const attachments = draft.attachments;
     if (
       composerAttachmentUploadBlockReason({
@@ -816,6 +821,7 @@ export function useThreadComposerState(input: {
           ? {}
           : { dispatchMode: followUpDispatchMode }),
       ...(freshContext ? { freshContext: true } : {}),
+      ...(dictation ? { dictation } : {}),
       createdAt: metadata.createdAt,
     });
     clearComposerDraftContent(threadKey, { deferAttachmentCleanup: true });
