@@ -4,36 +4,56 @@ import { ScrollView, View } from "react-native";
 import { AppText as Text } from "../../components/ui/AppText";
 import { useDictationPreview } from "./dictationPreview";
 
-/**
- * The speech service's live draft above the composer while dictating, then the
- * final recogniser's text while it refines, as in the web composer.
- */
-export function DictationLivePreview(props: { readonly visible: boolean }) {
-  const preview = useDictationPreview();
+const STATUS = {
+  listening: "Listening",
+  refining: "Finishing the transcript",
+  sent: "Sent. It goes to the chat when the transcript is final; you can leave.",
+} as const;
+
+function PreviewField(props: {
+  readonly label: string;
+  readonly text: string;
+  readonly placeholder: string;
+}) {
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
-  if (!props.visible || !preview) return null;
-  const refining = preview.phase === "refining";
-  const text = preview.final || preview.draft;
   return (
-    <View className="mx-2 mb-2 rounded-[18px] bg-subtle-strong px-3.5 py-2.5">
-      <Text className="mb-1 font-t3-medium text-xs text-foreground-secondary">
-        {refining ? (preview.final ? "Final" : "Refining…") : "Live draft"}
-      </Text>
+    <View className="flex-1">
+      <Text className="mb-1 font-t3-medium text-xs text-foreground-secondary">{props.label}</Text>
       <ScrollView
         ref={scrollRef}
-        style={{ maxHeight: 160 }}
+        style={{ maxHeight: 120 }}
         onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
       >
         <Text
-          className={
-            refining && !preview.final
-              ? "text-sm text-foreground-secondary"
-              : "text-sm text-foreground"
-          }
+          className={props.text ? "text-sm text-foreground" : "text-sm text-foreground-secondary"}
         >
-          {text || "Listening…"}
+          {props.text || props.placeholder}
         </Text>
       </ScrollView>
+    </View>
+  );
+}
+
+/**
+ * Above the composer while dictating: the speech service's live draft and its
+ * refined text side by side, as in the web composer, until the message is sent.
+ */
+export function DictationLivePreview(props: { readonly ownerKey: string | null }) {
+  const preview = useDictationPreview(props.ownerKey);
+  if (!preview) return null;
+  return (
+    <View className="mx-2 mb-2 gap-2 rounded-[18px] bg-subtle-strong px-3.5 py-2.5">
+      <View className="gap-2">
+        <PreviewField label="Live" text={preview.draft} placeholder="Listening…" />
+        <PreviewField
+          label="Refined"
+          text={preview.final}
+          placeholder={
+            preview.phase === "listening" ? "Follows a few seconds behind…" : "Refining…"
+          }
+        />
+      </View>
+      <Text className="text-xs text-foreground-secondary">{STATUS[preview.phase]}</Text>
     </View>
   );
 }
