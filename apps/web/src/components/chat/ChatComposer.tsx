@@ -15,6 +15,7 @@ import { importPastedComposerText, readPastedComposerContext } from "../composer
 import { elementContextToPreviewAnnotation } from "../../lib/elementContext";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import { Dictation } from "./Dictation";
+import { useVoiceMode } from "./VoiceMode";
 import {
   questionAttachmentDraftId,
   countQuestionAttachments,
@@ -2422,8 +2423,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     key: 0,
     active: false,
   });
+  // Voice mode dictates through this composer, so its microphone stays mounted.
+  const voiceModeOpen = useVoiceMode().open;
   const isComposerCollapsedMobile =
-    isMobileViewport && !forceExpandedOnMobile && !isComposerFocused && !hasMultilinePrompt;
+    isMobileViewport &&
+    !forceExpandedOnMobile &&
+    !isComposerFocused &&
+    !hasMultilinePrompt &&
+    !voiceModeOpen;
 
   const composerEditorRef = useRef<ComposerPromptEditorHandle>(null);
   const pasteAsTextShortcutUntilRef = useRef(0);
