@@ -3,6 +3,7 @@ import {
   READ_ALOUD_SPEEDS,
   ReadAloudPlayer,
   type ReadAloudAudio,
+  type ReadAloudClip,
 } from "@t3tools/client-runtime/read-aloud";
 import type { PreparedConnection } from "@t3tools/client-runtime/connection";
 import { ReadAloudState, type EnvironmentId, type ReadAloudMode } from "@t3tools/contracts";
@@ -34,25 +35,59 @@ import { environmentSession } from "../../state/session";
 const decodeReadAloudState = Schema.decodeUnknownSync(ReadAloudState);
 
 let connection: PreparedConnection | null = null;
-let player: AudioPlayer | null = null;
+
+type Slot = { readonly player: AudioPlayer; id: string | null };
+
+// Two players: one plays while the other already holds the next chunk, so
+// chunks follow each other without a load gap.
+let slots: [Slot, Slot] | null = null;
+let active: Slot | null = null;
 let rejectClip: ((error: Error) => void) | null = null;
 let releaseClip: (() => void) | null = null;
 let clipNumber = 0;
 
+async function slotPair(): Promise<[Slot, Slot]> {
+  if (!slots) {
+    await setAudioModeAsync({ playsInSilentMode: true });
+    slots = [
+      { player: createAudioPlayer(null, { updateInterval: 250 }), id: null },
+      { player: createAudioPlayer(null, { updateInterval: 250 }), id: null },
+    ];
+  }
+  return slots;
+}
+
+async function load(slot: Slot, clip: ReadAloudClip) {
+  if (slot.id === clip.id) return;
+  // Rotating files: neither the playing nor the preloaded clip is overwritten.
+  const file = new File(Paths.cache, `read-aloud-${clipNumber++ % 6}.wav`);
+  await file.write(clip.audio, { encoding: "base64" });
+  slot.player.replace({ uri: file.uri });
+  slot.id = clip.id;
+}
+
 const audio: ReadAloudAudio = {
-  play: async (base64, rate) => {
+  play: async (clip, { rate, startFraction, next, onProgress }) => {
     rejectClip?.(new Error("replaced"));
     releaseClip?.();
-    // Rotating files: the clip being played is never overwritten by the next one.
-    const file = new File(Paths.cache, `read-aloud-${clipNumber++ % 4}.mp3`);
-    await file.write(base64, { encoding: "base64" });
-    if (!player) {
-      await setAudioModeAsync({ playsInSilentMode: true });
-      player = createAudioPlayer(null);
-    }
-    const current = player;
+    const pair = await slotPair();
+    const slot =
+      pair.find((candidate) => candidate.id === clip.id) ??
+      pair.find((candidate) => candidate !== active) ??
+      pair[0];
+    await load(slot, clip);
+    active = slot;
+    const { player } = slot;
     await new Promise<void>((resolve, reject) => {
-      const subscription = current.addListener("playbackStatusUpdate", (status) => {
+      let seeked = !startFraction;
+      const subscription = player.addListener("playbackStatusUpdate", (status) => {
+        if (status.duration > 0) {
+          if (!seeked) {
+            seeked = true;
+            void player.seekTo(status.duration * (startFraction ?? 0));
+          }
+          onProgress?.(status.currentTime / status.duration);
+        }
         if (status.didJustFinish) {
           releaseClip?.();
           resolve();
@@ -64,15 +99,16 @@ const audio: ReadAloudAudio = {
         rejectClip = null;
       };
       rejectClip = reject;
-      current.replace({ uri: file.uri });
-      current.setPlaybackRate(rate, "high");
-      current.play();
+      player.setPlaybackRate(rate, "high");
+      player.play();
+      const other = pair.find((candidate) => candidate !== slot);
+      if (next && other) void load(other, next).catch(() => undefined);
     });
   },
-  pause: () => player?.pause(),
-  resume: () => player?.play(),
+  pause: () => active?.player.pause(),
+  resume: () => active?.player.play(),
   stop: () => {
-    player?.pause();
+    active?.player.pause();
     const reject = rejectClip;
     releaseClip?.();
     reject?.(new Error("stopped"));
