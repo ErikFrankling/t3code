@@ -4,6 +4,7 @@ import {
   READ_ALOUD_SPEEDS,
   ReadAloudPlayer,
   type ReadAloudAudio,
+  type ReadAloudClip,
 } from "@t3tools/client-runtime/read-aloud";
 import { Schema } from "effect";
 import {
@@ -26,34 +27,79 @@ const decodeReadAloudState = Schema.decodeUnknownSync(ReadAloudState);
 const SPEED_KEY = "t3code:read-aloud-speed";
 
 let environment: EnvironmentId | null = null;
-let element: HTMLAudioElement | null = null;
+
+type Slot = { readonly element: HTMLAudioElement; id: string | null; url: string | null };
+
+// Two <audio> elements for the whole app: one plays while the other already
+// holds the next chunk, so chunks follow each other without a load gap.
+let slots: [Slot, Slot] | null = null;
+let active: Slot | null = null;
 let rejectClip: ((error: Error) => void) | null = null;
 let clipListeners: AbortController | null = null;
 
-/** One <audio> for the whole app: a new message replaces whatever was playing. */
+const slotPair = (): [Slot, Slot] =>
+  (slots ??= [
+    { element: new Audio(), id: null, url: null },
+    { element: new Audio(), id: null, url: null },
+  ]);
+
+function load(slot: Slot, clip: ReadAloudClip) {
+  if (slot.id === clip.id) return;
+  if (slot.url) URL.revokeObjectURL(slot.url);
+  const bytes = Uint8Array.from(atob(clip.audio), (char) => char.charCodeAt(0));
+  slot.url = URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
+  slot.id = clip.id;
+  slot.element.preload = "auto";
+  slot.element.src = slot.url;
+  slot.element.load();
+}
+
 const audio: ReadAloudAudio = {
-  play: (base64, rate) =>
+  play: (clip, { rate, startFraction, next, onProgress }) =>
     new Promise<void>((resolve, reject) => {
-      element ??= new Audio();
+      const pair = slotPair();
       rejectClip?.(new Error("replaced"));
       rejectClip = reject;
       clipListeners?.abort();
       clipListeners = new AbortController();
       const { signal } = clipListeners;
+      const slot =
+        pair.find((candidate) => candidate.id === clip.id) ??
+        pair.find((candidate) => candidate !== active) ??
+        pair[0];
+      load(slot, clip);
+      active = slot;
+      const { element } = slot;
       element.addEventListener("ended", () => resolve(), { signal });
       element.addEventListener("error", () => reject(new Error("The audio could not be played.")), {
         signal,
       });
-      element.src = `data:audio/mpeg;base64,${base64}`;
+      element.addEventListener(
+        "timeupdate",
+        () => {
+          if (element.duration > 0) onProgress?.(element.currentTime / element.duration);
+        },
+        { signal },
+      );
       element.preservesPitch = true;
       element.defaultPlaybackRate = rate;
       element.playbackRate = rate;
-      element.play().catch(reject);
+      const begin = () => {
+        if (startFraction && element.duration > 0) {
+          element.currentTime = element.duration * startFraction;
+        }
+        element.play().catch(reject);
+      };
+      if (element.readyState >= HTMLMediaElement.HAVE_METADATA) begin();
+      else element.addEventListener("loadedmetadata", begin, { once: true, signal });
+      const other = pair.find((candidate) => candidate !== slot);
+      if (next && other) load(other, next);
     }),
-  pause: () => element?.pause(),
-  resume: () => void element?.play(),
+  pause: () => active?.element.pause(),
+  resume: () => void active?.element.play(),
   stop: () => {
-    element?.pause();
+    active?.element.pause();
+    if (active) active.element.currentTime = 0;
     rejectClip?.(new Error("stopped"));
     rejectClip = null;
   },
