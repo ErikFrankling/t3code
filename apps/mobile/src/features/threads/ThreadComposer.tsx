@@ -114,6 +114,7 @@ import {
 } from "../voice-input/ComposerDictationControl";
 import { DictationLivePreview } from "../voice-input/DictationLivePreview";
 import { useVoiceInputController } from "../voice-input/useVoiceInputController";
+import { registerVoiceModeComposer } from "../voice-mode/voiceMode";
 import { resolveVoiceComposerPresentation } from "../voice-input/voiceInputPresentation";
 import {
   rememberModelOptions,
@@ -506,6 +507,11 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     onChangeDraftMessage: (text) => setComposerDraftText(composerDraftKey, text),
     onChangeSelection: composerMenu.onSelectionChange,
   });
+  const { start: startVoiceInput, stop: stopVoiceInput } = voiceInput;
+  useEffect(
+    () => registerVoiceModeComposer({ start: startVoiceInput, stop: stopVoiceInput }),
+    [startVoiceInput, stopVoiceInput],
+  );
   const voicePresentation = resolveVoiceComposerPresentation(
     voiceInput.state,
     voiceInput.elapsedSeconds,

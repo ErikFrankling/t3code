@@ -422,6 +422,7 @@ import {
 import type { AssistantCitationRequest } from "./chat/AssistantCitationSource";
 import { MessagesTimeline, type MessagesTimelineHistoryControls } from "./chat/MessagesTimeline";
 import { ReadAloudDock } from "./chat/ReadAloud";
+import { VoiceModeOverlay, voiceMode } from "./chat/VoiceMode";
 import { ProviderSubagentBar } from "./chat/ProviderSubagentBar";
 import { getTriggerDisplayModelName } from "./chat/providerIconUtils";
 import { resolveTimelineIsAtEnd } from "./chat/MessagesTimeline.logic";
@@ -8412,10 +8413,19 @@ export default function ChatView(props: ChatViewProps) {
                   className="group/composer-stack pointer-events-auto relative z-10 mx-auto w-full max-w-(--chat-content-max-width)"
                 >
                   {isDraftHeroState ? null : (
-                    <ReadAloudDock
-                      environmentId={activeThread.environmentId}
-                      latest={latestReadAloudMessage}
-                    />
+                    <>
+                      <ReadAloudDock
+                        environmentId={activeThread.environmentId}
+                        latest={latestReadAloudMessage}
+                        onVoiceMode={voiceMode.open}
+                      />
+                      <VoiceModeOverlay
+                        environmentId={activeThread.environmentId}
+                        title={activeThread.title}
+                        reply={latestReadAloudMessage}
+                        working={isWorking}
+                      />
+                    </>
                   )}
                   {isDraftHeroState ? (
                     <div className="absolute inset-x-0 bottom-full">
