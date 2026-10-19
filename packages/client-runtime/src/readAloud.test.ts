@@ -1,3 +1,4 @@
+// @effect-diagnostics globalTimers:off -- Plain promise polling and playback, shared with React Native; no Effect runtime here.
 import type { ReadAloudRequest, ReadAloudState } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
