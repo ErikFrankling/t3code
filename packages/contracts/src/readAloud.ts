@@ -27,8 +27,13 @@ export type ReadAloudRequest = typeof ReadAloudRequest.Type;
 
 export const ReadAloudSentence = Schema.Struct({
   text: Schema.String,
-  /** Base64 MP3, present once synthesized and only from the requested index on. */
+  /**
+   * Base64 WAV on the first sentence of a chunk, covering `span` sentences;
+   * present once synthesized and only from the requested index on.
+   */
   audio: Schema.optional(Schema.String),
+  span: Schema.optional(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))),
+  /** Whether this sentence's audio exists (possibly in an earlier sentence's chunk). */
   ready: Schema.Boolean,
 });
 export type ReadAloudSentence = typeof ReadAloudSentence.Type;
