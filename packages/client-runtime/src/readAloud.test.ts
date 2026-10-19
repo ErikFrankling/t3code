@@ -5,7 +5,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { ReadAloudPlayer, type ReadAloudAudio } from "./readAloud.ts";
 
 /** A job whose sentences and clips arrive over successive polls, like the server's. */
-function fakeServer(steps: { text: string; audio?: string }[][]) {
+function fakeServer(steps: { text: string; audio?: string; span?: number; ready?: boolean }[][]) {
   let poll = 0;
   const requests: ReadAloudRequest[] = [];
   const request = async (body: ReadAloudRequest): Promise<ReadAloudState> => {
@@ -19,8 +19,10 @@ function fakeServer(steps: { text: string; audio?: string }[][]) {
       error: "",
       sentences: step.map((sentence, index) => ({
         text: sentence.text,
-        ready: sentence.audio !== undefined,
-        ...(index >= from && sentence.audio ? { audio: sentence.audio } : {}),
+        ready: sentence.ready ?? sentence.audio !== undefined,
+        ...(index >= from && sentence.audio
+          ? { audio: sentence.audio, span: sentence.span ?? 1 }
+          : {}),
       })),
     };
   };
@@ -28,12 +30,19 @@ function fakeServer(steps: { text: string; audio?: string }[][]) {
 }
 
 function fakeAudio() {
-  const played: { clip: string; rate: number }[] = [];
+  const played: { clip: string; rate: number; next?: string; startFraction?: number }[] = [];
   let finish: (() => void) | null = null;
   let fail: ((error: Error) => void) | null = null;
+  let progress: ((fraction: number) => void) | undefined;
   const audio: ReadAloudAudio = {
-    play: (clip, rate) => {
-      played.push({ clip, rate });
+    play: (clip, options) => {
+      played.push({
+        clip: clip.audio,
+        rate: options.rate,
+        ...(options.next ? { next: options.next.audio } : {}),
+        ...(options.startFraction ? { startFraction: options.startFraction } : {}),
+      });
+      progress = options.onProgress;
       return new Promise((resolve, reject) => {
         finish = resolve;
         fail = reject;
@@ -47,7 +56,7 @@ function fakeAudio() {
     finish?.();
     await new Promise((resolve) => setTimeout(resolve, 5));
   };
-  return { audio, played, endClip };
+  return { audio, played, endClip, progress: (fraction: number) => progress?.(fraction) };
 }
 
 const until = async (check: () => boolean) => {
@@ -124,5 +133,51 @@ describe("ReadAloudPlayer", () => {
     await until(() => sound.played.length === 1);
     player.stop();
     expect(player.getSnapshot()).toMatchObject({ phase: "idle", key: null, sentences: [] });
+  });
+
+  it("follows the subtitle through a chunk and preloads the next one", async () => {
+    const server = fakeServer([
+      [
+        { text: "One.", audio: "c0" },
+        { text: "Two is longer.", audio: "c1", span: 2 },
+        { text: "Three.", ready: true },
+        { text: "Four.", audio: "c3" },
+      ],
+    ]);
+    const sound = fakeAudio();
+    const player = new ReadAloudPlayer({ request: server.request, audio: sound.audio, pollMs: 0 });
+    player.start("message-1", "text");
+    await until(() => sound.played.length === 1);
+    // The next chunk loads while the first plays, so there is no gap.
+    expect(sound.played[0]).toMatchObject({ clip: "c0", next: "c1" });
+    await sound.endClip();
+    await until(() => sound.played.length === 2);
+    expect(sound.played[1]).toMatchObject({ clip: "c1", next: "c3" });
+    expect(player.getSnapshot().current).toBe(1);
+    // "Two is longer." is most of the chunk's characters; past it, "Three." is spoken.
+    sound.progress(0.5);
+    expect(player.getSnapshot().current).toBe(1);
+    sound.progress(0.8);
+    expect(player.getSnapshot().current).toBe(2);
+    await sound.endClip();
+    await until(() => sound.played.length === 3);
+    expect(sound.played[2]).toMatchObject({ clip: "c3" });
+  });
+
+  it("seeks into the middle of a chunk", async () => {
+    const server = fakeServer([
+      [
+        { text: "One.", audio: "c0", span: 2 },
+        { text: "Two.", ready: true },
+      ],
+    ]);
+    const sound = fakeAudio();
+    const player = new ReadAloudPlayer({ request: server.request, audio: sound.audio, pollMs: 0 });
+    player.start("message-1", "text");
+    await until(() => sound.played.length === 1);
+    player.seek(1);
+    await until(() => sound.played.length === 2);
+    expect(sound.played[1]?.clip).toBe("c0");
+    expect(sound.played[1]?.startFraction).toBeCloseTo(0.5);
   });
 });
