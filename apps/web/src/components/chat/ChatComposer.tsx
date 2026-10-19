@@ -7,6 +7,7 @@ import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useRightPanelStore } from "~/rightPanelStore";
 import { importPastedComposerText, readPastedComposerContext } from "../composerInlineTokenPaste";
 import { Dictation } from "./Dictation";
+import { useVoiceMode } from "./VoiceMode";
 import {
   questionAttachmentDraftId,
   trackOpenQuestionAttachmentDraft,
@@ -1062,12 +1063,15 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const hasMultilinePrompt = prompt.includes("\n") || hasWrappedPrompt;
   // A pending question stays expanded: its card moves into the banner dock,
   // so collapsing would leave the surface empty and squashed beneath it.
+  // Voice mode dictates through this composer, so its microphone stays mounted.
+  const voiceModeOpen = useVoiceMode().open;
   const isComposerCollapsedMobile =
     isMobileViewport &&
     !forceExpandedOnMobile &&
     !isComposerFocused &&
     !hasMultilinePrompt &&
-    pendingUserInputs.length === 0;
+    pendingUserInputs.length === 0 &&
+    !voiceModeOpen;
 
   const composerEditorRef = useRef<ComposerPromptEditorHandle>(null);
   const pasteAsTextShortcutUntilRef = useRef(0);
