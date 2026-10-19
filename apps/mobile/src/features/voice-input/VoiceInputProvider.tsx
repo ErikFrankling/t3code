@@ -43,6 +43,8 @@ import {
   voiceInputBlocksSubmission,
   type VoiceInputState,
 } from "@t3tools/client-runtime/voice-input";
+import { voiceCall } from "../../native/voiceCall";
+import { createCallVoiceRecorder } from "./callVoiceRecorder";
 import { createLazyVoiceRecorder, type LazyVoiceRecorder } from "./lazyVoiceRecorder";
 import { normalizeVoiceInputDecibels, VOICE_WAVEFORM_SAMPLE_COUNT } from "./voiceInputMetering";
 import { VoiceInputSession } from "./voiceInputSession";
@@ -76,7 +78,7 @@ const VOICE_RECORDING_OPTIONS = {
 
 async function releaseVoiceRecordingAudio(): Promise<void> {
   try {
-    await setAudioModeAsync({ allowsRecording: false });
+    await setAudioModeAsync({ allowsRecording: false, shouldPlayInBackground: voiceCall.active });
   } finally {
     // Expo does not deactivate AVAudioSession when recording stops or its
     // category changes. Explicit deactivation resumes interrupted app audio.
@@ -90,7 +92,8 @@ async function configureVoiceRecordingAudio(): Promise<void> {
       allowsRecording: true,
       interruptionMode: "doNotMix",
       playsInSilentMode: true,
-      shouldPlayInBackground: false,
+      // Voice mode reads the reply aloud with the screen off.
+      shouldPlayInBackground: voiceCall.active,
     });
     await setIsAudioActiveAsync(true);
   } catch (error) {
@@ -144,7 +147,10 @@ function useVoiceInputRuntime() {
 
   if (!sessionRef.current || !recorderRef.current) {
     const recorder = createLazyVoiceRecorder({
-      create: () => new AudioModule.AudioRecorder(VOICE_RECORDING_OPTIONS),
+      create: () =>
+        voiceCall.active
+          ? createCallVoiceRecorder()
+          : new AudioModule.AudioRecorder(VOICE_RECORDING_OPTIONS),
       onStatus: (status: RecordingStatus) => {
         sessionRef.current?.controller.handleRecorderStatus({
           isFinished: status.isFinished,
@@ -215,12 +221,17 @@ function useVoiceInputRuntime() {
       // iOS reports `inactive` while its permission dialog is open. Only the
       // real background state cancels preparation; recorder status handles
       // calls and route interruptions during capture.
-      if (nextState === "background" && !permissionPromptRef.current) {
+      // In voice mode the call's service keeps recording with the screen off.
+      if (nextState === "background" && !permissionPromptRef.current && !voiceCall.active) {
         controller.appMovedToBackground();
       }
     });
     return () => subscription.remove();
   }, [controller]);
+
+  // The next recording uses the recorder for the mode: the call's own while
+  // voice mode runs, expo-audio's otherwise.
+  useEffect(() => voiceCall.subscribe(() => recorder.release()), [recorder]);
 
   useEffect(
     () => () => {
