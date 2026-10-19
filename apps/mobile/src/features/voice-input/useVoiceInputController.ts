@@ -47,8 +47,8 @@ export function useVoiceInputController(input: {
 
   const start = useCallback(() => {
     const captured = latestInput.current;
-    if (!captured.ownerKey || captured.disabled) return;
-    void session.start({
+    if (!captured.ownerKey || captured.disabled) return Promise.resolve();
+    return session.start({
       ...createVoiceInputTarget(
         captured.ownerKey,
         captured.readDraftMessage,
