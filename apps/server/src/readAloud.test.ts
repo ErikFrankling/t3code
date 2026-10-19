@@ -3,9 +3,27 @@ import * as NodeHttp from "node:http";
 import type * as NodeNet from "node:net";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { readAloud, takeSentences, whenSettled } from "./readAloud.ts";
+import { polishClip, readAloud, readWav, takeSentences, whenSettled } from "./readAloud.ts";
 
 type Speech = { voice: string; input: string; speed: number; model: string };
+
+function rawWav(samples: Int16Array, sampleRate = 24000) {
+  const data = Buffer.from(samples.buffer);
+  const header = Buffer.alloc(44);
+  header.write("RIFF", 0, "ascii");
+  header.writeUInt32LE(36 + data.length, 4);
+  header.write("WAVEfmt ", 8, "ascii");
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(1, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(sampleRate * 2, 28);
+  header.writeUInt16LE(2, 32);
+  header.writeUInt16LE(16, 34);
+  header.write("data", 36, "ascii");
+  header.writeUInt32LE(data.length, 40);
+  return Buffer.concat([header, data]);
+}
 
 let server: NodeHttp.Server;
 let base = "";
@@ -42,7 +60,12 @@ beforeAll(async () => {
         return;
       }
       spoken.push(speech);
-      response.end(Buffer.from(`${request.url}:${speech.input}`));
+      const sampleRate = 24000;
+      const pad = sampleRate / 5;
+      const speechSamples = (sampleRate / 100) * speech.input.length;
+      const samples = new Int16Array(pad + speechSamples + pad);
+      for (let i = 0; i < speechSamples; i++) samples[pad + i] = i % 2 ? 3000 : -3000;
+      response.end(rawWav(samples, sampleRate));
     });
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -63,8 +86,6 @@ beforeEach(() => {
   bigFails = false;
   spoken = [];
 });
-
-const decode = (audio: string | undefined) => Buffer.from(audio ?? "", "base64").toString();
 
 async function finished(text: string, options: Parameters<typeof readAloud>[0] = {}) {
   const started = readAloud({ text, ...options });
@@ -92,7 +113,7 @@ describe("takeSentences", () => {
 });
 
 describe("readAloud", () => {
-  it("speaks the streamed summary sentence by sentence with the small voice", async () => {
+  it("speaks the first sentence alone, then the rest in one chunk, with the small voice", async () => {
     summary = "Ok so, the model fits. Dictation stays loaded. Want me to build it?";
     const state = await finished("A long assistant message.", { speed: 1.5 });
     expect(state.status).toBe("complete");
@@ -102,7 +123,12 @@ describe("readAloud", () => {
       "Dictation stays loaded.",
       "Want me to build it?",
     ]);
-    expect(decode(state.sentences[2]?.audio)).toBe("/small:Want me to build it?");
+    expect(spoken.map((speech) => speech.input)).toEqual([
+      "Ok so, the model fits.",
+      "Dictation stays loaded. Want me to build it?",
+    ]);
+    expect(state.sentences.map((sentence) => sentence.span)).toEqual([1, 2, undefined]);
+    expect(state.sentences.every((sentence) => sentence.ready)).toBe(true);
     // The request's speed multiplies the voice's own pace.
     expect(spoken[0]?.speed).toBeCloseTo(1.8);
   });
@@ -112,7 +138,8 @@ describe("readAloud", () => {
     summary = "Higgs is warm. It speaks.";
     const state = await finished("Another message.");
     expect(state.voice).toBe("big");
-    expect(spoken.map((speech) => speech.voice)).toEqual(["erik", "erik"]);
+    expect(spoken.map((speech) => speech.voice)).toEqual(["erik", "erik"].slice(0, spoken.length));
+    expect(spoken[0]?.voice).toBe("erik");
   });
 
   it("finishes on the small voice when the big one is taken away", async () => {
@@ -142,11 +169,25 @@ describe("readAloud", () => {
   it("returns only the audio the client does not have yet", async () => {
     summary = "One. Two. Three.";
     const state = await finished("Fourth message.");
-    const polled = readAloud({ id: state.id, from: 2 });
+    // Chunks: "One." alone, then "Two. Three."; a client holding the first asks from 1.
+    const polled = readAloud({ id: state.id, from: 1 });
     expect(polled?.sentences.map((sentence) => sentence.audio !== undefined)).toEqual([
       false,
-      false,
       true,
+      false,
     ]);
+  });
+});
+
+describe("polishClip", () => {
+  it("trims the voice's padding and ends every clip with the same short pause", () => {
+    const sampleRate = 24000;
+    const samples = new Int16Array(sampleRate);
+    for (let i = 6000; i < 18000; i++) samples[i] = i % 2 ? 5000 : -5000;
+    const clip = readWav(polishClip({ sampleRate, samples }));
+    // 0.5 s of speech, 30 ms kept on each side, 280 ms pause.
+    expect(clip.samples.length / sampleRate).toBeCloseTo(0.5 + 0.06 + 0.28, 2);
+    expect(clip.samples[0]).toBe(0);
+    expect(clip.samples.at(-1)).toBe(0);
   });
 });

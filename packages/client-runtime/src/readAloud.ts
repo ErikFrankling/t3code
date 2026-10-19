@@ -3,13 +3,31 @@ import type { ReadAloudMode, ReadAloudRequest, ReadAloudState } from "@t3tools/c
 
 /**
  * Client side of read-aloud (`/api/read-aloud`, see the server's readAloud.ts):
- * starts a job, polls for sentences, and plays each clip as soon as it lands,
- * so the first sentence speaks while the summary is still being written.
+ * starts a job, polls for audio, and plays each chunk as soon as it lands, so
+ * the first sentence speaks while the summary is still being written. A chunk
+ * covers one or more sentences; the subtitle follows playback within it.
  * Platforms only supply HTTP and audio playback.
  */
+export type ReadAloudClip = {
+  /** Unique per job and chunk, so a preloaded clip can be recognized. */
+  readonly id: string;
+  /** Base64 WAV. */
+  readonly audio: string;
+};
+
+export type ReadAloudPlayOptions = {
+  readonly rate: number;
+  /** Where to start within the clip, 0..1. */
+  readonly startFraction?: number;
+  /** The clip after this one, to load while this one plays (no gap between them). */
+  readonly next?: ReadAloudClip;
+  /** Called with the played fraction, 0..1, a few times a second. */
+  readonly onProgress?: (fraction: number) => void;
+};
+
 export interface ReadAloudAudio {
-  /** Plays one base64 MP3 clip; resolves when it ends, rejects if stopped. */
-  play(base64Mp3: string, rate: number): Promise<void>;
+  /** Plays one clip; resolves when it ends, rejects if stopped. */
+  play(clip: ReadAloudClip, options: ReadAloudPlayOptions): Promise<void>;
   pause(): void;
   resume(): void;
   stop(): void;
@@ -52,11 +70,16 @@ const idle = (speed: number): ReadAloudSnapshot => ({
   speed,
 });
 
+type Chunk = { readonly audio: string; readonly span: number };
+
 export class ReadAloudPlayer {
   #deps: ReadAloudDependencies;
   #state: ReadAloudSnapshot;
   #listeners = new Set<() => void>();
-  #clips: (string | undefined)[] = [];
+  /** Chunks by the index of their first sentence. */
+  #chunks = new Map<number, Chunk>();
+  /** First sentence not covered by a received chunk (chunks arrive in order). */
+  #covered = 0;
   #session = 0;
   #complete = false;
   #wake: (() => void) | null = null;
@@ -88,7 +111,8 @@ export class ReadAloudPlayer {
     this.#text = text;
     this.#deps.audio.stop();
     const session = ++this.#session;
-    this.#clips = [];
+    this.#chunks = new Map();
+    this.#covered = 0;
     this.#complete = false;
     this.#set({ ...idle(this.#state.speed), phase: "loading", key, mode });
     void this.#fetch(session, text, mode);
@@ -126,8 +150,7 @@ export class ReadAloudPlayer {
     const target = Math.max(0, Math.min(index, this.#state.sentences.length - 1));
     const session = ++this.#session;
     this.#deps.audio.stop();
-    this.#set({ current: target, phase: this.#clips[target] ? "playing" : "loading" });
-    // Fetching continues under the old session only if it was still running.
+    this.#set({ current: target, phase: this.#chunkAt(target) ? "playing" : "loading" });
     if (!this.#complete) void this.#fetchContinue(session);
     void this.#playLoop(session);
   }
@@ -163,11 +186,7 @@ export class ReadAloudPlayer {
     while (session === this.#session && !this.#complete && this.#jobId) {
       await new Promise((resolve) => setTimeout(resolve, this.#deps.pollMs ?? 400));
       if (session !== this.#session) return;
-      const from = this.#clips.findIndex((clip) => clip === undefined);
-      const state = await this.#deps.request({
-        id: this.#jobId,
-        from: from === -1 ? this.#clips.length : from,
-      });
+      const state = await this.#deps.request({ id: this.#jobId, from: this.#covered });
       if (session !== this.#session) return;
       this.#absorb(state);
     }
@@ -175,8 +194,17 @@ export class ReadAloudPlayer {
 
   #absorb(state: ReadAloudState) {
     state.sentences.forEach((sentence, index) => {
-      if (sentence.audio) this.#clips[index] = sentence.audio;
+      if (sentence.audio) {
+        this.#chunks.set(index, { audio: sentence.audio, span: sentence.span ?? 1 });
+      }
     });
+    for (
+      let chunk = this.#chunks.get(this.#covered);
+      chunk;
+      chunk = this.#chunks.get(this.#covered)
+    ) {
+      this.#covered += chunk.span;
+    }
     this.#complete = state.status !== "working";
     this.#set({
       sentences: state.sentences.map((sentence) => sentence.text),
@@ -192,11 +220,32 @@ export class ReadAloudPlayer {
     this.#wake?.();
   }
 
+  /** The chunk holding a sentence, with the index of its first sentence. */
+  #chunkAt(index: number): { readonly first: number; readonly chunk: Chunk } | null {
+    for (const [first, chunk] of this.#chunks) {
+      if (index >= first && index < first + chunk.span) return { first, chunk };
+    }
+    return null;
+  }
+
+  /** Where each sentence of a chunk ends, as a fraction of the chunk (by characters). */
+  #bounds(first: number, span: number): number[] {
+    const lengths = this.#state.sentences.slice(first, first + span).map((text) => text.length + 1);
+    const total = lengths.reduce((sum, length) => sum + length, 0) || 1;
+    let sum = 0;
+    return lengths.map((length) => (sum += length) / total);
+  }
+
+  #clip(first: number): ReadAloudClip | undefined {
+    const chunk = this.#chunks.get(first);
+    return chunk && { id: `${this.#jobId}:${first}`, audio: chunk.audio };
+  }
+
   async #playLoop(session: number) {
     while (session === this.#session) {
       const index = this.#state.current;
-      const clip = this.#clips[index];
-      if (clip === undefined) {
+      const found = this.#chunkAt(index);
+      if (!found) {
         if (this.#complete && index >= this.#state.sentences.length) {
           this.#set({ phase: this.#state.phase === "error" ? "error" : "done" });
           return;
@@ -209,14 +258,30 @@ export class ReadAloudPlayer {
         await new Promise<void>((resolve) => (this.#wake = resolve));
         continue;
       }
+      const { first, chunk } = found;
+      const bounds = this.#bounds(first, chunk.span);
+      const startFraction = index > first ? (bounds[index - first - 1] ?? 0) : 0;
+      const clip = this.#clip(first);
+      const next = this.#clip(first + chunk.span);
+      if (!clip) return;
       this.#set({ phase: "playing" });
       try {
-        await this.#deps.audio.play(clip, this.#state.speed / this.#jobSpeed);
+        await this.#deps.audio.play(clip, {
+          rate: this.#state.speed / this.#jobSpeed,
+          startFraction,
+          ...(next ? { next } : {}),
+          onProgress: (fraction) => {
+            if (session !== this.#session) return;
+            const within = bounds.findIndex((bound) => fraction < bound);
+            const current = first + (within === -1 ? chunk.span - 1 : within);
+            if (current !== this.#state.current) this.#set({ current });
+          },
+        });
       } catch {
         return;
       }
       if (session !== this.#session) return;
-      this.#set({ current: index + 1 });
+      this.#set({ current: first + chunk.span });
     }
   }
 }

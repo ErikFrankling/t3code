@@ -118,7 +118,8 @@ type Job = {
   id: string;
   status: ReadAloudState["status"];
   voice: string;
-  sentences: { text: string; audio?: string }[];
+  // `audio` sits on the first sentence of a chunk and covers `span` sentences.
+  sentences: { text: string; audio?: string; span?: number; covered?: boolean }[];
   error: string;
   touched: number;
 };
@@ -149,8 +150,10 @@ function view(job: Job, from: number): ReadAloudState {
     error: job.error,
     sentences: job.sentences.map((sentence, index) => ({
       text: sentence.text,
-      ready: sentence.audio !== undefined,
-      ...(index >= from && sentence.audio !== undefined ? { audio: sentence.audio } : {}),
+      ready: sentence.covered === true,
+      ...(index >= from && sentence.audio !== undefined
+        ? { audio: sentence.audio, span: sentence.span ?? 1 }
+        : {}),
     })),
   };
 }
@@ -168,6 +171,73 @@ async function bigVoiceLoaded(): Promise<boolean> {
   }
 }
 
+/** Mono 16-bit PCM out of a WAV file (both voices answer `response_format: "wav"`). */
+export function readWav(wav: Buffer): { sampleRate: number; samples: Int16Array } {
+  let offset = 12;
+  let sampleRate = 24000;
+  let channels = 1;
+  while (offset + 8 <= wav.length) {
+    const id = wav.toString("ascii", offset, offset + 4);
+    const size = wav.readUInt32LE(offset + 4);
+    if (id === "fmt ") {
+      channels = wav.readUInt16LE(offset + 10);
+      sampleRate = wav.readUInt32LE(offset + 12);
+    } else if (id === "data") {
+      // Streamed WAVs may carry a placeholder size; the data runs to the end.
+      const end = size > 0 && offset + 8 + size <= wav.length ? offset + 8 + size : wav.length;
+      const frames = Math.floor((end - offset - 8) / 2 / channels);
+      const samples = new Int16Array(frames);
+      for (let i = 0; i < frames; i++) samples[i] = wav.readInt16LE(offset + 8 + i * 2 * channels);
+      return { sampleRate, samples };
+    }
+    offset += 8 + size + (size % 2);
+  }
+  throw new Error("The voice returned no audio.");
+}
+
+// Every clip gets the same seam: speech trimmed to the first and last audible
+// sample, short fades so the cut never clicks, then one natural pause. The
+// voices pad clips unevenly (up to ~0.2 s each side), which together with a
+// clip switch made ~0.45 s gaps between sentences.
+const SILENCE = 400;
+const KEEP_MS = 30;
+const FADE_MS = 10;
+// Measured: the voice pauses 0.25-0.5 s between its own sentences.
+const PAUSE_MS = 280;
+
+export function polishClip({ sampleRate, samples }: { sampleRate: number; samples: Int16Array }) {
+  let start = 0;
+  let end = samples.length;
+  while (start < end && Math.abs(samples[start]!) < SILENCE) start++;
+  while (end > start && Math.abs(samples[end - 1]!) < SILENCE) end--;
+  const keep = Math.round((sampleRate * KEEP_MS) / 1000);
+  start = Math.max(0, start - keep);
+  end = Math.min(samples.length, end + keep);
+  const speech = samples.slice(start, end);
+  const fade = Math.min(Math.round((sampleRate * FADE_MS) / 1000), Math.floor(speech.length / 2));
+  for (let i = 0; i < fade; i++) {
+    speech[i] = Math.round((speech[i]! * i) / fade);
+    speech[speech.length - 1 - i] = Math.round((speech[speech.length - 1 - i]! * i) / fade);
+  }
+  const pause = Math.round((sampleRate * PAUSE_MS) / 1000);
+  const data = Buffer.alloc((speech.length + pause) * 2);
+  speech.forEach((sample, i) => data.writeInt16LE(sample, i * 2));
+  const header = Buffer.alloc(44);
+  header.write("RIFF", 0, "ascii");
+  header.writeUInt32LE(36 + data.length, 4);
+  header.write("WAVEfmt ", 8, "ascii");
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(1, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(sampleRate * 2, 28);
+  header.writeUInt16LE(2, 32);
+  header.writeUInt16LE(16, 34);
+  header.write("data", 36, "ascii");
+  header.writeUInt32LE(data.length, 40);
+  return Buffer.concat([header, data]);
+}
+
 async function synthesize(voice: Voice, text: string, speed: number): Promise<string> {
   const response = await fetch(voice.url, {
     method: "POST",
@@ -177,12 +247,12 @@ async function synthesize(voice: Voice, text: string, speed: number): Promise<st
       input: text,
       voice: voice.voice,
       speed: voice.speed * speed,
-      response_format: "mp3",
+      response_format: "wav",
     }),
     signal: AbortSignal.timeout(120_000),
   });
   if (!response.ok) throw new Error(`${voice.name} voice: HTTP ${response.status}`);
-  return Buffer.from(await response.arrayBuffer()).toString("base64");
+  return polishClip(readWav(Buffer.from(await response.arrayBuffer()))).toString("base64");
 }
 
 /** Streams the summary, handing over each sentence as soon as it is complete. */
@@ -229,40 +299,99 @@ async function summarize(text: string, onSentence: (sentence: string) => void): 
   takeSentences(buffer, true).sentences.forEach(onSentence);
 }
 
+// The first chunk is one sentence, so audio starts as soon as it exists; later
+// chunks take every sentence already written, up to about a paragraph. Fewer
+// seams, and the voice phrases across sentences itself.
+const CHUNK_CHARS = 320;
+
 async function run(job: Job, text: string, mode: ReadAloudMode, speed: number) {
   const { big, small } = config();
   let voice = (await bigVoiceLoaded()) ? big : small;
   job.voice = voice.name;
-  // Sentences are synthesized in order, one at a time, while the summary is
-  // still streaming in; the client plays each clip as it lands.
-  let queue = Promise.resolve();
-  const speak = (index: number) => {
-    queue = queue.then(async () => {
-      const sentence = job.sentences[index];
-      if (!sentence) return;
+  let next = 0;
+  let running: Promise<void> | null = null;
+  let failure: unknown = null;
+  // After the first chunk, wait for a paragraph's worth of sentences (or the
+  // end of the summary): the first chunk plays for seconds while the model
+  // writes the rest in about two, so waiting costs nothing and saves seams.
+  let writing = true;
+  let wake: (() => void) | null = null;
+  // Through a function: TypeScript narrows `wake` to null at direct call sites.
+  const notify = () => wake?.();
+  const pending = () =>
+    job.sentences.slice(next).reduce((sum, sentence) => sum + sentence.text.length + 1, 0);
+  const paragraph = async () => {
+    for (;;) {
+      if (next === 0 || !writing || pending() >= CHUNK_CHARS) return;
+      await new Promise<void>((resolve) => (wake = resolve));
+    }
+  };
+  const pump = async () => {
+    while (next < job.sentences.length) {
+      await paragraph();
+      const first = next;
+      let last = first + 1;
+      let chars = job.sentences[first]!.text.length;
+      const limit = first === 0 ? 0 : CHUNK_CHARS;
+      while (last < job.sentences.length) {
+        const length = job.sentences[last]!.text.length;
+        if (chars + length > limit) break;
+        chars += length + 1;
+        last++;
+      }
+      const words = job.sentences
+        .slice(first, last)
+        .map((sentence) => sentence.text)
+        .join(" ");
+      let audio: string;
       try {
-        sentence.audio = await synthesize(voice, sentence.text, speed);
+        audio = await synthesize(voice, words, speed);
       } catch (error) {
         // Dictation takes the GPU back by unloading the big voice; finish on the small one.
         if (voice === small) throw error;
         voice = small;
         job.voice = small.name;
-        sentence.audio = await synthesize(voice, sentence.text, speed);
+        audio = await synthesize(voice, words, speed);
       }
-    });
+      job.sentences[first]!.audio = audio;
+      job.sentences[first]!.span = last - first;
+      for (let index = first; index < last; index++) job.sentences[index]!.covered = true;
+      next = last;
+    }
+  };
+  // Sentences arrive while the summary streams; one pump synthesizes them in order.
+  const kick = () => {
+    running ??= pump()
+      .catch((error: unknown) => {
+        failure ??= error;
+      })
+      .finally(() => {
+        running = null;
+        if (failure === null && next < job.sentences.length) kick();
+      });
   };
   const add = (sentence: string) => {
     job.sentences.push({ text: sentence });
-    speak(job.sentences.length - 1);
+    notify();
+    kick();
+  };
+  const settle = async () => {
+    // `running` is replaced while we wait when more sentences arrive.
+    for (let current = running; current; current = running) await current;
   };
   try {
     if (mode === "full") takeSentences(speakableText(text), true).sentences.forEach(add);
     else await summarize(text, add);
-    await queue;
+    writing = false;
+    notify();
+    await settle();
+    if (failure !== null) throw failure;
     if (job.sentences.length === 0) throw new Error("There was nothing to read.");
     job.status = "complete";
   } catch (error) {
-    await queue.catch(() => undefined);
+    writing = false;
+    notify();
+    await settle();
     job.status = "error";
     job.error = error instanceof Error ? error.message : String(error);
   }
