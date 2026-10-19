@@ -68,10 +68,10 @@ describe("createLazyVoiceRecorder", () => {
     expect(created).toHaveLength(0);
 
     await recorder.prepareToRecordAsync();
-    recorder.record({ forDuration: 300 });
+    recorder.record();
 
     expect(created).toHaveLength(1);
-    expect(created[0]!.record).toHaveBeenCalledWith({ forDuration: 300 });
+    expect(created[0]!.record).toHaveBeenCalledWith();
     expect(recorder.uri).toBe("file:///voice-0.m4a");
     expect(recorder.getStatus()).toEqual({ isRecording: true });
   });
@@ -151,7 +151,7 @@ describe("createLazyVoiceRecorder", () => {
     await expect(recorder.stop()).rejects.toThrow("not recording");
     recorder.release();
     await vi.waitFor(() => expect(first.release).toHaveBeenCalledTimes(1));
-    expect(() => recorder.record({ forDuration: 1 })).toThrow("not prepared");
+    expect(() => recorder.record()).toThrow("not prepared");
 
     await recorder.prepareToRecordAsync();
     expect(created).toHaveLength(2);
