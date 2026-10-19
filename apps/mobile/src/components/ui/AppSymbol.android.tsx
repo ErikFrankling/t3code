@@ -305,6 +305,9 @@ const SF_ICON_LOOKUP: Partial<
 > = ANDROID_ICON_BY_SF_SYMBOL;
 
 const ANDROID_ICON_BY_MATERIAL_NAME = {
+  headphones: IconHeadphones,
+  mic: IconMicrophone,
+  arrow_upward: IconArrowUp,
   pause: IconPlayerPause,
   play_arrow: IconPlayerPlay,
   skip_next: IconPlayerSkipForward,
