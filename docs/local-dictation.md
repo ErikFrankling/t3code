@@ -76,6 +76,33 @@ OpenAI-compatible chat endpoint, default llama-swap `read-aloud-summary`),
 is used only while llama-swap reports `_BIG_MODEL` loaded; the host decides when
 to lend it the GPU. The client's speed multiplies the voice's own speed.
 
+## Voice mode
+
+**Voice** next to **Read latest** opens the thread full screen as speech: the
+live transcript while you talk, the subtitles while a reply is read, one big
+button. With **Loop** on it reads each finished reply (not the messages in
+between), says "Recording started", dictates until you end the turn, sends,
+and waits for the next reply. The big button, or Space on web and desktop,
+ends your turn, skips the reading, or starts talking again while it waits.
+`packages/client-runtime/src/voiceLoop.ts` is the loop; each client supplies
+dictation (`VoiceMode.tsx` on web, `features/voice-mode/` on Android).
+
+On Android the loop is a "call" that keeps going with the screen off
+(`apps/mobile/modules/t3-voice-call`): a foreground service of type microphone
+and media playback, started from the open app and kept until you hang up (the
+notification's **Hang up**, or Loop off), so each turn may record and play from
+the background. It records with its own MediaRecorder (from a Bluetooth
+headset's microphone when one is connected), keeps React Native's timers
+running with a headless JS task, and holds a wake lock. Its media session takes
+the hardware buttons: while you talk or wait, a volume key ends the turn
+(a remote volume provider, so the volume does not change), and an earbud tap
+does the same and also skips a reading. It plays an inaudible loop, because
+Android gives the earbud button only to an app that is playing audio. Tested on
+the emulator with the screen off, with key events sent to the kernel input
+device (`adb root; adb shell sendevent /dev/input/event13 1 114 1 ...`; `adb
+shell input keyevent` is injected and never reaches a media session while the
+screen is off).
+
 ## How it works
 
 The host forwards authenticated `POST /api/dictation` speech actions to the

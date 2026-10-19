@@ -12,11 +12,15 @@ import {
 
 import { randomUUID } from "../../lib/utils";
 import { environmentFetch } from "./environmentFetch";
+import { publishVoiceDictation, registerVoiceDictation } from "./VoiceMode";
 import { Button } from "../ui/button";
 import { Dialog, DialogPopup, DialogTitle } from "../ui/dialog";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
 const decodeDictationState = Schema.decodeUnknownSync(DictationState);
+// Four hours, as the speech service keeps; a recording is never cut short
+// before that (it used to stop and send at 30 minutes).
+const MAX_SAMPLES = 16000 * 60 * 60 * 4;
 
 export function dictationFetch(
   environmentId: EnvironmentId,
@@ -103,6 +107,28 @@ export function Dictation({
   const registered = useRef(false);
   const audio = useRef<Int16Array[]>([]);
   const sequence = useRef(0);
+  const startError = useRef("");
+
+  // Voice mode records and sends through this composer's dictation.
+  useEffect(() =>
+    registerVoiceDictation({
+      start: () => {
+        startError.current = "";
+        return start(false);
+      },
+      finish: () => finish(),
+      recording: () => stopCapture.current !== null,
+      error: () => startError.current,
+    }),
+  );
+  useEffect(() => {
+    publishVoiceDictation({
+      recording: stopCapture.current !== null,
+      draft: state?.draft ?? "",
+      final: state?.final ?? "",
+    });
+  });
+  useEffect(() => () => publishVoiceDictation({ recording: false, draft: "", final: "" }), []);
 
   useEffect(() => {
     onBusyChange(starting || state?.status === "recording" || state?.status === "finalizing");
@@ -198,9 +224,9 @@ export function Dictation({
     );
   }
 
-  async function start() {
+  async function start(show = true) {
     captureRequested.current = true;
-    setOpen(true);
+    setOpen(show);
     setView("draft");
     setStarting(true);
     setError("");
@@ -249,18 +275,18 @@ export function Dictation({
         pending = [];
       };
       processor.onaudioprocess = (event) => {
-        if (count >= 16000 * 1800) return;
+        if (count >= MAX_SAMPLES) return;
         const input = event.inputBuffer.getChannelData(0);
         if (active.current)
           setLevel(
             Math.min(1, Math.sqrt(input.reduce((sum, x) => sum + x * x, 0) / input.length) * 8),
           );
-        for (const sample of input.subarray(0, 16000 * 1800 - count))
+        for (const sample of input.subarray(0, MAX_SAMPLES - count))
           pending.push(Math.max(-32768, Math.min(32767, Math.round(sample * 32767))));
         count += input.length;
-        if (active.current) setCaptured(Math.min(count, 16000 * 1800));
+        if (active.current) setCaptured(Math.min(count, MAX_SAMPLES));
         if (pending.length >= 16000) flush();
-        if (count >= 16000 * 1800) void finish();
+        if (count >= MAX_SAMPLES) void finish();
       };
       source.connect(processor);
       processor.connect(context.destination);
@@ -277,6 +303,7 @@ export function Dictation({
     } catch (cause) {
       media?.getTracks().forEach((track) => track.stop());
       if (context && context.state !== "closed") void context.close();
+      startError.current = String(cause);
       setError(String(cause));
     } finally {
       if (active.current) setStarting(false);
