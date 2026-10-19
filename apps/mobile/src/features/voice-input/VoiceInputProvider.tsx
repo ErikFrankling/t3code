@@ -28,6 +28,8 @@ import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/
 import { environmentSession } from "../../state/session";
 import { getNativeShowcaseScene } from "../showcase/nativeShowcaseScene";
 import { voiceInputBlocksSubmission } from "@t3tools/client-runtime/voice-input";
+import { voiceCall } from "../../native/voiceCall";
+import { createCallVoiceRecorder } from "./callVoiceRecorder";
 import { createLazyVoiceRecorder } from "./lazyVoiceRecorder";
 import { VOICE_WAVEFORM_SAMPLE_COUNT } from "./voiceInputMetering";
 import { VoiceInputSession } from "./voiceInputSession";
@@ -84,7 +86,10 @@ const voiceInputAtom = Atom.make((get) => {
   let permissionPrompt = false;
   let audioToken: ReturnType<typeof acquireAudioSession> | null = null;
   const recorder = createLazyVoiceRecorder({
-    create: () => new AudioModule.AudioRecorder(VOICE_RECORDING_OPTIONS),
+    create: () =>
+      voiceCall.active
+        ? createCallVoiceRecorder()
+        : new AudioModule.AudioRecorder(VOICE_RECORDING_OPTIONS),
     onStatus: (status: RecordingStatus) => {
       session.controller.handleRecorderStatus({
         isFinished: status.isFinished,
@@ -161,7 +166,8 @@ const voiceInputAtom = Atom.make((get) => {
   // background state cancels preparation; recorder status handles calls and
   // route interruptions during capture.
   const appStateSubscription = AppState.addEventListener("change", (nextState) => {
-    if (nextState === "background" && !permissionPrompt) {
+    // In voice mode the call's service keeps recording with the screen off.
+    if (nextState === "background" && !permissionPrompt && !voiceCall.active) {
       void session.controller.appMovedToBackground();
     }
   });
@@ -174,8 +180,12 @@ const voiceInputAtom = Atom.make((get) => {
     if (phase === "recording") beginDictationStream(recorder.uri, session.ownerKey);
     else if (phase === "idle" || phase === "error") endDictationStream();
   });
+  // The next recording uses the recorder for the mode: the call's own while
+  // voice mode runs, expo-audio's otherwise.
+  const unsubscribeVoiceCall = voiceCall.subscribe(() => recorder.release());
   get.addFinalizer(() => {
     unsubscribeStream();
+    unsubscribeVoiceCall();
     appStateSubscription.remove();
     session.dispose();
     recorder.release();
