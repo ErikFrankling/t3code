@@ -62,7 +62,9 @@ export type VoiceRecorderStatus = {
 export interface VoiceRecorder {
   readonly uri: string | null;
   prepareToRecordAsync(signal?: AbortSignal): Promise<void>;
-  record(options: { readonly forDuration: number }): void;
+  // No duration: a recording lasts until the user stops it (Erik talks for
+  // half an hour; a native cap used to stop and send mid-sentence at 5 min).
+  record(): void;
   stop(): Promise<void>;
 }
 
@@ -378,7 +380,7 @@ export class VoiceInputController {
           },
         );
       }
-      this.dependencies.recorder.record({ forDuration: VOICE_RECORDING_LIMIT_SECONDS });
+      this.dependencies.recorder.record();
       this.setState({ phase: "recording", error: null, errorAction: null });
     } catch (error) {
       if (this.isCurrent(operationToken))
