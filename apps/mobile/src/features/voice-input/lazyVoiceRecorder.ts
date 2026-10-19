@@ -18,7 +18,7 @@ export interface VoiceRecordingInput {
 export interface NativeVoiceRecorder<TStatus, TRecorderState> {
   readonly uri: string | null;
   prepareToRecordAsync(): Promise<void>;
-  record(options: { readonly forDuration: number }): void;
+  record(): void;
   stop(): Promise<void>;
   getStatus(): TRecorderState;
   addListener(
@@ -122,9 +122,9 @@ export function createLazyVoiceRecorder<TStatus, TRecorderState>(input: {
         }),
       );
     },
-    record(options) {
+    record() {
       if (!recorder) throw new Error(m(msg("The voice recorder isn’t ready. Try again.")));
-      recorder.record(options);
+      recorder.record();
     },
     stop() {
       return recorder ? track(recorder.stop()) : Promise.resolve();

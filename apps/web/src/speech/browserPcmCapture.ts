@@ -8,6 +8,7 @@ import {
 } from "@t3tools/client-runtime/voice-input";
 import * as Schema from "effect/Schema";
 import { requestMicrophone } from "./requestMicrophone";
+import { VOICE_RECORDING_LIMIT_SECONDS } from "@t3tools/client-runtime/voice-input";
 import workletUrl from "./pcmWorklet.ts?worker&url";
 import { msg } from "gt-react";
 import { m } from "../i18n/messages";
@@ -144,10 +145,11 @@ export function createBrowserPcmCapture(
         throw error;
       }
     },
-    record: ({ forDuration }) => {
+    record: () => {
       // oxlint-disable-next-line unicorn/require-post-message-target-origin -- AudioWorklet MessagePorts do not accept a target origin
       worklet?.port.postMessage("start");
-      durationTimer = setTimeout(input.onDurationLimit, forDuration * 1_000);
+      // Fork: the shared recorder has no duration; this upload path keeps its own cap.
+      durationTimer = setTimeout(input.onDurationLimit, VOICE_RECORDING_LIMIT_SECONDS * 1_000);
     },
     stop: async () => {
       if (!worklet) return;
