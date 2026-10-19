@@ -139,6 +139,10 @@
       "types": "./src/readAloud.ts",
       "default": "./src/readAloud.ts"
     },
+    "./voice-loop": {
+      "types": "./src/voiceLoop.ts",
+      "default": "./src/voiceLoop.ts"
+    },
     "./t3ToolSummary": {
       "types": "./src/t3ToolSummary.ts",
       "default": "./src/t3ToolSummary.ts"
