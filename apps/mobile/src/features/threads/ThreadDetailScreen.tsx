@@ -199,6 +199,8 @@ import {
   ThreadComposer,
 } from "./ThreadComposer";
 import { ReadAloudDock } from "./ReadAloudButton";
+import { VoiceModeHost } from "../voice-mode/VoiceModeView";
+import { voiceMode } from "../voice-mode/voiceMode";
 import { ComposerPopoverHost } from "./ComposerPopoverHost";
 import { ThreadFeed, type ThreadFeedHistoryControls } from "./ThreadFeed";
 import { WorkspaceMutationIdProvider } from "./WorkspaceMutationIdProvider";
@@ -1886,8 +1888,15 @@ function ThreadDetailBody(
                         <ReadAloudDock
                           environmentId={props.environmentId}
                           latest={latestReadableAssistantMessage(props.selectedThreadFeed)}
+                          onVoiceMode={voiceMode.open}
                         />
                       </View>
+                      <VoiceModeHost
+                        environmentId={props.environmentId}
+                        title={props.selectedThread.title || "Untitled thread"}
+                        reply={latestReadableAssistantMessage(props.selectedThreadFeed)}
+                        working={props.activeWorkStartedAt !== null}
+                      />
                       <ThreadComposer
                         isDraft={Boolean(props.draftMode)}
                         canOperateThread={props.canOperateThread}
