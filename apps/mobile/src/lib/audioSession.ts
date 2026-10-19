@@ -1,5 +1,7 @@
 import { AudioModule, setAudioModeAsync, setIsAudioActiveAsync } from "expo-audio";
 
+import { voiceCall } from "../native/voiceCall";
+
 type AudioSessionToken = {
   readonly kind: "playback" | "recording";
   readonly onCancel?: () => void;
@@ -72,7 +74,8 @@ export function activateAudioSession(
       allowsRecording: token.kind === "recording",
       interruptionMode: "doNotMix",
       playsInSilentMode: true,
-      shouldPlayInBackground: false,
+      // Voice mode reads the reply aloud with the screen off.
+      shouldPlayInBackground: voiceCall.active,
     });
     if (!isAudioSessionOwner(token)) return false;
     await setIsAudioActiveAsync(true);
@@ -85,7 +88,9 @@ export function releaseAudioSession(token: AudioSessionToken): Promise<void> {
   return enqueue(async () => {
     if (owner !== token) return;
     try {
-      if (token.kind === "recording") await setAudioModeAsync({ allowsRecording: false });
+      if (token.kind === "recording") {
+        await setAudioModeAsync({ allowsRecording: false, shouldPlayInBackground: voiceCall.active });
+      }
     } finally {
       if (owner === token) {
         if (token.kind === "recording") await setIsAudioActiveAsync(false);

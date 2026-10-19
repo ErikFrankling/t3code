@@ -9,7 +9,12 @@ import type { PreparedConnection } from "@t3tools/client-runtime/connection";
 import { ReadAloudState, type EnvironmentId, type ReadAloudMode } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from "expo-audio";
+import {
+  createAudioPlayer,
+  setAudioModeAsync,
+  setIsAudioActiveAsync,
+  type AudioPlayer,
+} from "expo-audio";
 import { fetch } from "expo/fetch";
 import { File, Paths } from "expo-file-system";
 import {
@@ -24,6 +29,7 @@ import { Pressable, ScrollView, View, type ColorValue } from "react-native";
 
 import { AppText as Text } from "../../components/ui/AppText";
 import { SymbolView, type AppSymbolName } from "../../components/ui/AppSymbol";
+import { voiceCall } from "../../native/voiceCall";
 import { environmentSession } from "../../state/session";
 
 /**
@@ -46,9 +52,20 @@ let rejectClip: ((error: Error) => void) | null = null;
 let releaseClip: (() => void) | null = null;
 let clipNumber = 0;
 
+let backgroundPlayback: boolean | null = null;
+
 async function slotPair(): Promise<[Slot, Slot]> {
+  // Voice mode reads replies with the screen off; otherwise reading stops when you leave.
+  if (backgroundPlayback !== voiceCall.active) {
+    backgroundPlayback = voiceCall.active;
+    await setAudioModeAsync({
+      playsInSilentMode: true,
+      shouldPlayInBackground: backgroundPlayback,
+    });
+  }
+  // Dictation turns the audio session off when it stops recording; playback needs it on.
+  await setIsAudioActiveAsync(true);
   if (!slots) {
-    await setAudioModeAsync({ playsInSilentMode: true });
     slots = [
       { player: createAudioPlayer(null, { updateInterval: 250 }), id: null },
       { player: createAudioPlayer(null, { updateInterval: 250 }), id: null },
@@ -75,9 +92,13 @@ const audio: ReadAloudAudio = {
       pair.find((candidate) => candidate.id === clip.id) ??
       pair.find((candidate) => candidate !== active) ??
       pair[0];
+    // The same text gets the same clip from the server (voice mode's cue every
+    // turn), and a player holding it may still sit at its end.
+    const reused = slot.id === clip.id;
     await load(slot, clip);
     active = slot;
     const { player } = slot;
+    if (reused && !startFraction) await player.seekTo(0);
     await new Promise<void>((resolve, reject) => {
       let seeked = !startFraction;
       const subscription = player.addListener("playbackStatusUpdate", (status) => {
@@ -115,6 +136,18 @@ const audio: ReadAloudAudio = {
   },
 };
 
+/**
+ * Frees the players. Each one carries a media session that answers the
+ * earbud button, so voice mode drops them while you talk, and its own
+ * session gets the tap. The next clip creates them again.
+ */
+export function releaseReadAloudAudio() {
+  if (active && rejectClip) return;
+  for (const slot of slots ?? []) slot.player.remove();
+  slots = null;
+  active = null;
+}
+
 export const readAloudPlayer = new ReadAloudPlayer({
   audio,
   request: async (body) => {
@@ -135,15 +168,23 @@ export const readAloudPlayer = new ReadAloudPlayer({
   },
 });
 
-const useReadAloud = () =>
+export const useReadAloud = () =>
   useSyncExternalStore(readAloudPlayer.subscribe, readAloudPlayer.getSnapshot);
 
-function useStartReadAloud(environmentId: EnvironmentId) {
+/** Returns a function that points read-aloud at an environment's connection. */
+export function useReadAloudEnvironment(environmentId: EnvironmentId) {
   const registry = useContext(RegistryContext);
-  return (key: string, text: string, mode: ReadAloudMode = "summary") => {
+  return () => {
     connection = Option.getOrNull(
       registry.get(environmentSession.preparedConnectionValueAtom(environmentId)),
     );
+  };
+}
+
+function useStartReadAloud(environmentId: EnvironmentId) {
+  const selectEnvironment = useReadAloudEnvironment(environmentId);
+  return (key: string, text: string, mode: ReadAloudMode = "summary") => {
+    selectEnvironment();
     readAloudPlayer.start(key, text, mode);
   };
 }
@@ -233,6 +274,7 @@ const VOICE_LABEL: Record<string, string> = { big: "Higgs", small: "Kokoro" };
 export function ReadAloudDock(props: {
   readonly environmentId: EnvironmentId;
   readonly latest: { readonly id: string; readonly text: string } | null;
+  readonly onVoiceMode?: () => void;
 }) {
   const state = useReadAloud();
   const start = useStartReadAloud(props.environmentId);
@@ -246,24 +288,41 @@ export function ReadAloudDock(props: {
   }, [current]);
 
   if (state.phase === "idle") {
-    if (!props.latest) return null;
     const latest = props.latest;
     return (
-      <View pointerEvents="box-none" className="absolute bottom-0 right-3 mb-2">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Read the latest reply aloud"
-          onPress={() => start(latest.id, latest.text)}
-          className="flex-row items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5"
-        >
-          <SymbolView
-            name={{ ios: "speaker.wave.2", android: "volume_up" }}
-            size={14}
-            tintColorClassName="accent-foreground"
-            type="monochrome"
-          />
-          <Text className="text-xs text-foreground">Read latest</Text>
-        </Pressable>
+      <View pointerEvents="box-none" className="absolute bottom-0 right-3 mb-2 flex-row gap-2">
+        {props.onVoiceMode ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open voice mode"
+            onPress={props.onVoiceMode}
+            className="flex-row items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5"
+          >
+            <SymbolView
+              name={{ ios: "headphones", android: "headphones" }}
+              size={14}
+              tintColorClassName="accent-foreground"
+              type="monochrome"
+            />
+            <Text className="text-xs text-foreground">Voice</Text>
+          </Pressable>
+        ) : null}
+        {latest ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Read the latest reply aloud"
+            onPress={() => start(latest.id, latest.text)}
+            className="flex-row items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5"
+          >
+            <SymbolView
+              name={{ ios: "speaker.wave.2", android: "volume_up" }}
+              size={14}
+              tintColorClassName="accent-foreground"
+              type="monochrome"
+            />
+            <Text className="text-xs text-foreground">Read latest</Text>
+          </Pressable>
+        ) : null}
       </View>
     );
   }
