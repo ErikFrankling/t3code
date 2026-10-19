@@ -8,6 +8,7 @@ import {
 } from "@t3tools/client-runtime/read-aloud";
 import { Schema } from "effect";
 import {
+  HeadphonesIcon,
   LoaderCircleIcon,
   PauseIcon,
   PlayIcon,
@@ -119,6 +120,11 @@ export const readAloudPlayer = new ReadAloudPlayer({
   },
 });
 
+/** Points read-aloud at an environment, for readers that start the player themselves. */
+export function setReadAloudEnvironment(environmentId: EnvironmentId) {
+  environment = environmentId;
+}
+
 export function startReadAloud(
   environmentId: EnvironmentId,
   key: string,
@@ -178,9 +184,11 @@ const VOICE_LABEL: Record<string, string> = { big: "Higgs", small: "Kokoro" };
 export function ReadAloudDock({
   environmentId,
   latest,
+  onVoiceMode,
 }: {
   environmentId: EnvironmentId;
   latest: { id: string; text: string } | null;
+  onVoiceMode?: () => void;
 }) {
   const state = useReadAloud();
   const currentRef = useRef<HTMLSpanElement | null>(null);
@@ -197,19 +205,33 @@ export function ReadAloudDock({
   };
 
   if (!active) {
-    if (!latest) return null;
+    if (!latest && !onVoiceMode) return null;
     return (
-      <div className="pointer-events-none absolute inset-x-0 bottom-full mb-2 flex justify-end px-2">
-        <Button
-          aria-label="Read the latest reply aloud"
-          className="pointer-events-auto"
-          size="xs"
-          variant="glass"
-          onClick={() => read("summary")}
-        >
-          <Volume2Icon className="size-3.5" />
-          Read latest
-        </Button>
+      <div className="pointer-events-none absolute inset-x-0 bottom-full mb-2 flex justify-end gap-2 px-2">
+        {onVoiceMode ? (
+          <Button
+            aria-label="Open voice mode"
+            className="pointer-events-auto"
+            size="xs"
+            variant="glass"
+            onClick={onVoiceMode}
+          >
+            <HeadphonesIcon className="size-3.5" />
+            Voice
+          </Button>
+        ) : null}
+        {latest ? (
+          <Button
+            aria-label="Read the latest reply aloud"
+            className="pointer-events-auto"
+            size="xs"
+            variant="glass"
+            onClick={() => read("summary")}
+          >
+            <Volume2Icon className="size-3.5" />
+            Read latest
+          </Button>
+        ) : null}
       </div>
     );
   }

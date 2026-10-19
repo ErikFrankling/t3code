@@ -28,6 +28,8 @@ import {
   voiceInputBlocksSubmission,
   type VoiceTranscriber,
 } from "@t3tools/client-runtime/voice-input";
+import { voiceCall } from "../../native/voiceCall";
+import { createCallVoiceRecorder } from "./callVoiceRecorder";
 import { createLazyVoiceRecorder } from "./lazyVoiceRecorder";
 import { VOICE_WAVEFORM_SAMPLE_COUNT } from "./voiceInputMetering";
 import { VoiceInputSession } from "./voiceInputSession";
@@ -112,13 +114,16 @@ const voiceInputAtom = Atom.make((get) => {
   let keepAwakeSequence = 0;
   let audioToken: ReturnType<typeof acquireAudioSession> | null = null;
   const permission = createVoiceRecordingPermission(() => {
-    void session.controller.appMovedToBackground();
+    // In voice mode the call's service keeps recording with the screen off.
+    if (!voiceCall.active) void session.controller.appMovedToBackground();
   });
   const recorder = createLazyVoiceRecorder({
     getDestination: () => (registry.get(voiceRouteAtom) === null ? "local" : "environment"),
     create: (destination) =>
-      destination === "local"
-        ? createVoiceRecorder(VOICE_RECORDING_OPTIONS)
+      voiceCall.active
+        ? createCallVoiceRecorder()
+        : destination === "local"
+          ? createVoiceRecorder(VOICE_RECORDING_OPTIONS)
         : new AudioModule.AudioRecorder(VOICE_RECORDING_OPTIONS),
     onStatus: (status: RecordingStatus) => {
       session.controller.handleRecorderStatus({
@@ -196,8 +201,12 @@ const voiceInputAtom = Atom.make((get) => {
     if (phase === "recording") beginDictationStream(recorder.uri, session.ownerKey);
     else if (phase === "idle" || phase === "error") endDictationStream();
   });
+  // The next recording uses the recorder for the mode: the call's own while
+  // voice mode runs, expo-audio's otherwise.
+  const unsubscribeVoiceCall = voiceCall.subscribe(() => recorder.release());
   get.addFinalizer(() => {
     unsubscribeStream();
+    unsubscribeVoiceCall();
     permission.dispose();
     session.dispose();
     recorder.release();
