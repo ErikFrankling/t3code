@@ -4,7 +4,6 @@ import {
   resetVoiceInputGlobalsForTests,
   resolveTranscriptCommit,
   VoiceInputController,
-  VOICE_RECORDING_LIMIT_SECONDS,
   type VoiceDraftSnapshot,
   type VoiceInputControllerDependencies,
   type VoiceRecorder,
@@ -218,12 +217,10 @@ describe("VoiceInputController", () => {
     },
   );
 
-  it("uses the native five-minute cap and commits one final transcript", async () => {
+  it("records without a time limit and commits one final transcript", async () => {
     const harness = createHarness();
     await harness.controller.start();
-    expect(harness.recorder.record).toHaveBeenCalledWith({
-      forDuration: VOICE_RECORDING_LIMIT_SECONDS,
-    });
+    expect(harness.recorder.record).toHaveBeenCalledWith();
 
     const stopping = harness.controller.stop();
     harness.controller.handleRecorderStatus({
