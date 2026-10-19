@@ -40,7 +40,6 @@ import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/
 import { environmentSession } from "../../state/session";
 import { getNativeShowcaseScene } from "../showcase/nativeShowcaseScene";
 import {
-  VOICE_RECORDING_LIMIT_SECONDS,
   voiceInputBlocksSubmission,
   type VoiceInputState,
 } from "@t3tools/client-runtime/voice-input";
@@ -269,10 +268,7 @@ function useVoiceInputRuntime() {
         audioLevels.value = nextLevels;
       }
 
-      const nextElapsedSeconds = Math.min(
-        VOICE_RECORDING_LIMIT_SECONDS,
-        Math.max(0, Math.floor(status.durationMillis / 1_000)),
-      );
+      const nextElapsedSeconds = Math.max(0, Math.floor(status.durationMillis / 1_000));
       if (nextElapsedSeconds !== elapsedSecondsRef.current) {
         elapsedSecondsRef.current = nextElapsedSeconds;
         setElapsedSeconds(nextElapsedSeconds);
