@@ -1032,7 +1032,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
               >
                 <ComposerDictationCancelAction
                   presentation={voicePresentation}
-                  onCancel={voiceInput.cancel}
+                  onCancel={voiceInput.cancelAndDelete}
                 />
                 {isVoiceInputPresented ? (
                   <ComposerDictationStatus
@@ -1041,6 +1041,9 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                     phase={voiceInput.state.phase}
                     presentation={voicePresentation}
                     onDismissError={voiceInput.cancel}
+                    failedRecording={voiceInput.failedRecording}
+                    onRetry={() => void voiceInput.retryFailed()}
+                    onDiscardFailed={voiceInput.discardFailed}
                   />
                 ) : (
                   <View className="min-w-0 flex-1 flex-row items-center justify-between">

@@ -192,7 +192,7 @@ describe("createLazyVoiceRecorder", () => {
       expect(created).toHaveLength(0);
     });
 
-    it("stops, deletes, and releases the recorder created by a cancelled recording", async () => {
+    it("stops, deletes, and releases the recorder when a discard was confirmed", async () => {
       const { controller, recorder, created, deleted } = createController(true);
 
       await controller.start();
@@ -200,7 +200,7 @@ describe("createLazyVoiceRecorder", () => {
       expect(created).toHaveLength(1);
       const native = created[0]!;
 
-      controller.cancel();
+      controller.cancelAndDelete();
       recorder.release();
       await vi.waitFor(() => expect(native.release).toHaveBeenCalledTimes(1));
 
