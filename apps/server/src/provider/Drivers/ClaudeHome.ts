@@ -145,10 +145,12 @@ export const claudeLocalSettingsDirectory = Effect.fn("claudeLocalSettingsDirect
 
 export const makeClaudeContinuationGroupKey = Effect.fn("makeClaudeContinuationGroupKey")(
   function* (
-    config: Pick<ClaudeSettings, "homePath">,
+    config: Pick<ClaudeSettings, "homePath"> & Partial<Pick<ClaudeSettings, "sharedSessionGroup">>,
     environment?: NodeJS.ProcessEnv,
   ): Effect.fn.Return<string, never, Path.Path | FileSystem.FileSystem> {
     const fileSystem = yield* FileSystem.FileSystem;
+    const sharedSessionGroup = config.sharedSessionGroup?.trim();
+    if (sharedSessionGroup) return `claude:shared:${sharedSessionGroup}`;
     const resolvedHomePath = yield* resolveClaudeHomePath(config, environment);
     // Two instances that reach one Claude home through a symlink share sessions, so they can resume.
     // Only the key uses the real path: the spawn keeps the literal path, which names the Keychain login.
