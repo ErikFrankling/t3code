@@ -23,6 +23,7 @@ import {
 } from "@react-navigation/native";
 import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
 import { Platform, Pressable, ScrollView, View } from "react-native";
+import { useComposerEditorMaxHeight } from "./composerEditorHeight";
 import {
   KeyboardController,
   KeyboardStickyView,
@@ -322,6 +323,7 @@ export function NewTaskDraftScreen(props: {
     });
   const queuesInsteadOfStarting = !environmentConnected || attachmentsUploading;
   const promptInputRef = useRef<ComposerEditorHandle>(null);
+  const editorMaxHeight = useComposerEditorMaxHeight();
   const loadedBranchesProjectKeyRef = useRef<string | null>(null);
   const [isComposerFocused, setIsComposerFocused] = useState(false);
   const [previewVideo, setPreviewVideo] = useState<VideoPreviewSource | null>(null);
@@ -1445,7 +1447,7 @@ export function NewTaskDraftScreen(props: {
         contentInsetVertical={0}
         style={{
           minHeight: 72,
-          maxHeight: 160,
+          maxHeight: editorMaxHeight,
           paddingVertical: 4,
         }}
         textStyle={{ ...bodyText, color: foregroundColor, fontFamily: regularFontFamily }}
