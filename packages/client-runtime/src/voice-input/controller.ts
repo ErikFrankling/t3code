@@ -308,6 +308,10 @@ export class VoiceInputController {
   private capturedDraft: VoiceDraftSnapshot | null = null;
   private recordingUri: string | null = null;
   private readonly ownedRecordingUris = new Set<string>();
+  // Recordings stay on the device unless their words were delivered or committed.
+  private keepRecordings = true;
+  // The recording a failed stop left behind (kept on the device): Retry or Save it.
+  private failed: string | null = null;
   private recordingConfigured = false;
   private finishing = false;
   private retryRecording: {
@@ -500,6 +504,11 @@ export class VoiceInputController {
     this.postProcessingAbortController?.abort();
   }
 
+  /**
+   * Something stopped the recording (the recorder failed, the system ended it).
+   * The words are kept: what was recorded is transcribed into the draft (never
+   * sent on its own), and the audio is deleted only once that worked.
+   */
   interruptRecording(
     message?: string,
     completedUri: string | null = null,
@@ -519,15 +528,22 @@ export class VoiceInputController {
     if (this.state.phase !== "recording") return;
     this.rememberRecordingUri(completedUri);
     this.recordingUri = completedUri ?? this.recordingUri;
-    return this.discardRecording(failure.message, failure.code);
+    return this.finishRecording(true, completedUri, "draft");
   }
 
+  /**
+   * Leaving the app (locking the phone, a sign-in screen on top) never stops a
+   * recording: the recorder keeps going in the background. Only a recording that
+   * had not started yet is abandoned.
+   */
   appMovedToBackground(): Promise<void> | void {
-    return this.interruptRecording(
-      this.state.phase === "preparing"
-        ? this.text(msg("Voice input stopped when the app moved to the background."))
-        : undefined,
-    );
+    if (this.state.phase === "preparing") {
+      this.invalidateOperation();
+      this.setError(
+        this.text(msg("Voice input stopped when the app moved to the background.")),
+        "retry",
+      );
+    }
   }
 
   handleRecorderStatus(status: VoiceRecorderStatus): Promise<void> | void {
@@ -568,6 +584,8 @@ export class VoiceInputController {
   private async finishRecording(
     alreadyStopped: boolean,
     completedUri: string | null,
+    // `draft`: put the transcript into the draft even where Stop would send it.
+    destination: "default" | "draft" = "default",
   ): Promise<void> {
     if (this.finishing || (this.state.phase !== "recording" && this.state.phase !== "preparing"))
       return;
@@ -605,12 +623,13 @@ export class VoiceInputController {
         if (live && "error" in live) throw live.error;
         if (live?.text != null) {
           transcript = live.text;
-        } else if (transcription.deliver) {
+        } else if (transcription.deliver && destination === "default") {
           const deliver = transcription.deliver;
           const fallback = await runTranscriptionOperation(() =>
             deliver(recordingUri!, { signal }),
           );
           if (fallback === null) {
+            this.keepRecordings = false;
             if (this.isCurrent(operationToken)) this.setState(IDLE_STATE);
             return;
           }
@@ -623,6 +642,7 @@ export class VoiceInputController {
           );
         }
       } catch (error) {
+        this.failed = recordingUri;
         if (this.isCurrent(operationToken)) {
           if (
             this.dependencies.retryFailedRecording &&
@@ -684,6 +704,7 @@ export class VoiceInputController {
         transcription.locale,
       );
       if (result.kind === "stale") {
+        this.failed = recordingUri;
         this.setError(
           this.text(
             msg("The draft changed while voice input was running. The transcript was not added."),
@@ -694,13 +715,16 @@ export class VoiceInputController {
         return;
       }
       if (result.kind === "empty") {
+        this.failed = recordingUri;
         this.setError(this.text(msg("No speech was detected.")), "retry", "no-speech");
         return;
       }
 
       this.dependencies.commitDraft(result.text, result.selection);
+      this.keepRecordings = false;
       this.setState(IDLE_STATE);
     } catch {
+      this.failed = this.recordingUri;
       if (this.isCurrent(operationToken)) {
         this.setError(
           this.text(msg("Could not finish voice recording.")),
@@ -712,6 +736,77 @@ export class VoiceInputController {
       this.finishing = false;
       await this.releaseResources();
     }
+  }
+
+  /** The kept recording of a failed stop, if any (a file on the device). */
+  get failedRecording(): string | null {
+    return this.failed;
+  }
+
+  /**
+   * Transcribes the kept recording again (as a new upload) and puts the words
+   * into the draft. The file is deleted only once that worked.
+   */
+  async retryFailed(): Promise<void> {
+    const uri = this.failed;
+    if (!uri || this.state.phase === "recording" || this.state.phase === "transcribing") return;
+    const transcriber = this.dependencies.getTranscriber();
+    if (!transcriber) return;
+    const controller = new AbortController();
+    this.setState({ phase: "transcribing", error: null, errorAction: null });
+    try {
+      const prepared = await transcriber.prepare({ signal: controller.signal });
+      const transcript = await prepared.transcribe(uri, { signal: controller.signal });
+      const current = this.dependencies.readDraft();
+      const result = current
+        ? resolveTranscriptCommit(current, current, transcript, prepared.locale)
+        : null;
+      if (!result || result.kind !== "commit") {
+        this.setError(
+          result?.kind === "empty"
+            ? this.text(msg("No speech was detected."))
+            : this.text(msg("The transcript could not be added to the draft.")),
+          "retry",
+        );
+        return;
+      }
+      this.dependencies.commitDraft(result.text, result.selection);
+      this.failed = null;
+      try {
+        this.dependencies.deleteRecording(uri);
+      } catch {}
+      this.setState(IDLE_STATE);
+    } catch (error) {
+      this.setFailure(transcriptionFailure(error, this.resolve), "retry");
+    }
+  }
+
+  /**
+   * A recording found on the device from before the app closed (killed, phone
+   * off): offered like a failed stop, with Retry and Save.
+   */
+  adoptKeptRecording(uri: string, message: string): void {
+    if (this.state.phase !== "idle" || this.failed) return;
+    this.failed = uri;
+    this.setError(message, "retry");
+  }
+
+  /** After the user confirmed discarding the recording in progress: it is deleted. */
+  cancelAndDelete(): void {
+    this.keepRecordings = false;
+    this.cancel();
+  }
+
+  /** After the user confirmed: the kept recording is deleted. */
+  discardFailed(): void {
+    const uri = this.failed;
+    this.failed = null;
+    if (uri) {
+      try {
+        this.dependencies.deleteRecording(uri);
+      } catch {}
+    }
+    if (this.state.phase === "error") this.setState(IDLE_STATE);
   }
 
   private async discardRecording(
@@ -744,7 +839,11 @@ export class VoiceInputController {
     await this.liveTranscription;
     this.liveTranscription = null;
     this.recordingUri = null;
-    this.deleteOwnedRecordings();
+    // The audio is deleted only after its words reached the draft or the chat;
+    // anything else (an error, a cancel) keeps the file.
+    if (this.keepRecordings) this.ownedRecordingUris.clear();
+    else this.deleteOwnedRecordings();
+    this.keepRecordings = true;
     await this.releaseAudioSession();
     releaseSession(this.sessionToken);
     this.sessionToken = null;
