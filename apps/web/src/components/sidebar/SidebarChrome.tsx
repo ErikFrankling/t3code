@@ -249,12 +249,17 @@ const SidebarPersonalAgentItem = memo(function SidebarPersonalAgentItem() {
   );
 });
 
-export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
+export const SidebarChromeFooter = memo(function SidebarChromeFooter({
+  personalAgentListed = false,
+}: {
+  /** The thread already leads the pinned list, so the footer shortcut would repeat it. */
+  personalAgentListed?: boolean;
+}) {
   return (
     <SidebarFooter>
       <SidebarProviderUpdatePill />
       <SidebarUpdateArchitectureWarning />
-      <SidebarPersonalAgentItem />
+      {personalAgentListed ? null : <SidebarPersonalAgentItem />}
       <SidebarUtilityMenu />
     </SidebarFooter>
   );
