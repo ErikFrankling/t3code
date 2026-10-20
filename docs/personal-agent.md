@@ -1,8 +1,10 @@
 # Personal agent
 
 This fork adds one long-running thread per environment that belongs to the user
-rather than to a project. Open it from **Personal agent** at the bottom of the
-sidebar, or at `/personal` (a stable address to bookmark on a phone).
+rather than to a project. It always leads the pinned threads at the top of the
+sidebar, and the Android app shows it as a **Personal agent** card above the
+thread list. Before it exists (or while it is unpinned or archived), open it from
+**Personal agent** at the bottom of the sidebar, or at `/personal`.
 
 The first open creates:
 
