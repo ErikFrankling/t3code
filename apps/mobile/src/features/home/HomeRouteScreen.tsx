@@ -32,6 +32,7 @@ import { buildHomeProjectScopes, resolveHomeProjectFilterScope } from "./homeThr
 import { usePendingTaskListActions } from "./usePendingTaskListActions";
 import { useThreadListActions } from "./useThreadListActions";
 import { useWorkspaceTabs } from "../layout/workspace/WorkspaceTabsContext";
+import { usePersonalAgentEntry } from "./usePersonalAgentEntry";
 import { openSettings } from "../settings/settings-navigation";
 import { useSelectWorkspaceTab } from "../layout/workspace/useSelectWorkspaceTab";
 import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
@@ -136,6 +137,12 @@ export function HomeRouteScreen() {
       }),
     [listOptions.projectGroupingMode, projects, selectedEnvironmentId],
   );
+  const personalAgent = usePersonalAgentEntry({
+    environments,
+    selectedEnvironmentId,
+    threads,
+    onSelectThread: handleSelectThread,
+  });
   const projectFilterOptions = useMemo(
     () =>
       pickableProjectGroups(projectScopes).map((scope) => ({
@@ -218,6 +225,7 @@ export function HomeRouteScreen() {
           }}
           onStartNewTask={startNewTask}
           pendingTasks={pendingTasks}
+          personalAgent={personalAgent}
           projectGroupingMode={listOptions.projectGroupingMode}
           projects={projects}
           projectSortOrder={listOptions.projectSortOrder}
