@@ -348,7 +348,7 @@ describe("VoiceInputController", () => {
       await nextStart;
 
       expect(harness.commits).toEqual([]);
-      expect(harness.deleted).toEqual(["file:///voice.m4a"]);
+      expect(harness.deleted).toEqual([]);
       expect(harness.controller.currentState.phase).toBe("idle");
 
       expect(next.controller.currentState.phase).toBe("recording");
@@ -380,7 +380,7 @@ describe("VoiceInputController", () => {
 
     expect(signal.aborted).toBe(true);
     expect(harness.commits).toEqual([]);
-    expect(harness.deleted).toEqual(["file:///voice.m4a"]);
+    expect(harness.deleted).toEqual([]);
     expect(harness.controller.currentState.phase).toBe("idle");
   });
 
@@ -518,7 +518,7 @@ describe("VoiceInputController", () => {
     await next.controller.interruptRecording();
   });
 
-  it("releases an abandoned recording even if its native recorder was already disposed", async () => {
+  it("keeps an interrupted recording even if its native recorder was already disposed", async () => {
     const harness = createHarness();
     await harness.controller.start();
     harness.recorder.stop.mockRejectedValueOnce(new Error("recorder released"));
@@ -529,7 +529,7 @@ describe("VoiceInputController", () => {
     });
 
     await expect(harness.controller.interruptRecording()).resolves.toBeUndefined();
-    expect(harness.deleted).toEqual(["file:///voice.m4a"]);
+    expect(harness.deleted).toEqual([]);
     const next = createHarness();
     await next.controller.start();
     expect(next.controller.currentState.phase).toBe("recording");
@@ -585,8 +585,8 @@ describe("VoiceInputController", () => {
     expect(harness.controller.currentState.error).toContain("no longer available");
   });
 
-  it("discards recorder errors and audio interruptions without transcribing", async () => {
-    const transcribe = vi.fn(async () => "ignored");
+  it("keeps the words of an interrupted recording: they go to the draft, not the chat", async () => {
+    const transcribe = vi.fn(async () => "kept");
     const preparationEntered = deferred<AbortSignal>();
     const harness = createHarness({
       getTranscriber: () => ({
@@ -606,11 +606,11 @@ describe("VoiceInputController", () => {
       url: "file:///voice.m4a",
     });
 
-    expect(harness.commits).toEqual([]);
-    expect(transcribe).not.toHaveBeenCalled();
-    expect(signal.aborted).toBe(true);
-    expect(harness.controller.currentState.error).toBe("Audio route changed");
-    expect(harness.deleted).toEqual(["file:///voice.m4a", "file:///reset-empty.m4a"]);
+    expect(transcribe).toHaveBeenCalledWith("file:///voice.m4a", expect.anything());
+    expect(signal.aborted).toBe(false);
+    expect(harness.commits).toEqual([{ text: "hello kept", selection: { start: 10, end: 10 } }]);
+    // Deleted only now that its words are in the draft.
+    expect(harness.deleted).toContain("file:///voice.m4a");
   });
 
   it("cancels preparation when the app reaches the background", async () => {

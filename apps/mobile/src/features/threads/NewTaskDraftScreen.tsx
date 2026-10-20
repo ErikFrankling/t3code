@@ -1698,7 +1698,7 @@ export function NewTaskDraftScreen(props: {
             >
               <ComposerDictationCancelAction
                 presentation={voicePresentation}
-                onCancel={voiceInput.cancel}
+                onCancel={voiceInput.cancelAndDelete}
               />
               {isVoiceInputPresented ? (
                 <ComposerDictationStatus
@@ -1707,6 +1707,9 @@ export function NewTaskDraftScreen(props: {
                   phase={voiceInput.state.phase}
                   presentation={voicePresentation}
                   onDismissError={voiceInput.cancel}
+                  failedRecording={voiceInput.failedRecording}
+                  onRetry={() => void voiceInput.retryFailed()}
+                  onDiscardFailed={voiceInput.discardFailed}
                 />
               ) : (
                 <>
