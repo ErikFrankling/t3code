@@ -57,9 +57,11 @@ export const hasClaudeManagedMcpConfig = Effect.fn("hasClaudeManagedMcpConfig")(
 
 export const makeClaudeContinuationGroupKey = Effect.fn("makeClaudeContinuationGroupKey")(
   function* (
-    config: Pick<ClaudeSettings, "homePath">,
+    config: Pick<ClaudeSettings, "homePath"> & Partial<Pick<ClaudeSettings, "sharedSessionGroup">>,
     environment?: NodeJS.ProcessEnv,
   ): Effect.fn.Return<string, never, Path.Path> {
+    const sharedSessionGroup = config.sharedSessionGroup?.trim();
+    if (sharedSessionGroup) return `claude:shared:${sharedSessionGroup}`;
     const resolvedHomePath = yield* resolveClaudeHomePath(config, environment);
     return `claude:home:${resolvedHomePath}`;
   },
