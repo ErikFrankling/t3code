@@ -1,0 +1,20 @@
+apply plugin: 'com.android.library'
+apply plugin: 'org.jetbrains.kotlin.android'
+
+group = 'com.t3tools.selfupdate'
+version = '0.0.0'
+
+android {
+  namespace 'expo.modules.t3selfupdate'
+  compileSdk rootProject.ext.compileSdkVersion
+  defaultConfig {
+    minSdkVersion rootProject.ext.minSdkVersion
+    targetSdkVersion rootProject.ext.targetSdkVersion
+  }
+}
+
+dependencies {
+  implementation project(':expo-modules-core')
+  // Same version expo-widgets already brings into the app.
+  implementation 'androidx.work:work-runtime-ktx:2.9.1'
+}
