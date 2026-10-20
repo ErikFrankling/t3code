@@ -16,6 +16,37 @@ const base = {
   capabilities: CodexProviderCapabilitiesV2,
 };
 
+it.each([
+  ["claude:shared:max", "claude:shared:max", "restart_and_resume"],
+  ["claude:shared:max", "claude:shared:other", "create_with_handoff"],
+  ["claude:home:/account-a", "claude:home:/account-b", "create_with_handoff"],
+  ["claude:home:/account-a", "claude:shared:max", "create_with_handoff"],
+  ["claude:home:/account-a", "claude:home:/account-a", "restart_and_resume"],
+] as const)("classifies Claude instance switches from %s to %s", (source, target, expected) => {
+  const claudeDriver = ProviderDriverKind.make("claudeAgent");
+  const current = {
+    ...base,
+    driver: claudeDriver,
+    continuationIdentity: { driverKind: claudeDriver, continuationKey: source },
+    modelSelection: { instanceId: ProviderInstanceId.make("claude-a"), model: "sonnet" },
+  };
+  assert.deepEqual(
+    decideProviderSessionTransition({
+      current,
+      target: {
+        ...current,
+        continuationIdentity: { driverKind: claudeDriver, continuationKey: target },
+        modelSelection: {
+          ...current.modelSelection,
+          instanceId: ProviderInstanceId.make("claude-b"),
+        },
+        available: true,
+      },
+    }),
+    { type: expected },
+  );
+});
+
 it("reuses compatible sessions and treats interaction mode as turn-scoped", () => {
   assert.deepEqual(
     decideProviderSessionTransition({
