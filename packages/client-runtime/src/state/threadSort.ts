@@ -1,4 +1,4 @@
-import type { ProjectId } from "@t3tools/contracts";
+import { PERSONAL_AGENT_THREAD_ID, type ProjectId } from "@t3tools/contracts";
 import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@t3tools/contracts/settings";
 import type { EnvironmentThreadShell } from "./models.ts";
 
@@ -292,7 +292,12 @@ export function sortPinnedThreadsByOrderKey<
     (left, right) =>
       timestamps.get(right)! - timestamps.get(left)! || identityTiebreak(left, right),
   );
-  return [...keyed, ...keyless];
+  // The personal agent is the entry point to every other thread, so it leads
+  // the pinned block on every client whatever the stored order says.
+  return [...keyed, ...keyless].sort(
+    (left, right) =>
+      Number(right.id === PERSONAL_AGENT_THREAD_ID) - Number(left.id === PERSONAL_AGENT_THREAD_ID),
+  );
 }
 
 export function sortActiveThreadsByOrderKey<
