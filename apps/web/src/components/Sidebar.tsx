@@ -43,6 +43,7 @@ import {
 } from "@t3tools/client-runtime/environment";
 import {
   AuthOrchestrationOperateScope,
+  PERSONAL_AGENT_THREAD_ID,
   type ScopedThreadRef,
   type ThreadId,
 } from "@t3tools/contracts";
@@ -520,7 +521,12 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
     const supportsSnooze = capabilities?.threadSnooze === true;
     const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
     if (capabilities?.threadActiveReorder === true) activeReorderable.add(threadKey);
-    if (capabilities?.threadPinning === true && capabilities.threadPinReorder === true) {
+    // The personal agent always leads the pinned block, so it has no slot to drag to.
+    if (
+      capabilities?.threadPinning === true &&
+      capabilities.threadPinReorder === true &&
+      thread.id !== PERSONAL_AGENT_THREAD_ID
+    ) {
       draggable.add(threadKey);
     }
     if (optimisticDrop?.key === threadKey) {
@@ -3134,7 +3140,9 @@ export default function Sidebar() {
           ) : null}
         </SidebarGroup>
       </SidebarContent>
-      <SidebarChromeFooter />
+      <SidebarChromeFooter
+        personalAgentListed={pinnedThreads.some((thread) => thread.id === PERSONAL_AGENT_THREAD_ID)}
+      />
     </>
   );
 }
