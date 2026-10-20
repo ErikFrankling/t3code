@@ -10,12 +10,14 @@ import {
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
 import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
 import { acpSelectionTransition } from "@t3tools/provider-core/server/selectionTransition";
 import * as ProviderSwitch from "./ProviderSwitchService.ts";
 import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
+import { makeClaudeContinuationGroupKey } from "../provider/Drivers/ClaudeHome.ts";
 
 const driver = ProviderDriverKind.make("codex");
 const currentInstanceId = ProviderInstanceId.make("codex_primary");
@@ -69,12 +71,13 @@ function layerTest(
   metadata: Readonly<Record<string, { continuationKey: string }>>,
   planSelectionTransition: ProviderAdapter.ProviderAdapterV2["Service"]["planSelectionTransition"] = () =>
     Effect.succeed({ type: "restart_session" }),
+  driverKind = driver,
 ) {
   const adapter = (
     instanceId: ProviderInstanceId,
   ): ProviderAdapter.ProviderAdapterV2["Service"] => ({
     instanceId,
-    driver,
+    driver: driverKind,
     getCapabilities: () => Effect.succeed(capabilitiesWithoutModelSwitch),
     planSelectionTransition,
     openSession: () => Effect.die("ProviderSwitchService tests do not open sessions."),
@@ -94,7 +97,7 @@ function layerTest(
             new ProviderAdapterRegistry.ProviderAdapterRegistryLookupError({ instanceId }),
           )
         : Effect.succeed({
-            driver,
+            driver: driverKind,
             continuationKey: value.continuationKey,
             enabled: true,
             capabilities: capabilitiesWithoutModelSwitch,
@@ -103,6 +106,59 @@ function layerTest(
   });
   return ProviderSwitch.layer.pipe(Layer.provide(layerRegistry));
 }
+
+it.effect("uses current Claude group settings for an existing stopped thread", () =>
+  Effect.gen(function* () {
+    const targetId = ProviderInstanceId.make("claude-secondary");
+    const providerThreadId = ProviderThreadId.make("existing-claude-thread");
+    const existing = projection();
+    const persisted = {
+      ...existing,
+      thread: { ...existing.thread, activeProviderThreadId: providerThreadId },
+      providerSessions: [deadSessionRecord("old-claude-session", "stopped")],
+      providerThreads: [
+        {
+          id: providerThreadId,
+          providerInstanceId: currentInstanceId,
+          nativeThreadRef: { nativeId: "original-claude-session-id" },
+        },
+      ],
+    } as unknown as OrchestrationV2ThreadProjection;
+    const plan = (sharedSessionGroup: string) =>
+      Effect.gen(function* () {
+        const sourceKey = yield* makeClaudeContinuationGroupKey({
+          homePath: "~/.claude",
+          sharedSessionGroup,
+        });
+        const targetKey = yield* makeClaudeContinuationGroupKey({
+          homePath: "~/.claude_2",
+          sharedSessionGroup,
+        });
+        return yield* Effect.gen(function* () {
+          const service = yield* ProviderSwitch.ProviderSwitchServiceV2;
+          return yield* service.plan({
+            projection: persisted,
+            targetModelSelection: { instanceId: targetId, model: "sonnet" },
+          });
+        }).pipe(
+          Effect.provide(
+            layerTest(
+              {
+                [currentInstanceId]: { continuationKey: sourceKey },
+                [targetId]: { continuationKey: targetKey },
+              },
+              undefined,
+              ProviderDriverKind.make("claudeAgent"),
+            ),
+          ),
+        );
+      });
+    assert.equal((yield* plan("")).transition.type, "create_with_handoff");
+    const shared = yield* plan("max");
+    assert.equal(shared.transition.type, "restart_and_resume");
+    assert.deepEqual(shared.releaseProviderSessionIds, []);
+  }).pipe(Effect.provide(NodeServices.layer)),
+);
 
 it.effect("releases the newest live session, not the newest record overall", () =>
   Effect.gen(function* () {
