@@ -85,6 +85,8 @@ import { SwipeableScrollGateProvider, useSwipeableScrollGate } from "./thread-sw
 import { useFabScroll } from "./FabScrollContext";
 import { useWorkspaceTabs } from "../workspace/WorkspaceTabsContext";
 import { ThreadListFilters } from "./ThreadListFilters";
+import { PersonalAgentCard } from "./PersonalAgentCard";
+import type { PersonalAgentEntry } from "./usePersonalAgentEntry";
 
 interface HomeScreenProps {
   readonly projects: ReadonlyArray<EnvironmentProject>;
@@ -132,6 +134,7 @@ interface HomeScreenProps {
   readonly onDeletePendingTask: (pendingTask: PendingNewTask) => void;
   readonly onNewThreadOnBranch: (thread: EnvironmentThreadShell) => void;
   readonly onNewThreadInProject: (project: EnvironmentProject) => void;
+  readonly personalAgent: PersonalAgentEntry | null;
 }
 
 const ESTIMATED_THREAD_LIST_V2_ROW_HEIGHT = 72;
@@ -446,13 +449,23 @@ export function HomeScreen(props: HomeScreenProps) {
   } = listEnvironments;
   const resolveProviderInstance = useThreadRowProviderInstanceResolver(providersByEnvironmentId);
   const pendingOrder = usePendingThreadOrder(nowMinute, snoozeWakeTick);
+  // The card above the list stands in for the agent's own row, except in
+  // search results, where it is matched like any other thread.
+  const personalAgentThread = hasSearchQuery ? null : (props.personalAgent?.thread ?? null);
   const {
     layout: threadListV2Layout,
     items: threadListV2Items,
     contentOnlyThreadKeys,
     olderSettledShelf,
   } = useThreadListV2({
-    threads: props.threads,
+    threads:
+      personalAgentThread === null
+        ? props.threads
+        : props.threads.filter(
+            (thread) =>
+              thread.id !== personalAgentThread.id ||
+              thread.environmentId !== personalAgentThread.environmentId,
+          ),
     pendingTasks: props.pendingTasks,
     environmentId: props.selectedEnvironmentId,
     projectRefs: v2ScopedProjectGroup === null ? null : v2ScopedProjectGroup.projectRefs,
@@ -720,9 +733,15 @@ export function HomeScreen(props: HomeScreenProps) {
 
   const listHeader = Platform.OS === "ios" ? undefined : <HomeTopContentSpacer />;
 
+  const personalAgentCard =
+    props.personalAgent === null || hasSearchQuery ? null : (
+      <PersonalAgentCard entry={props.personalAgent} pane={primaryColumn ? "sidebar" : "screen"} />
+    );
+
   const v2ListHeader = (
     <>
       {listHeader}
+      {personalAgentCard}
       {Platform.OS === "ios" && workspace ? (
         <ThreadListFilters
           gutter={primaryColumn ? 8 : 0}
@@ -764,7 +783,7 @@ export function HomeScreen(props: HomeScreenProps) {
       />
     );
 
-  if (Platform.OS === "android" && threadListV2Items.length === 0) {
+  if (Platform.OS === "android" && threadListV2Items.length === 0 && personalAgentCard === null) {
     return (
       <View className="flex-1 bg-header">
         <View
