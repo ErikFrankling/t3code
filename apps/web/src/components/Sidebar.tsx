@@ -60,6 +60,7 @@ import {
   AuthOrchestrationOperateScope,
   type ContextMenuSource,
   ProjectId,
+  PERSONAL_AGENT_THREAD_ID,
   type ScopedThreadRef,
   type ThreadId,
 } from "@t3tools/contracts";
@@ -680,6 +681,12 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
     serverConfigs,
     connectedEnvironmentIds: input.connectedEnvironmentIds,
   });
+  // The personal agent always leads the pinned block, so it has no slot to drag to.
+  for (const thread of visible) {
+    if (thread.id === PERSONAL_AGENT_THREAD_ID) {
+      draggableThreadKeys.delete(scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)));
+    }
+  }
   for (const thread of visible) {
     const configLoaded = serverConfigs.has(thread.environmentId);
     const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
@@ -3864,7 +3871,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           ) : null}
         </SidebarGroup>
       </SidebarContent>
-      <SidebarChromeFooter />
+      <SidebarChromeFooter
+        personalAgentListed={pinnedThreads.some((thread) => thread.id === PERSONAL_AGENT_THREAD_ID)}
+      />
     </SidebarFolderDrop>
   );
 }
