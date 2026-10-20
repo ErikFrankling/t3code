@@ -236,9 +236,18 @@ const config: ExpoConfig = {
   userInterfaceStyle: "automatic",
   updates: {
     enabled: repoEnv.T3CODE_MOBILE_UPDATES_ENABLED !== "0",
-    url: "https://u.expo.dev/d763fcb8-d37c-41ea-a773-b54a0ab4a454",
     checkAutomatically: "ON_LOAD",
     fallbackToCacheTimeout: 0,
+    // Erik's fork serves its own updates (docs/erik-updates.md). Every
+    // manifest must be signed by the fork's key, so nothing upstream
+    // publishes can ever load in this build.
+    ...(repoEnv.T3CODE_MOBILE_UPDATES_URL
+      ? {
+          url: repoEnv.T3CODE_MOBILE_UPDATES_URL,
+          codeSigningCertificate: "./certs/erik-updates-certificate.pem",
+          codeSigningMetadata: { keyid: "main", alg: "rsa-v1_5-sha256" },
+        }
+      : { url: "https://u.expo.dev/d763fcb8-d37c-41ea-a773-b54a0ab4a454" }),
   },
   ios: {
     icon: variant.assets.iosIcon,
@@ -446,6 +455,8 @@ const config: ExpoConfig = {
   ],
   extra: {
     appVariant: APP_VARIANT,
+    // Native (APK) updates for Erik's fork; see modules/t3-self-update.
+    selfUpdateUrl: repoEnv.T3CODE_MOBILE_SELF_UPDATE_URL ?? null,
     iosPersonalTeamBuild: isIosPersonalTeamBuild,
     relay: {
       url: repoEnv.T3CODE_RELAY_URL ?? null,

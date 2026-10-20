@@ -1,0 +1,9 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Erik's fork installs its own new APKs (docs/erik-updates.md). -->
+  <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+  <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
+  <uses-permission android:name="android.permission.INTERNET" />
+  <application>
+    <receiver android:name="expo.modules.t3selfupdate.InstallResultReceiver" android:exported="false" />
+  </application>
+</manifest>
