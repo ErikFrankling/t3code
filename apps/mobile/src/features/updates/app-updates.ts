@@ -62,6 +62,11 @@ export function createAppUpdateDeferral(): AppUpdateDeferral {
 
 const appUpdateDeferral = createAppUpdateDeferral();
 
+/** Whether a downloaded update is waiting for the next backgrounding. */
+export function hasPendingAppUpdate(): boolean {
+  return appUpdateDeferral.pendingInstall;
+}
+
 interface AppUpdateCheckOptions {
   readonly applyMode?: "background" | "immediate";
   readonly client?: AppUpdateClient;
@@ -406,7 +411,7 @@ async function defaultConfirmInstallNow(): Promise<boolean> {
   });
 }
 
-async function defaultFlushPendingWrites(): Promise<void> {
+export async function flushPendingAppWrites(): Promise<void> {
   const results = await Promise.allSettled([
     import("../../state/use-composer-drafts").then((drafts) => drafts.flushComposerDrafts()),
     import("../../state/thread-outbox").then((outbox) => outbox.flushThreadOutbox()),
@@ -463,7 +468,7 @@ function defaultOnForegroundStay(apply: () => void): void {
 
 const defaultAppUpdateEnvironment: AppUpdateEnvironment = {
   confirmInstallNow: defaultConfirmInstallNow,
-  flushPendingWrites: defaultFlushPendingWrites,
+  flushPendingWrites: flushPendingAppWrites,
   isSafeToRestartInBackground: defaultIsSafeToRestartInBackground,
   onNextBackground: defaultOnNextBackground,
   onForegroundStay: defaultOnForegroundStay,
