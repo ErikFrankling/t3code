@@ -144,6 +144,13 @@ export class VoiceInputSession {
     return this.target ? this.start(this.target) : Promise.resolve();
   }
 
+  /** Transcribes the kept recording of a failed stop into `target`'s draft. */
+  retryFailed(target: VoiceInputTarget): Promise<void> {
+    if (voiceInputBlocksSubmission(this.controller.currentState)) return Promise.resolve();
+    this.target = target;
+    return this.controller.retryFailed();
+  }
+
   start(target: VoiceInputTarget): Promise<void> {
     if (voiceInputBlocksSubmission(this.controller.currentState)) return Promise.resolve();
     this.target = target;
