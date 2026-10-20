@@ -353,6 +353,15 @@ describe("planPinnedMove", () => {
 });
 
 describe("sortPinnedThreadsByOrderKey", () => {
+  it("puts the personal agent first whatever its stored order", () => {
+    const sorted = sortPinnedThreadsByOrderKey([
+      { id: "first", createdAt: "2026-03-09T10:00:00.000Z", pinOrderKey: "a" },
+      { id: "personal-agent", createdAt: "2026-03-09T09:00:00.000Z", pinOrderKey: "z" },
+      { id: "keyless", createdAt: "2026-03-09T11:00:00.000Z" },
+    ]);
+    expect(sorted.map((thread) => thread.id)).toEqual(["personal-agent", "first", "keyless"]);
+  });
+
   it("breaks equal keys by id THEN environment so merged lists are stable everywhere", () => {
     const sorted = sortPinnedThreadsByOrderKey([
       {
