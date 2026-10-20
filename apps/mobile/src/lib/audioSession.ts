@@ -1,5 +1,7 @@
 import { AudioModule, setAudioModeAsync, setIsAudioActiveAsync } from "expo-audio";
 
+import { Platform } from "react-native";
+
 import { voiceCall } from "../native/voiceCall";
 
 type AudioSessionToken = {
@@ -76,6 +78,11 @@ export function activateAudioSession(
       playsInSilentMode: true,
       // Voice mode reads the reply aloud with the screen off.
       shouldPlayInBackground: voiceCall.active,
+      // Locking the phone or a screen on top (a sign-in, a call) never stops a
+      // dictation: expo-audio records on in a foreground service. (Voice mode's
+      // call records with its own service.)
+      allowsBackgroundRecording:
+        token.kind === "recording" && Platform.OS === "android" && !voiceCall.active,
     });
     if (!isAudioSessionOwner(token)) return false;
     await setIsAudioActiveAsync(true);
