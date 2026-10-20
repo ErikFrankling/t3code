@@ -822,6 +822,9 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
           <ComposerDictationError
             error={voiceInput.state.phase === "error" ? voiceInput.state.error : null}
             onDismiss={voiceInput.cancel}
+            failedRecording={voiceInput.failedRecording}
+            onRetry={() => void voiceInput.retryFailed()}
+            onDiscardFailed={voiceInput.discardFailed}
           />
           {isExpanded ? editingAttachments : null}
           <View
@@ -1087,7 +1090,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                 <ComposerDictationCancelAction
                   size={usesLargeControls ? "large" : "regular"}
                   presentation={voicePresentation}
-                  onCancel={voiceInput.cancel}
+                  onCancel={voiceInput.cancelAndDelete}
                 />
                 <ComposerDictationStatus
                   audioLevels={voiceInput.audioLevels}
