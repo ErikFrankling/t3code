@@ -275,6 +275,8 @@ export function ReadAloudDock(props: {
   readonly environmentId: EnvironmentId;
   readonly latest: { readonly id: string; readonly text: string } | null;
   readonly onVoiceMode?: () => void;
+  /** Raises the dock clear of the floating status pill above the composer. */
+  readonly bottomOffset?: number;
 }) {
   const state = useReadAloud();
   const start = useStartReadAloud(props.environmentId);
@@ -290,7 +292,11 @@ export function ReadAloudDock(props: {
   if (state.phase === "idle") {
     const latest = props.latest;
     return (
-      <View pointerEvents="box-none" className="absolute bottom-0 right-3 mb-2 flex-row gap-2">
+      <View
+        pointerEvents="box-none"
+        className="absolute right-3 mb-2 flex-row gap-2"
+        style={{ bottom: props.bottomOffset ?? 0 }}
+      >
         {props.onVoiceMode ? (
           <Pressable
             accessibilityRole="button"
@@ -332,7 +338,11 @@ export function ReadAloudDock(props: {
   const otherMode: ReadAloudMode = state.mode === "summary" ? "full" : "summary";
 
   return (
-    <View pointerEvents="box-none" className="absolute inset-x-0 bottom-0 mb-2 px-3">
+    <View
+      pointerEvents="box-none"
+      className="absolute inset-x-0 mb-2 px-3"
+      style={{ bottom: props.bottomOffset ?? 0 }}
+    >
       <View className="rounded-2xl border border-border bg-card p-3">
         <ScrollView ref={scrollRef} style={{ maxHeight: 150 }}>
           {state.sentences.length === 0 ? (
