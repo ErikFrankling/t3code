@@ -12,7 +12,10 @@ import Animated, {
   type SharedValue,
 } from "react-native-reanimated";
 
+import * as Sharing from "expo-sharing";
+
 import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
+import * as Dialog from "../../components/ui/Dialog";
 import { AppText as Text } from "../../components/ui/AppText";
 import { SymbolView, type AppSymbolName } from "../../components/ui/AppSymbol";
 import { useAndroidControlSizing } from "../../components/ui/useAndroidControlSizing";
@@ -325,6 +328,10 @@ export function ComposerDictationStatus(props: {
   readonly phase: VoiceInputPhase;
   readonly presentation: VoiceComposerPresentation;
   readonly onDismissError: () => void;
+  /** A recording kept from a failed stop (or from before the app closed). */
+  readonly failedRecording?: string | null;
+  readonly onRetry?: () => void;
+  readonly onDiscardFailed?: () => void;
 }) {
   const recording = props.phase === "recording";
   const waveformStyle = useAnimatedStyle(() => ({
@@ -343,12 +350,44 @@ export function ComposerDictationStatus(props: {
           <Text className="min-w-0 flex-1 text-sm text-danger-foreground" numberOfLines={2}>
             {props.presentation.statusLabel}
           </Text>
+          {props.failedRecording ? (
+            <>
+              <ErrorAction label="Retry" onPress={() => props.onRetry?.()} />
+              <ErrorAction
+                label="Save"
+                onPress={() =>
+                  void Sharing.shareAsync(props.failedRecording!, {
+                    mimeType: "audio/aac",
+                    dialogTitle: "Save the recording",
+                  }).catch(() => undefined)
+                }
+              />
+            </>
+          ) : null}
           <Pressable
-            accessibilityLabel="Dismiss voice input error"
+            accessibilityLabel={
+              props.failedRecording ? "Delete the kept recording" : "Dismiss voice input error"
+            }
             accessibilityRole="button"
             className="size-7 items-center justify-center active:opacity-70"
             hitSlop={8}
-            onPress={props.onDismissError}
+            onPress={
+              props.failedRecording
+                ? () =>
+                    Dialog.alert(
+                      "Delete this recording?",
+                      "It was not sent. The audio will be gone from this phone. Retry puts its words in the text box; Save keeps the audio file.",
+                      [
+                        { text: "Keep", style: "cancel" },
+                        {
+                          text: "Delete",
+                          style: "destructive",
+                          onPress: () => props.onDiscardFailed?.(),
+                        },
+                      ],
+                    )
+                : props.onDismissError
+            }
           >
             <SymbolView
               name="xmark"
@@ -397,7 +436,12 @@ export function ComposerDictationCancelAction(props: {
       size={props.size}
       accessibilityLabel="Cancel dictation"
       icon="xmark"
-      onPress={props.onCancel}
+      onPress={() =>
+        Dialog.alert("Discard this recording?", "What you said so far will be deleted.", [
+          { text: "Keep recording", style: "cancel" },
+          { text: "Discard", style: "destructive", onPress: props.onCancel },
+        ])
+      }
     />
   );
 }
@@ -458,5 +502,19 @@ export function ComposerDictationStartAction(props: {
           : props.onStart
       }
     />
+  );
+}
+
+function ErrorAction(props: { readonly label: string; readonly onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={props.label}
+      hitSlop={6}
+      onPress={props.onPress}
+      className="rounded-full bg-subtle-strong px-3 py-1 active:opacity-70"
+    >
+      <Text className="text-sm font-t3-medium text-foreground">{props.label}</Text>
+    </Pressable>
   );
 }
