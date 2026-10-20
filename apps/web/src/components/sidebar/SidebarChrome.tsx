@@ -1,17 +1,16 @@
-<<<<<<< HEAD
-import { ArrowLeftIcon, ArrowRightIcon, ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react";
-=======
-import { ArrowLeftIcon, ChartNoAxesColumnIcon, SettingsIcon, SparklesIcon } from "lucide-react";
->>>>>>> 056c5f53f7 (feat: a personal agent that orchestrates the other threads)
+import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  ChartNoAxesColumnIcon,
+  SettingsIcon,
+  SparklesIcon,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { memo } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 
-<<<<<<< HEAD
 import { useAtomValue } from "@effect/atom-react";
-=======
 import { usePersonalAgent } from "../../hooks/usePersonalAgent";
->>>>>>> 056c5f53f7 (feat: a personal agent that orchestrates the other threads)
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
 import { shortcutLabelForCommand } from "../../keybindings";
 import {
@@ -318,12 +317,17 @@ const SidebarPersonalAgentItem = memo(function SidebarPersonalAgentItem() {
   );
 });
 
-export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
+export const SidebarChromeFooter = memo(function SidebarChromeFooter({
+  personalAgentListed = false,
+}: {
+  /** The thread already leads the pinned list, so the footer shortcut would repeat it. */
+  personalAgentListed?: boolean;
+}) {
   return (
     <SidebarFooter>
       <SidebarProviderUpdatePill />
       <SidebarUpdateArchitectureWarning />
-      <SidebarPersonalAgentItem />
+      {personalAgentListed ? null : <SidebarPersonalAgentItem />}
       <SidebarUtilityMenu />
     </SidebarFooter>
   );
