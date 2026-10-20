@@ -1,4 +1,4 @@
-// @effect-diagnostics nodeBuiltinImport:off globalFetch:off globalDate:off -- Same plain Node calls to the local speech server as DictationDelivery.ts, plus one ffmpeg run.
+// @effect-diagnostics nodeBuiltinImport:off globalFetch:off globalDate:off -- Same plain Node calls to the local speech server as DictationDelivery.ts, plus ffmpeg runs.
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
@@ -13,15 +13,21 @@ import { speechServiceUrl } from "./DictationDelivery.ts";
 const run = NodeUtil.promisify(NodeChildProcess.execFile);
 const decodeDictationState = Schema.decodeUnknownSync(DictationState);
 
-/** Five minutes of the phone's 128 kbit/s AAC, with room to spare. */
+/** One upload body; a whole recording sent at once may be this large. */
 export const DICTATION_AUDIO_MAX_BYTES = 16 * 1024 * 1024;
+/** Four hours of the phone's 48 kbit/s AAC, the speech service's own limit. */
+const RECORDING_MAX_BYTES = 4 * 3600 * 6000 * 1.5;
 // One second of 16 kHz 16-bit mono, well under the speech service's chunk cap.
 const CHUNK_BYTES = 32000;
+// Each AAC frame is 1024 samples; decoding resumes two frames back so the
+// decoder's overlap is warmed up again, and those two frames are dropped.
+const OVERLAP_FRAMES = 2;
+const SAMPLES_PER_FRAME = 1024;
 
 const ffmpegPath = () => process.env.T3CODE_FFMPEG ?? "ffmpeg";
 
-/** Any container ffmpeg reads (the phone records AAC in MPEG-4) to 16 kHz mono PCM. */
-async function decodeToPcm(audio: Uint8Array): Promise<Buffer> {
+/** Audio in any container ffmpeg reads (or raw ADTS with `format: "aac"`) to 16 kHz mono PCM. */
+async function decodeToPcm(audio: Uint8Array, format?: "aac"): Promise<Buffer> {
   const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-dictation-"));
   try {
     const input = NodePath.join(directory, "input");
@@ -33,6 +39,7 @@ async function decodeToPcm(audio: Uint8Array): Promise<Buffer> {
         "-nostdin",
         "-loglevel",
         "error",
+        ...(format ? ["-f", format] : []),
         "-i",
         input,
         "-ac",
@@ -51,7 +58,9 @@ async function decodeToPcm(audio: Uint8Array): Promise<Buffer> {
   }
 }
 
-async function speech(owner: string, body: Record<string, unknown>): Promise<DictationState> {
+type SpeechState = DictationState & { readonly sequence?: number };
+
+async function speech(owner: string, body: Record<string, unknown>): Promise<SpeechState> {
   const response = await fetch(speechServiceUrl(), {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-STT-Owner": owner },
@@ -61,43 +70,74 @@ async function speech(owner: string, body: Record<string, unknown>): Promise<Dic
   if (!response.ok) {
     throw new Error(`Speech service returned HTTP ${response.status}: ${await response.text()}`);
   }
-  return decodeDictationState(await response.json());
+  const body2 = (await response.json()) as { sequence?: unknown };
+  const state = decodeDictationState(body2);
+  return typeof body2.sequence === "number" ? { ...state, sequence: body2.sequence } : state;
 }
 
-// Decoding the whole stream again on every upload keeps the PCM prefix
-// identical between uploads; the tail is held back because the last AAC frame
-// may still be incomplete.
-const HOLD_BACK_BYTES = 8000;
-const ABANDONED_AFTER_MS = 30 * 60_000;
+/** Complete ADTS frames in `data` from `start`: their byte offsets, and where the next one begins. */
+export function adtsFrames(
+  data: Uint8Array,
+  start = 0,
+): { frames: number[]; end: number; rate: number } {
+  const frames: number[] = [];
+  let rate = 16000;
+  let offset = start;
+  while (offset + 7 <= data.length) {
+    if (data[offset] !== 0xff || (data[offset + 1]! & 0xf0) !== 0xf0) {
+      throw new Error("The recording is not AAC in ADTS frames.");
+    }
+    const length =
+      ((data[offset + 3]! & 3) << 11) | (data[offset + 4]! << 3) | (data[offset + 5]! >> 5);
+    if (length < 7) throw new Error("The recording has a broken AAC frame.");
+    if (offset + length > data.length) break;
+    rate = ADTS_RATES[(data[offset + 2]! >> 2) & 0xf] ?? rate;
+    frames.push(offset);
+    offset += length;
+  }
+  return { frames, end: offset, rate };
+}
 
-type Upload = {
-  readonly owner: string;
+const ADTS_RATES = [
+  96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350,
+];
+
+/**
+ * What survives a restart of the server for one recording: the audio exactly
+ * as received (`audio.aac`, appended before anything else happens) and how far
+ * it has been passed on to the speech service (`meta.json`).
+ */
+type Meta = {
+  owner: string;
+  project: string;
   started: boolean;
-  bytes: Buffer;
-  pcmSent: number;
-  sequence: number;
-  touched: number;
-  queue: Promise<unknown>;
+  /** ADTS frames already decoded and sent on. */
+  framesSent: number;
+  /** Byte offset of frame `framesSent` in audio.aac. */
+  frameOffset: number;
+  finished: boolean;
 };
-
-const uploads = new Map<string, Upload>();
-// Finished recordings by owner, so a retried final upload (clients and HTTP
-// stacks resend after a lost response) gets the state instead of an error.
-const finished = new Map<string, { readonly owner: string; readonly at: number }>();
 
 export type RecordingUploadResult =
   | { readonly kind: "state"; readonly state: DictationState }
   | { readonly kind: "gap"; readonly expected: number };
 
+const queues = new Map<string, Promise<unknown>>();
+
 /**
- * Compressed audio for clients that cannot stream PCM (the Android app records
- * AAC). Uploads arrive in order as byte ranges of one growing file (`offset`),
- * so the speech service sees the recording while it is made and its live draft
- * works as in the web composer; `final` asks for the final transcript, which the
- * client then polls with `status`. A single upload with offset 0 and `final`
- * sends a whole recording, in any container ffmpeg reads.
+ * Compressed audio from the Android app (AAC in ADTS frames, 16 kHz mono).
+ * Uploads arrive in order as byte ranges of one growing file (`offset`). Each
+ * one is appended to the copy on disk first, so nothing received is ever lost:
+ * not to a crash, a restart, or a pause of hours (the next upload continues
+ * where the last ended, and a client that lost track is told where with a
+ * `gap`). New complete frames are then decoded and passed on to the speech
+ * service, so its live draft works as in the web composer. `final` asks for
+ * the final transcript. A single upload with offset 0 and `final` may also
+ * send a whole recording in any container ffmpeg reads.
  */
 export function submitRecording(input: {
+  /** The server's state directory; uploads live in `dictation-uploads/<id>`. */
+  readonly directory: string;
   readonly owner: string;
   readonly id: string;
   readonly project: string;
@@ -105,81 +145,145 @@ export function submitRecording(input: {
   readonly offset: number;
   readonly final: boolean;
 }): Promise<RecordingUploadResult> {
-  const now = Date.now();
-  for (const [id, upload] of uploads) {
-    if (now - upload.touched > ABANDONED_AFTER_MS) uploads.delete(id);
-  }
-  for (const [id, entry] of finished) {
-    if (now - entry.at > ABANDONED_AFTER_MS) finished.delete(id);
-  }
-  const done = finished.get(input.id);
-  if (done && done.owner === input.owner) {
-    return speech(input.owner, { action: "status", id: input.id }).then((state) => ({
-      kind: "state" as const,
-      state,
-    }));
-  }
-  const existing = uploads.get(input.id);
-  if (existing && existing.owner !== input.owner) {
-    return Promise.reject(new Error("Recording identifier is already in use."));
-  }
-  const upload: Upload = existing ?? {
-    owner: input.owner,
-    started: false,
-    bytes: Buffer.alloc(0),
-    pcmSent: 0,
-    sequence: 0,
-    touched: now,
-    queue: Promise.resolve(),
-  };
-  uploads.set(input.id, upload);
-  const result = upload.queue.then(() => receive(upload, input));
-  upload.queue = result.catch(() => undefined);
+  const previous = queues.get(input.id) ?? Promise.resolve();
+  const result = previous.then(() => receive(input));
+  const settled = result.catch(() => undefined);
+  queues.set(input.id, settled);
+  void settled.then(() => {
+    if (queues.get(input.id) === settled) queues.delete(input.id);
+  });
   return result;
 }
 
+async function readMeta(file: string): Promise<Meta | null> {
+  try {
+    return JSON.parse(await NodeFSP.readFile(file, "utf8")) as Meta;
+  } catch {
+    return null;
+  }
+}
+
+async function writeMeta(file: string, meta: Meta) {
+  const temporary = `${file}.tmp`;
+  await NodeFSP.writeFile(temporary, JSON.stringify(meta));
+  await NodeFSP.rename(temporary, file);
+}
+
 async function receive(
-  upload: Upload,
   input: Parameters<typeof submitRecording>[0],
 ): Promise<RecordingUploadResult> {
-  upload.touched = Date.now();
-  if (input.offset > upload.bytes.byteLength) {
-    return { kind: "gap", expected: upload.bytes.byteLength };
+  const folder = NodePath.join(input.directory, "dictation-uploads", input.id);
+  await NodeFSP.mkdir(folder, { recursive: true, mode: 0o700 });
+  const audioFile = NodePath.join(folder, "audio.aac");
+  const metaFile = NodePath.join(folder, "meta.json");
+  const meta: Meta = (await readMeta(metaFile)) ?? {
+    owner: input.owner,
+    project: input.project,
+    started: false,
+    framesSent: 0,
+    frameOffset: 0,
+    finished: false,
+  };
+  if (meta.owner !== input.owner) throw new Error("Recording identifier is already in use.");
+  if (meta.finished) {
+    return { kind: "state", state: await speech(input.owner, { action: "status", id: input.id }) };
   }
-  if (!upload.started) {
-    await speech(input.owner, { action: "start", id: input.id, project: input.project });
-    upload.started = true;
-  }
-  const fresh = input.audio.subarray(upload.bytes.byteLength - input.offset);
-  if (fresh.byteLength > 0) upload.bytes = Buffer.concat([upload.bytes, fresh]);
 
-  let pcm: Buffer | null = null;
-  try {
-    pcm = await decodeToPcm(upload.bytes);
-  } catch (cause) {
-    // Too little audio for a whole frame yet; the next upload decodes it.
-    if (input.final) throw cause;
-  }
-  if (pcm) {
-    const end = input.final
-      ? pcm.byteLength
-      : Math.max(upload.pcmSent, (pcm.byteLength - HOLD_BACK_BYTES) & ~1);
-    for (let offset = upload.pcmSent; offset < end; offset += CHUNK_BYTES) {
-      await speech(input.owner, {
-        action: "append",
-        id: input.id,
-        sequence: upload.sequence++,
-        audio: pcm.subarray(offset, Math.min(offset + CHUNK_BYTES, end)).toString("base64"),
-      });
+  // 1. Keep what arrived, before anything can fail.
+  const size = await NodeFSP.stat(audioFile).then(
+    (stat) => stat.size,
+    () => 0,
+  );
+  if (input.offset > size) return { kind: "gap", expected: size };
+  const fresh = input.audio.subarray(size - input.offset);
+  if (size + fresh.byteLength > RECORDING_MAX_BYTES) throw new Error("The recording is too long.");
+  if (fresh.byteLength > 0) {
+    const handle = await NodeFSP.open(audioFile, "a", 0o600);
+    try {
+      await handle.write(fresh);
+      await handle.sync();
+    } finally {
+      await handle.close();
     }
-    upload.pcmSent = end;
   }
+  const audio = await NodeFSP.readFile(audioFile);
+
+  // 2. Pass it on to the speech service.
+  if (!meta.started) {
+    // Harmless for a recording the speech service already holds (this server lost its notes).
+    await speech(input.owner, { action: "start", id: input.id, project: input.project });
+    meta.started = true;
+    await writeMeta(metaFile, meta);
+  }
+  const whole = input.offset === 0 && input.final && meta.framesSent === 0 && !isAdts(audio);
+  const batch = whole
+    ? { pcm: await decodeToPcm(audio), frames: 0, offset: 0, pcmStart: 0 }
+    : await decodeNewFrames(audio, meta);
+  const sent = await pass(input, batch);
+  meta.framesSent += batch.frames;
+  meta.frameOffset = batch.offset;
+  await writeMeta(metaFile, meta);
+
   if (!input.final) {
     return { kind: "state", state: await speech(input.owner, { action: "status", id: input.id }) };
   }
-  if (upload.pcmSent === 0) throw new Error("The recording contains no audio.");
+  if (sent === 0) throw new Error("The recording contains no audio.");
   const state = await speech(input.owner, { action: "finish", id: input.id });
-  uploads.delete(input.id);
-  finished.set(input.id, { owner: input.owner, at: Date.now() });
+  meta.finished = true;
+  await writeMeta(metaFile, meta);
   return { kind: "state", state };
+}
+
+const isAdts = (audio: Uint8Array) =>
+  audio.length >= 2 && audio[0] === 0xff && (audio[1]! & 0xf0) === 0xf0;
+
+type Batch = {
+  readonly pcm: Buffer;
+  readonly frames: number;
+  readonly offset: number;
+  /** Where `pcm` starts in the recording's PCM. */
+  readonly pcmStart: number;
+};
+
+/** PCM of the complete frames not sent yet; `meta` moves past them once they are passed on. */
+async function decodeNewFrames(audio: Buffer, meta: Meta): Promise<Batch> {
+  const { frames, end, rate } = adtsFrames(audio, meta.frameOffset);
+  const frameBytes = Math.round((SAMPLES_PER_FRAME * 16000) / rate) * 2;
+  const pcmStart = meta.framesSent * frameBytes;
+  if (frames.length === 0)
+    return { pcm: Buffer.alloc(0), frames: 0, offset: meta.frameOffset, pcmStart };
+  // Back up to warm the decoder; those frames' samples are dropped again.
+  const back = Math.min(OVERLAP_FRAMES, meta.framesSent);
+  const start = back > 0 ? adtsFrames(audio, 0).frames[meta.framesSent - back]! : meta.frameOffset;
+  const decoded = await decodeToPcm(audio.subarray(start, end), "aac");
+  const pcm = decoded.subarray(Math.min(back * frameBytes, decoded.length));
+  return { pcm, frames: frames.length, offset: end, pcmStart };
+}
+
+/**
+ * Appends a batch to the speech service. It holds `bytes` of PCM already and
+ * expects `sequence` next; that may be more of this batch than this server
+ * knows (an upload that failed halfway, a crash between its reply and our
+ * notes, lost notes): what it has is skipped. Returns the PCM it then holds.
+ */
+async function pass(input: Parameters<typeof submitRecording>[0], batch: Batch): Promise<number> {
+  const held = await speech(input.owner, { action: "status", id: input.id });
+  let sequence = held.sequence ?? 0;
+  let bytes = held.bytes;
+  for (
+    let offset = Math.max(0, bytes - batch.pcmStart);
+    offset < batch.pcm.byteLength;
+    offset += CHUNK_BYTES
+  ) {
+    const chunk = batch.pcm.subarray(offset, Math.min(offset + CHUNK_BYTES, batch.pcm.byteLength));
+    await speech(input.owner, {
+      action: "append",
+      id: input.id,
+      sequence,
+      audio: chunk.toString("base64"),
+    });
+    sequence += 1;
+    bytes += chunk.byteLength;
+  }
+  return bytes;
 }

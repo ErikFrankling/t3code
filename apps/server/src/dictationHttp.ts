@@ -19,6 +19,7 @@ import {
 } from "effect/http";
 import { DICTATION_AUDIO_MAX_BYTES, submitRecording } from "./dictationAudio.ts";
 import { DictationDelivery, speechServiceUrl } from "./DictationDelivery.ts";
+import * as ServerConfig from "./config.ts";
 import { authenticateRawRouteWithScope } from "./http.ts";
 
 const decodeDictationRequest = Schema.decodeUnknownEffect(DictationRequest);
@@ -87,6 +88,7 @@ export const layerDictationAudioRoute = HttpRouter.add(
     const request = yield* HttpServerRequest.HttpServerRequest;
     const query = new URL(request.url, "http://localhost").searchParams;
     const id = query.get("id") ?? "";
+    const config = yield* ServerConfig.ServerConfig;
     if (!RECORDING_ID.test(id)) {
       return HttpServerResponse.text("Invalid recording identifier.", { status: 400 });
     }
@@ -107,6 +109,7 @@ export const layerDictationAudioRoute = HttpRouter.add(
     }
     const result = yield* Effect.tryPromise(() =>
       submitRecording({
+        directory: config.stateDir,
         owner: session.subject,
         id,
         project: query.get("project") ?? "",
