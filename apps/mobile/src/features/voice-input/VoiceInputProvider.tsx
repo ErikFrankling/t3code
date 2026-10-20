@@ -6,7 +6,7 @@ import {
   requestRecordingPermissionsAsync,
   type RecordingStatus,
 } from "expo-audio";
-import { File } from "expo-file-system";
+import { Directory, File, Paths } from "expo-file-system";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import { useSyncExternalStore } from "react";
 import { AppState, Platform } from "react-native";
@@ -53,6 +53,9 @@ const VOICE_RECORDING_OPTIONS = {
   // (MPEG-4 is unreadable until stopped). Speech needs no more than 16 kHz mono.
   ...(Platform.OS === "android"
     ? {
+        // Kept in the app's documents, not the cache Android may clear: a recording
+        // survives the app being killed or the phone dying, and is offered again.
+        directory: "document" as const,
         extension: ".aac",
         outputFormat: "aac_adts",
         audioEncoder: "aac",
@@ -179,7 +182,26 @@ const voiceInputAtom = Atom.make((get) => {
     streamPhase = phase;
     if (phase === "recording") beginDictationStream(recorder.uri, session.ownerKey);
     else if (phase === "idle" || phase === "error") endDictationStream();
+    if (phase === "idle") offerKeptRecording();
   });
+  // A recording is deleted only once its words reached the chat or the draft,
+  // so any file still here when dictation is idle is one that did not (the app
+  // was killed, the phone died, a stop failed): offer it with Retry and Save.
+  const offerKeptRecording = () => {
+    const controller = session.controller;
+    if (Platform.OS !== "android" || controller.currentState.phase !== "idle") return;
+    if (controller.failedRecording) return;
+    const kept = keptRecordings();
+    const newest = kept[0];
+    if (!newest) return;
+    controller.adoptKeptRecording(
+      newest.uri,
+      kept.length > 1
+        ? `${kept.length} recordings were kept and not sent yet.`
+        : "A recording was kept and not sent yet.",
+    );
+  };
+  offerKeptRecording();
   // The next recording uses the recorder for the mode: the call's own while
   // voice mode runs, expo-audio's otherwise.
   const unsubscribeVoiceCall = voiceCall.subscribe(() => recorder.release());
@@ -205,4 +227,48 @@ export function useGlobalVoiceInput() {
     stop: () => session.controller.stop(),
     cancel: () => session.controller.cancel(),
   };
+}
+
+/** Recordings on the device that were never sent or put into a draft, newest first. */
+function keptRecordings(): File[] {
+  const files: File[] = [];
+  const add = (directory: Directory, match: (name: string) => boolean) => {
+    try {
+      if (!directory.exists) return;
+      for (const entry of directory.list()) {
+        if (entry instanceof File && match(entry.name) && (entry.size ?? 0) > 0) files.push(entry);
+      }
+    } catch {}
+  };
+  add(new Directory(Paths.document, "Audio"), (name) => name.endsWith(".aac"));
+  // Where recordings were kept before (the cache), in case an old one survived.
+  add(new Directory(Paths.cache, "Audio"), (name) => name.endsWith(".aac"));
+  // Voice mode's turns (they were kept in the cache before).
+  add(
+    new Directory(Paths.cache),
+    (name) => name.startsWith("voice-call-") && name.endsWith(".aac"),
+  );
+  return files.sort((a, b) => (b.modificationTime ?? 0) - (a.modificationTime ?? 0));
+}
+
+/** Recordings on the device that were never sent or put into a draft, newest first. */
+function keptRecordings(): File[] {
+  const files: File[] = [];
+  const add = (directory: Directory, match: (name: string) => boolean) => {
+    try {
+      if (!directory.exists) return;
+      for (const entry of directory.list()) {
+        if (entry instanceof File && match(entry.name) && (entry.size ?? 0) > 0) files.push(entry);
+      }
+    } catch {}
+  };
+  add(new Directory(Paths.document, "Audio"), (name) => name.endsWith(".aac"));
+  // Where recordings were kept before (the cache), in case an old one survived.
+  add(new Directory(Paths.cache, "Audio"), (name) => name.endsWith(".aac"));
+  // Voice mode's turns (they were kept in the cache before).
+  add(
+    new Directory(Paths.cache),
+    (name) => name.startsWith("voice-call-") && name.endsWith(".aac"),
+  );
+  return files.sort((a, b) => (b.modificationTime ?? 0) - (a.modificationTime ?? 0));
 }
