@@ -1,6 +1,7 @@
 import * as Dialog from "../../components/ui/Dialog";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import Constants from "expo-constants";
+import * as Updates from "expo-updates";
 import { settlePromise } from "@t3tools/client-runtime/state/runtime";
 import { useRef, useState } from "react";
 import { Pressable, View } from "react-native";
@@ -54,6 +55,7 @@ function AppSettingsSection() {
   const variant = (Constants.expoConfig?.extra?.appVariant as string | undefined) ?? "production";
   const variantLabel = variant === "production" ? "" : capitalize(variant);
   const versionLabel = variantLabel ? `${version} · ${variantLabel}` : version;
+  const buildLabel = describeRunningBuild(version);
   const updateCheckAvailable = isAppUpdateCheckAvailable();
   const busy =
     updateState === "checking" || updateState === "downloading" || updateState === "restarting";
@@ -113,6 +115,8 @@ function AppSettingsSection() {
         <Text className="text-lg text-foreground-muted">{versionLabel}</Text>
         {statusLabel ? (
           <Text className="text-xs text-foreground-muted/70">{statusLabel}</Text>
+        ) : buildLabel ? (
+          <Text className="text-xs text-foreground-muted/70">{buildLabel}</Text>
         ) : null}
       </View>
     </View>
@@ -142,6 +146,28 @@ function AppSettingsSection() {
       )}
     </SettingsSection>
   );
+}
+
+/**
+ * Which native build and JS update are running, e.g.
+ * "erik.202610210130.3313e63 · JS Oct 21, 02:10". Erik's fork updates itself
+ * (docs/erik-updates.md), so this is how to tell what arrived.
+ */
+function describeRunningBuild(version: string): string | null {
+  const parts: string[] = [];
+  const native = Constants.nativeAppVersion;
+  if (native && native !== version) parts.push(native.replace(`${version}-`, ""));
+  if (Updates.isEnabled && !Updates.isEmbeddedLaunch && Updates.createdAt) {
+    parts.push(
+      `JS ${Updates.createdAt.toLocaleString(undefined, {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })}`,
+    );
+  }
+  return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 function capitalize(value: string): string {
