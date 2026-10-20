@@ -110,6 +110,7 @@ import { pruneNewTaskFlowStates } from "./features/threads/new-task-flow-state";
 import { pruneNewTaskBranchCheckouts } from "./features/threads/NewTaskDraftRouteScreen";
 import { installAppUpdateChecks } from "./features/updates/app-updates";
 import { perfProbe } from "./features/development/perf-probe-hooks";
+import { startErikAutoUpdates } from "./features/updates/erik-auto-update";
 
 import "../global.css";
 
@@ -199,6 +200,12 @@ function handleNavigationReady(): void {
 
 declare const module: { readonly hot?: FoundationHotModule } | undefined;
 
+// The fork's own signed OTA and APK self-update; upstream's check above only sees its own channel.
+function installErikAutoUpdates(): () => void {
+  startErikAutoUpdates();
+  return () => undefined;
+}
+
 const appServiceDisposers = [
   installUiRuntimeMemoryWarningGc(),
   subscribeComposerDraftModelReconciliation({
@@ -217,6 +224,7 @@ const appServiceDisposers = [
   installAgentNotificationNavigation(linkToAppPath),
   installAppShortcuts(linkToAppPath),
   installAppUpdateChecks(),
+  installErikAutoUpdates(),
   installShowcaseCapture(rootPathnameFromState),
 ];
 disposeOnFoundationReplace(typeof module === "undefined" ? undefined : module.hot, () => {
