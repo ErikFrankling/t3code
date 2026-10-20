@@ -28,6 +28,7 @@ import { StackActions, useFocusEffect, useNavigation } from "@react-navigation/n
 import type { ReactNode } from "react";
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { Keyboard, Platform, Pressable, View, type ViewStyle } from "react-native";
+import { useComposerEditorMaxHeight } from "./composerEditorHeight";
 import { composerImageGallery } from "../../lib/composerImageGallery";
 import { filePreviewGallery } from "../../lib/filePreviewGallery";
 import { FilePreviewModal, type FilePreviewSource } from "../../components/FilePreviewModal";
@@ -337,6 +338,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
   const navigation = useNavigation();
   const foregroundColor = useUniwindTheme()["--color-foreground"];
   const bodyText = useScaledTextRole("body");
+  const editorMaxHeight = useComposerEditorMaxHeight();
   const fallbackInputRef = useRef<ComposerEditorHandle>(null);
   const inputRef = props.editorRef ?? fallbackInputRef;
   const [isFocused, setIsFocused] = useState(false);
@@ -932,7 +934,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                   isExpanded
                     ? {
                         minHeight: 72,
-                        maxHeight: 160,
+                        maxHeight: editorMaxHeight,
                         paddingVertical: 4,
                       }
                     : {

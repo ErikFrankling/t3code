@@ -98,6 +98,9 @@ interface NativeComposerEditorProps extends ViewProps {
   readonly onComposerPasteText?: (event: NativePasteTextEvent) => void;
   readonly onComposerFocus?: () => void;
   readonly onComposerBlur?: () => void;
+  readonly onComposerContentSizeChange?: (
+    event: NativeSyntheticEvent<{ readonly height: number }>,
+  ) => void;
 }
 
 const NativeView = requireNativeView<NativeComposerEditorProps>(NATIVE_MODULE_NAME);
@@ -130,6 +133,20 @@ export function ComposerEditor({
   const mostRecentEventCountRef = useRef(0);
   const [mostRecentEventCount, setMostRecentEventCount] = useState(0);
   const [, forceNativeEventRender] = useState(0);
+  // The native view reports its text height but has no intrinsic size, so the
+  // editor grows only when it is given that height. The caller's minHeight and
+  // maxHeight clamp it; past the max the native view scrolls. A caller that
+  // sets a fixed height (the collapsed composer) keeps it.
+  const [contentHeight, setContentHeight] = useState<number | null>(null);
+  const wrapperStyle = StyleSheet.flatten(style) ?? {};
+  const verticalPadding = (edge: "paddingTop" | "paddingBottom") => {
+    const value = wrapperStyle[edge] ?? wrapperStyle.paddingVertical ?? wrapperStyle.padding;
+    return typeof value === "number" ? value : 0;
+  };
+  const grownHeight =
+    contentHeight === null || wrapperStyle.height !== undefined
+      ? undefined
+      : contentHeight + verticalPadding("paddingTop") + verticalPadding("paddingBottom");
   // The native editor mounts empty, so the snapshot history starts empty: the
   // first controlled payload must be a non-echo so a restored draft (or a
   // recycled native view) is applied rather than skipped.
@@ -259,7 +276,10 @@ export function ComposerEditor({
   const resolvedTextStyle = StyleSheet.flatten(textStyle) ?? {};
   const regularFontFamily = FONT_FAMILIES.regular;
   return (
-    <TextInputWrapper onPaste={handlePaste} style={[{ minHeight: 0 }, style]}>
+    <TextInputWrapper
+      onPaste={handlePaste}
+      style={[{ minHeight: 0 }, style, grownHeight === undefined ? null : { height: grownHeight }]}
+    >
       <NativeView
         ref={nativeRef}
         controlledDocumentJson={controlledDocumentJson}
@@ -292,6 +312,7 @@ export function ComposerEditor({
         textPasteThresholdBytes={onPasteText ? PASTED_TEXT_ATTACHMENT_THRESHOLD_BYTES : 0}
         maxInputChars={PROVIDER_SEND_TURN_MAX_INPUT_CHARS}
         style={{ flex: 1, minHeight: 0 }}
+        onComposerContentSizeChange={(event) => setContentHeight(event.nativeEvent.height)}
         onComposerChange={(event) => {
           const acknowledgedEventCount = acceptNativeEvent(
             event.nativeEvent.eventCount,
