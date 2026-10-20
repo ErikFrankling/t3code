@@ -30,6 +30,7 @@ import { useAtomValueWhileVisible, useHomeRouteVisible } from "./home-route-visi
 import { buildHomeProjectScopes } from "./homeThreadList";
 import { usePendingTaskListActions } from "./usePendingTaskListActions";
 import { useThreadListActions } from "./useThreadListActions";
+import { usePersonalAgentEntry } from "./usePersonalAgentEntry";
 import { getConnectionAwareBrandHeaderOptions } from "./WorkspaceConnectionTitle";
 import { useWorkspaceTabs } from "../workspace/WorkspaceTabsContext";
 import { openSettings } from "../settings/settings-navigation";
@@ -147,6 +148,12 @@ export function HomeRouteScreen() {
       sidebarProjectGroupingOverrides: {},
     },
   );
+  const personalAgent = usePersonalAgentEntry({
+    environments,
+    selectedEnvironmentId,
+    threads,
+    onSelectThread: handleSelectThread,
+  });
   const projectFilterOptions = useMemo(
     () =>
       buildHomeProjectScopes({
@@ -276,6 +283,7 @@ export function HomeRouteScreen() {
           }}
           onStartNewTask={startNewTask}
           pendingTasks={pendingTasks}
+          personalAgent={personalAgent}
           projectGroupingMode={listOptions.projectGroupingMode}
           projects={projects}
           projectSortOrder={listOptions.projectSortOrder}
