@@ -55,6 +55,7 @@ import {
 import {
   AuthOrchestrationOperateScope,
   ProjectId,
+  PERSONAL_AGENT_THREAD_ID,
   type ScopedThreadRef,
   type ThreadId,
 } from "@t3tools/contracts";
@@ -617,7 +618,8 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
     const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
     if (configLoaded) {
       activeReorderable.add(threadKey);
-      draggable.add(threadKey);
+      // The personal agent always leads the pinned block, so it has no slot to drag to.
+      if (thread.id !== PERSONAL_AGENT_THREAD_ID) draggable.add(threadKey);
     }
     if (optimisticDrop?.key === threadKey) {
       const projected = applySidebarThreadDrop(
@@ -3504,6 +3506,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       </SidebarContent>
       <SidebarChromeFooter
         showUndoNotice={isSearchingThreads || sidebarListItemsFresh.length === 0}
+        personalAgentListed={pinnedThreads.some((thread) => thread.id === PERSONAL_AGENT_THREAD_ID)}
       />
     </>
   );
