@@ -45,10 +45,10 @@ export function useVoiceInputController(input: {
     }, [input.ownerKey, session]),
   );
 
-  const start = useCallback(() => {
+  const target = useCallback(() => {
     const captured = latestInput.current;
-    if (!captured.ownerKey || captured.disabled) return Promise.resolve();
-    return session.start({
+    if (!captured.ownerKey || captured.disabled) return null;
+    return {
       ...createVoiceInputTarget(
         captured.ownerKey,
         captured.readDraftMessage,
@@ -63,9 +63,23 @@ export function useVoiceInputController(input: {
       ),
       label: captured.label,
       ...(captured.dictation ? { dictation: captured.dictation } : {}),
-    });
-  }, [session]);
-  const state = global.ownerKey === input.ownerKey ? global.state : IDLE_STATE;
+    };
+  }, []);
+  const start = useCallback(() => {
+    const next = target();
+    return next ? session.start(next) : Promise.resolve();
+  }, [session, target]);
+  // A recording kept from a failed stop or from before the app closed: Retry
+  // transcribes it into this composer's draft; discarding needs a confirmation.
+  const retryFailed = useCallback(() => {
+    const next = target();
+    return next ? session.retryFailed(next) : Promise.resolve();
+  }, [session, target]);
+  const discardFailed = useCallback(() => session.controller.discardFailed(), [session]);
+  const cancelAndDelete = useCallback(() => session.controller.cancelAndDelete(), [session]);
+  // A kept recording found at launch belongs to no composer yet: every composer shows it.
+  const unowned = global.ownerKey === null && global.state.phase === "error";
+  const state = global.ownerKey === input.ownerKey || unowned ? global.state : IDLE_STATE;
   const isBusy = voiceInputBlocksSubmission(state);
   return {
     isAvailable: global.isAvailable && (!global.isBusy || global.ownerKey === input.ownerKey),
@@ -76,6 +90,10 @@ export function useVoiceInputController(input: {
     freezesEditor: isBusy,
     blocksSubmission: isBusy,
     start,
+    retryFailed,
+    discardFailed,
+    cancelAndDelete,
+    failedRecording: session.controller.failedRecording,
     stop: global.stop,
     cancel: global.cancel,
   };

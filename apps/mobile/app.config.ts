@@ -362,7 +362,8 @@ const config: ExpoConfig = {
         // Android dictation records here and transcribes on the environment.
         recordAudioAndroid: true,
         enableBackgroundPlayback: false,
-        enableBackgroundRecording: false,
+        // A dictation keeps recording with the screen locked or another screen on top.
+        enableBackgroundRecording: true,
       },
     ],
     [
