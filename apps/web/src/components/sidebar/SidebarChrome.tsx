@@ -1,4 +1,10 @@
-import { ArrowLeftIcon, ArrowRightIcon, ChartNoAxesColumnIcon, SettingsIcon, SparklesIcon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  ChartNoAxesColumnIcon,
+  SettingsIcon,
+  SparklesIcon,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { memo } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
@@ -311,12 +317,17 @@ const SidebarPersonalAgentItem = memo(function SidebarPersonalAgentItem() {
   );
 });
 
-export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
+export const SidebarChromeFooter = memo(function SidebarChromeFooter({
+  personalAgentListed = false,
+}: {
+  /** The thread already leads the pinned list, so the footer shortcut would repeat it. */
+  personalAgentListed?: boolean;
+}) {
   return (
     <SidebarFooter>
       <SidebarProviderUpdatePill />
       <SidebarUpdateArchitectureWarning />
-      <SidebarPersonalAgentItem />
+      {personalAgentListed ? null : <SidebarPersonalAgentItem />}
       <SidebarUtilityMenu />
     </SidebarFooter>
   );
