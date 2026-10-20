@@ -266,6 +266,14 @@ describe("custom model settings", () => {
   });
 });
 
+describe("ClaudeSettings shared sessions", () => {
+  it("keeps existing settings isolated and trims explicit group names", () => {
+    expect(decodeClaudeSettings({}).sharedSessionGroup).toBe("");
+    expect(decodeClaudeSettings({ sharedSessionGroup: "  max  " }).sharedSessionGroup).toBe("max");
+    expect(decodeClaudeSettings({ sharedSessionGroup: "   " }).sharedSessionGroup).toBe("");
+  });
+});
+
 describe("ClaudeSettings auto-compaction", () => {
   it("uses Claude's default threshold when no override is configured", () => {
     expect(decodeClaudeSettings({}).autoCompactWindow).toBe("");

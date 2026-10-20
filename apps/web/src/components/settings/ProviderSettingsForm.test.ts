@@ -101,6 +101,7 @@ describe("ProviderSettingsForm helpers", () => {
     expect(deriveProviderSettingsFields(claude!).map((field) => field.key)).toEqual([
       "binaryPath",
       "homePath",
+      "sharedSessionGroup",
       "autoCompactWindow",
       "launchArgs",
     ]);

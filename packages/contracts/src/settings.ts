@@ -645,6 +645,15 @@ export const ClaudeSettings = makeProviderSettingsSchema(
         },
       }),
     ),
+    sharedSessionGroup: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "Shared session group",
+        description:
+          "Allow resuming sessions across Claude instances with the same group. First link their projects directories to the same transcript store. Leave empty to keep config directories isolated.",
+        providerSettingsForm: { placeholder: "e.g. personal-max", clearWhenEmpty: "omit" },
+      }),
+    ),
     autoCompactWindow: TrimmedString.check(
       Schema.isPattern(CLAUDE_AUTO_COMPACT_WINDOW_PATTERN),
     ).pipe(
@@ -661,7 +670,7 @@ export const ClaudeSettings = makeProviderSettingsSchema(
     ),
   },
   {
-    order: ["binaryPath", "homePath", "autoCompactWindow", "launchArgs"],
+    order: ["binaryPath", "homePath", "sharedSessionGroup", "autoCompactWindow", "launchArgs"],
   },
 );
 export type ClaudeSettings = typeof ClaudeSettings.Type;
