@@ -188,6 +188,14 @@ describe("custom model settings", () => {
   });
 });
 
+describe("ClaudeSettings shared sessions", () => {
+  it("keeps existing settings isolated and trims explicit group names", () => {
+    expect(decodeClaudeSettings({}).sharedSessionGroup).toBe("");
+    expect(decodeClaudeSettings({ sharedSessionGroup: "  max  " }).sharedSessionGroup).toBe("max");
+    expect(decodeClaudeSettings({ sharedSessionGroup: "   " }).sharedSessionGroup).toBe("");
+  });
+});
+
 describe("resolveIdleCompaction", () => {
   it("lets a Claude instance override the global default", () => {
     const settings = decodeServerSettings({
