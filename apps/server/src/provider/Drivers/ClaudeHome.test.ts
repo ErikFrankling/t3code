@@ -14,6 +14,37 @@ import {
 
 it.layer(NodeServices.layer)("ClaudeHome", (it) => {
   describe("Claude home resolution", () => {
+    it.effect(
+      "shares continuation only for explicitly matching groups, without sharing account state",
+      () =>
+        Effect.gen(function* () {
+          const first = {
+            binaryPath: "claude",
+            homePath: "~/.claude",
+            sharedSessionGroup: " max ",
+          };
+          const second = { ...first, homePath: "~/.claude_2", sharedSessionGroup: "max" };
+          const key = yield* makeClaudeContinuationGroupKey(first);
+          expect(key).toBe("claude:shared:max");
+          expect(yield* makeClaudeContinuationGroupKey(second)).toBe(key);
+          expect(
+            yield* makeClaudeContinuationGroupKey({ ...second, sharedSessionGroup: "other" }),
+          ).not.toBe(key);
+          expect(
+            yield* makeClaudeContinuationGroupKey({ ...second, sharedSessionGroup: "" }),
+          ).not.toBe(key);
+          expect(
+            yield* makeClaudeContinuationGroupKey({ ...second, sharedSessionGroup: "   " }),
+          ).toBe(yield* makeClaudeContinuationGroupKey({ homePath: second.homePath }));
+          expect(yield* makeClaudeEnvironment(first)).not.toEqual(
+            yield* makeClaudeEnvironment(second),
+          );
+          expect(yield* makeClaudeCapabilitiesCacheKey(first)).not.toBe(
+            yield* makeClaudeCapabilitiesCacheKey(second),
+          );
+        }),
+    );
+
     it.effect("resolves configured Claude HOME and stamps continuation/cache keys with it", () =>
       Effect.gen(function* () {
         const path = yield* Path.Path;
