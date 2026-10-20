@@ -1659,6 +1659,13 @@ export const ThreadDetailScreen = function ThreadDetailScreen(props: ThreadDetai
                           environmentId={props.environmentId}
                           latest={latestReadableAssistantMessage(props.selectedThreadFeed)}
                           onVoiceMode={voiceMode.open}
+                          // The working/agents pill and the scroll-to-end button float
+                          // in the same strip above the composer.
+                          bottomOffset={
+                            showFloatingStatus || showScrollToEndButton
+                              ? FLOATING_WORKING_CONTROL_COVERAGE
+                              : 0
+                          }
                         />
                       </View>
                       <VoiceModeHost
