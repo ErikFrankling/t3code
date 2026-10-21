@@ -5,12 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.media.AudioAttributes
-import android.media.AudioDeviceInfo
-import android.media.AudioFormat
 import android.media.AudioManager
-import android.media.AudioTrack
-import android.media.MediaRecorder
 import android.media.VolumeProvider
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
@@ -27,31 +22,33 @@ import com.facebook.react.bridge.UiThreadUtil
 import com.facebook.react.jstasks.HeadlessJsTaskConfig
 import com.facebook.react.jstasks.HeadlessJsTaskContext
 import java.io.File
-import kotlin.math.log10
 
 /**
- * Voice mode on Android: one "call" from turning it on until hanging up.
+ * Voice mode on Android: one phone call from turning it on until hanging up.
  *
- * - The foreground service keeps the microphone and playback usable from the
- *   background; a wake lock keeps the CPU up between turns.
- * - A headless JS task keeps React Native's timers running while the app is
- *   in the background (they stop otherwise, and polling with them).
- * - A media session takes the earbud button, and while you talk, the volume
- *   keys: a remote volume provider gets the presses without changing the
- *   volume. Where a phone routes them elsewhere, a changed stream volume
- *   counts as a press and is put back.
- * - Recording goes to an AAC (ADTS) file that can be uploaded while it grows,
- *   as the normal dictation does, from a Bluetooth headset's microphone when
- *   one is connected.
+ * The audio is set up once, at the start, and held until the end: focus,
+ * communication mode and one route ([CallAudioSession]), one speaker
+ * ([VoicePlayer], which plays the replies and silence in between) and one open
+ * microphone ([VoiceCapture]). A turn only starts or stops encoding what the
+ * microphone already hears; nothing switches the mode or the route between
+ * turns, so a Bluetooth headset stays on its call profile the whole time
+ * (switching it in and out of a call for every turn made the audio glitch).
+ * [AudioLog] records every mode and route change.
+ *
+ * Around it: a foreground service keeps the microphone and the speaker usable
+ * with the screen off, a wake lock keeps the CPU up between turns, and a
+ * headless JS task keeps React Native's timers running in the background. A
+ * media session takes the earbud button and, while you talk, the volume keys
+ * (a remote volume provider, so the volume does not change); a headset
+ * hanging up its call link counts as a tap (see CallAudioSession).
  */
 @SuppressLint("StaticFieldLeak")
 object VoiceCall {
-  var listener: ((String) -> Unit)? = null
+  var listener: ((String, Map<String, Any>) -> Unit)? = null
 
   private val main = Handler(Looper.getMainLooper())
   private var context: Context? = null
   private var session: MediaSession? = null
-  private var silence: AudioTrack? = null
   private var wakeLock: PowerManager.WakeLock? = null
   private var taskContext: HeadlessJsTaskContext? = null
   private var taskId: Int? = null
@@ -59,31 +56,36 @@ object VoiceCall {
   private var volumeReceiver: BroadcastReceiver? = null
   private var restoringVolume = false
   private var lastPress = 0L
-
-  private var recorder: MediaRecorder? = null
+  private var audioSession: CallAudioSession? = null
+  private var player: VoicePlayer? = null
+  private var capture: VoiceCapture? = null
   private var recordingFile: File? = null
-  private var recordingStarted = 0L
-  private var bluetooth = false
 
   val active: Boolean
     get() = context != null
 
-  fun emit(event: String) {
-    main.post { listener?.invoke(event) }
+  fun emit(event: String, data: Map<String, Any> = emptyMap()) {
+    main.post { listener?.invoke(event, data) }
   }
 
-  /** One press per gesture: the session and the volume fallback can both see it. */
-  private fun press(event: String) {
+  /** One press per gesture: several paths can see the same one. */
+  private fun press(event: String, data: Map<String, Any> = emptyMap()) {
     val now = SystemClock.elapsedRealtime()
     if (now - lastPress < 700) return
     lastPress = now
-    emit(event)
+    emit(event, data)
+  }
+
+  private fun sessionEvent(event: String, data: Map<String, Any>) {
+    AudioLog.write("event $event $data")
+    emit(event, data)
   }
 
   fun start(appContext: Context, reactContext: ReactContext?) {
     if (context != null) return
     val ctx = appContext.applicationContext
     context = ctx
+    AudioLog.open(ctx, main)
     ContextCompat.startForegroundService(ctx, Intent(ctx, VoiceCallService::class.java))
     wakeLock =
       ctx.getSystemService(PowerManager::class.java)
@@ -92,26 +94,21 @@ object VoiceCall {
           setReferenceCounted(false)
           acquire()
         }
-    session =
-      MediaSession(ctx, "t3code-voice-call").apply {
-        setCallback(
-          object : MediaSession.Callback() {
-            override fun onMediaButtonEvent(intent: Intent): Boolean {
-              val event = mediaButton(intent) ?: return super.onMediaButtonEvent(intent)
-              if (event.action == KeyEvent.ACTION_UP) press("button")
-              return true
-            }
-
-            override fun onPlay() = press("button")
-
-            override fun onPause() = press("button")
-          },
-          main,
-        )
-        setPlaybackState(playbackState(PlaybackState.STATE_PLAYING))
-        isActive = true
-      }
-    silence = silentLoop()
+    try {
+      // Order matters: focus and mode first, then the player and the
+      // microphone (they make the app the mode's owner), then the route.
+      val route = if (Build.VERSION.SDK_INT >= 31) CallAudioSession(ctx, main, ::sessionEvent) else null
+      audioSession = route
+      route?.start()
+      player = VoicePlayer(::emit).apply { start() }
+      capture = VoiceCapture().apply { start() }
+      route?.pickRoute() ?: legacyRoute(ctx)
+      AudioLog.write("call audio held: player and microphone open")
+    } catch (error: Exception) {
+      stop()
+      throw error
+    }
+    session = mediaSession(ctx)
     applyListening()
     if (reactContext != null) {
       UiThreadUtil.runOnUiThread {
@@ -128,15 +125,25 @@ object VoiceCall {
 
   fun stop() {
     val ctx = context ?: return
-    stopRecording()
     setListening(false)
     session?.release()
     session = null
-    silence?.let {
-      it.stop()
-      it.release()
+    capture?.stop()
+    capture = null
+    recordingFile = null
+    // Route, then mode, then focus (CallAudioSession.stop), and the player last
+    // so the mode is never left without its owner.
+    audioSession?.stop()
+    audioSession = null
+    if (Build.VERSION.SDK_INT < 31) ctx.getSystemService(AudioManager::class.java).apply {
+      @Suppress("DEPRECATION")
+      isSpeakerphoneOn = false
+      mode = AudioManager.MODE_NORMAL
     }
-    silence = null
+    player?.stop()
+    player = null
+    // The system reports the switch out of the mode a moment later.
+    main.postDelayed({ if (context == null) AudioLog.close() }, 1500)
     wakeLock?.let { if (it.isHeld) it.release() }
     wakeLock = null
     val tasks = taskContext
@@ -150,38 +157,32 @@ object VoiceCall {
     context = null
   }
 
-  /**
-   * Android gives the earbud button only to a session of an app that is playing
-   * audio; between the replies nothing plays, so the call plays silence.
-   */
-  private fun silentLoop(): AudioTrack? =
-    try {
-      val frames = 16000
-      AudioTrack.Builder()
-        .setAudioAttributes(
-          AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_MEDIA)
-            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-            .build()
-        )
-        .setAudioFormat(
-          AudioFormat.Builder()
-            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-            .setSampleRate(16000)
-            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-            .build()
-        )
-        .setTransferMode(AudioTrack.MODE_STATIC)
-        .setBufferSizeInBytes(frames * 2)
-        .build()
-        .apply {
-          write(ShortArray(frames), 0, frames)
-          setLoopPoints(0, frames, -1)
-          play()
-        }
-    } catch (error: Exception) {
-      android.util.Log.w("T3VoiceCall", "No silent loop", error)
-      null
+  @Suppress("DEPRECATION")
+  private fun legacyRoute(ctx: Context) {
+    val audio = ctx.getSystemService(AudioManager::class.java)
+    audio.mode = AudioManager.MODE_IN_COMMUNICATION
+    audio.isSpeakerphoneOn = true
+    sessionEvent("route", mapOf("kind" to "speaker", "name" to "Speaker"))
+  }
+
+  private fun mediaSession(ctx: Context) =
+    MediaSession(ctx, "t3code-voice-call").apply {
+      setCallback(
+        object : MediaSession.Callback() {
+          override fun onMediaButtonEvent(intent: Intent): Boolean {
+            val event = mediaButton(intent) ?: return super.onMediaButtonEvent(intent)
+            if (event.action == KeyEvent.ACTION_UP) press("button", mapOf("source" to "media"))
+            return true
+          }
+
+          override fun onPlay() = press("button", mapOf("source" to "media"))
+
+          override fun onPause() = press("button", mapOf("source" to "media"))
+        },
+        main,
+      )
+      setPlaybackState(playbackState(PlaybackState.STATE_PLAYING))
+      isActive = true
     }
 
   private fun playbackState(state: Int) =
@@ -212,7 +213,7 @@ object VoiceCall {
     }
   }
 
-  /** While true the volume keys are the turn button; otherwise they set the volume. */
+  /** While true the volume keys are the turn button; otherwise they set the call volume. */
   fun setListening(value: Boolean) {
     listening = value
     applyListening()
@@ -230,7 +231,7 @@ object VoiceCall {
           override fun onAdjustVolume(direction: Int) {
             // Kept mid-range, so a press never hits a limit and gets dropped.
             currentVolume = 5
-            if (direction != 0) press("volume")
+            if (direction != 0) press("volume", mapOf("direction" to if (direction > 0) "up" else "down"))
           }
         }
       )
@@ -245,12 +246,8 @@ object VoiceCall {
         )
       }
     } else {
-      media.setPlaybackToLocal(
-        AudioAttributes.Builder()
-          .setUsage(AudioAttributes.USAGE_MEDIA)
-          .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-          .build()
-      )
+      // The keys then set the volume the call is heard at.
+      media.setPlaybackToLocal(VoicePlayer.VOICE_ATTRIBUTES)
       volumeReceiver?.let { ctx.unregisterReceiver(it) }
       volumeReceiver = null
     }
@@ -273,10 +270,23 @@ object VoiceCall {
         } catch (_: SecurityException) {
           restoringVolume = false
         }
-        press("volume")
+        press("volume", mapOf("direction" to if (value > previous) "up" else "down"))
       }
     }
 
+  // Replies play on the call's route, through the call's one speaker.
+  fun play(id: String, wav: String, speed: Double, startFraction: Double) {
+    AudioLog.write("play $id")
+    (player ?: throw IllegalStateException("Voice mode is not on.")).play(id, wav, speed.toFloat(), startFraction)
+  }
+
+  fun clearPlayback() = player?.clear()
+
+  fun pausePlayback() = player?.pause()
+
+  fun resumePlayback() = player?.resume()
+
+  // A turn: the open microphone's audio goes into a file JS uploads while it grows.
   fun prepareRecording(): String {
     val ctx = context ?: throw IllegalStateException("Voice mode is not on.")
     val file = File(ctx.cacheDir, "voice-call-${System.currentTimeMillis()}.aac")
@@ -284,85 +294,25 @@ object VoiceCall {
     return "file://${file.absolutePath}"
   }
 
-  @Synchronized
-  fun startRecording(preferBluetooth: Boolean) {
-    val ctx = context ?: throw IllegalStateException("Voice mode is not on.")
+  /** Starts encoding the microphone, which is already open; the mode and route stay as they are. */
+  fun startRecording() {
     val file = recordingFile ?: throw IllegalStateException("No recording prepared.")
-    stopRecording()
-    recordingFile = file
-    bluetooth = preferBluetooth && useBluetoothMicrophone(ctx)
-    val media =
-      (if (Build.VERSION.SDK_INT >= 31) MediaRecorder(ctx) else @Suppress("DEPRECATION") MediaRecorder())
-        .apply {
-          setAudioSource(
-            if (bluetooth) MediaRecorder.AudioSource.VOICE_COMMUNICATION
-            else MediaRecorder.AudioSource.MIC
-          )
-          setOutputFormat(MediaRecorder.OutputFormat.AAC_ADTS)
-          setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-          setAudioSamplingRate(16000)
-          setAudioChannels(1)
-          setAudioEncodingBitRate(48000)
-          setOutputFile(file.absolutePath)
-          prepare()
-          start()
-        }
-    recorder = media
-    recordingStarted = SystemClock.elapsedRealtime()
+    (capture ?: throw IllegalStateException("Voice mode is not on.")).begin(file)
+    AudioLog.write("turn start: recording ${file.name}")
   }
 
-  @Synchronized
   fun stopRecording() {
-    val media = recorder ?: return
-    recorder = null
-    try {
-      media.stop()
-    } catch (_: RuntimeException) {
-      // Stopped right after starting: the file is just shorter.
-    }
-    media.release()
-    if (bluetooth) releaseBluetoothMicrophone()
-    bluetooth = false
+    capture?.end()
+    AudioLog.write("turn end")
   }
 
-  fun status(): Map<String, Any> {
-    val media = recorder
-    val amplitude = media?.let { runCatching { it.maxAmplitude }.getOrDefault(0) } ?: 0
-    return mapOf(
-      "isRecording" to (media != null),
-      "durationMillis" to (if (media != null) SystemClock.elapsedRealtime() - recordingStarted else 0L),
-      "metering" to (if (amplitude > 0) 20 * log10(amplitude / 32767.0) else -160.0),
-      "bluetooth" to bluetooth,
-    )
-  }
+  fun status(): Map<String, Any> =
+    (capture?.status() ?: mapOf("isRecording" to false, "durationMillis" to 0L, "metering" to -160.0)) +
+      mapOf("bluetooth" to (route()["kind"] == "bluetooth"))
 
-  private fun useBluetoothMicrophone(ctx: Context): Boolean {
-    if (Build.VERSION.SDK_INT < 31) return false
-    val audio = ctx.getSystemService(AudioManager::class.java)
-    val headset =
-      audio.availableCommunicationDevices.firstOrNull {
-        it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO || it.type == AudioDeviceInfo.TYPE_BLE_HEADSET
-      } ?: return false
-    audio.mode = AudioManager.MODE_IN_COMMUNICATION
-    if (!audio.setCommunicationDevice(headset)) {
-      audio.mode = AudioManager.MODE_NORMAL
-      return false
-    }
-    // The headset's microphone takes a moment to come up; words before that are lost.
-    val deadline = SystemClock.elapsedRealtime() + 2000
-    while (audio.communicationDevice?.id != headset.id && SystemClock.elapsedRealtime() < deadline) {
-      Thread.sleep(50)
-    }
-    Thread.sleep(300)
-    return true
-  }
+  fun route(): Map<String, Any> = audioSession?.route() ?: mapOf("kind" to "speaker", "name" to "Speaker")
 
-  private fun releaseBluetoothMicrophone() {
-    if (Build.VERSION.SDK_INT < 31) return
-    val audio = context?.getSystemService(AudioManager::class.java) ?: return
-    audio.clearCommunicationDevice()
-    audio.mode = AudioManager.MODE_NORMAL
-  }
+  fun audioLog(): String = AudioLog.read()
 
   const val TASK = "T3VoiceCall"
   private const val VOLUME_CHANGED = "android.media.VOLUME_CHANGED_ACTION"
