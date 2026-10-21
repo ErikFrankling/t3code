@@ -49,13 +49,18 @@ ownership (AOSP `InstallPackageHelper`: "Once the installer changes and users
 agree to proceed, clear the update owner") and later updates install silently. Obtainium is
 no longer needed for this app.
 
-## What is not push-triggered
+## Push: a release reaches a closed app in seconds
 
-The phone notices a release within about a minute while the app is open, or
-within 15 minutes (WorkManager, later in Doze) while it is closed. Waking a
-closed app the moment CI finishes needs a push service: FCM (a Firebase
-project with `google-services.json`, see `docs/operations/android-notifications.md`)
-or UnifiedPush through the ntfy app. Neither exists yet.
+After publishing an APK, CI sends a content-free, high-priority FCM data
+message to the `erik-updates` topic (`scripts/erik-updates-ping.mjs`, secret
+`T3CODE_FCM_SERVICE_ACCOUNT_JSON`, Firebase project `t3code-erik-push`).
+`t3-agent-notifications` subscribes to the topic and turns the ping into the
+broadcast `<package>.T3_SELF_UPDATE_CHECK`; `UpdatePingReceiver` in
+`t3-self-update` then runs the same check as leaving the app. Anyone with the
+APK's `google-services.json` can subscribe to the topic, so the message never
+carries anything but the ping. Without the ping (no Google Play services, or
+FCM deprioritising data-only messages) the 15-minute WorkManager poll still
+applies, and an open app checks every minute.
 
 ## Runtime versions
 
