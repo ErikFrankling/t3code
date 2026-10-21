@@ -949,6 +949,40 @@ export function summarizeT3ToolCalls(
           );
       break;
     }
+    case "attention-update": {
+      const count = selected.length;
+      label = done
+        ? resolve(
+            msg(
+              "{count, plural, one {Updated {count} Needs you item} other {Updated {count} Needs you items}}",
+              { count },
+            ),
+          )
+        : resolve(
+            msg(
+              "{count, plural, one {Tried to update {count} Needs you item} other {Tried to update {count} Needs you items}}",
+              { count },
+            ),
+          );
+      break;
+    }
+    case "attention-list": {
+      const count = selected.length;
+      label = done
+        ? resolve(
+            msg(
+              "{count, plural, one {Listed Needs you items {count} time} other {Listed Needs you items {count} times}}",
+              { count },
+            ),
+          )
+        : resolve(
+            msg(
+              "{count, plural, one {Tried to list Needs you items {count} time} other {Tried to list Needs you items {count} times}}",
+              { count },
+            ),
+          );
+      break;
+    }
     case "thread-configuration": {
       const count = selected.length;
       label = done

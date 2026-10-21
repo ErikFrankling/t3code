@@ -26,6 +26,7 @@ async function waitForThreadShell(environmentId: EnvironmentId, threadId: Thread
 }
 
 export type PersonalAgentEntry = {
+  readonly environmentId: EnvironmentId;
   /** Null until the agent exists, or while it is archived. */
   readonly thread: EnvironmentThreadShell | null;
   readonly opening: boolean;
@@ -77,5 +78,5 @@ export function usePersonalAgentEntry(input: {
     })();
   };
 
-  return { thread, opening, open };
+  return { environmentId, thread, opening, open };
 }

@@ -33,6 +33,7 @@ const LISTED_OVERLAY_ROUTES: ReadonlySet<string> = new Set([
   "ThreadGuestShare",
   "ThreadPullRequests",
   "ThreadQueue",
+  "Attention",
   "ThreadReviewComment",
   "ThreadDevicePreview",
   "ThreadBrowserPreview",

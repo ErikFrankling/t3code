@@ -4,12 +4,14 @@ import { parseThreadKey, threadKey } from "@t3tools/client-runtime/state/entitie
 import { visibilityParentKey } from "@t3tools/client-runtime/state/threads";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import * as Option from "effect/Option";
+import { PERSONAL_AGENT_THREAD_ID } from "@t3tools/contracts";
 import { Link, Navigate, useNavigate } from "@tanstack/react-router";
 import { T } from "gt-react";
 import { useEffect, useState } from "react";
 
 import ChatView from "./ChatView";
 import { BackgroundThreadContext, HiddenThreadContext } from "./chat/backgroundThread";
+import { NeedsYouPanel } from "./chat/NeedsYouPanel";
 import { Button } from "./ui/button";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from "./ui/empty";
 import { SidebarInset } from "./ui/sidebar";
@@ -19,6 +21,7 @@ import {
   useEnvironmentThreadRefs,
   useAnyEnvironmentHiding,
   useQuietThreadShell,
+  useServerConfigs,
 } from "../state/entities";
 import { environmentUnreachableAtom } from "../state/presentation";
 import { appAtomRegistry } from "../rpc/atomRegistry";
@@ -162,6 +165,16 @@ export function ThreadRouteView({
     }
   }, [background, bootstrapComplete, environmentHasAnyThreads, navigate, renderState, target]);
 
+  // The personal agent's chat gets the Needs you list beside it.
+  const serverConfigs = useServerConfigs();
+  const needsYouEnvironmentId =
+    target.kind === "server" &&
+    target.threadRef.threadId === PERSONAL_AGENT_THREAD_ID &&
+    serverConfigs.get(target.threadRef.environmentId)?.environment.capabilities.attentionItems ===
+      true
+      ? target.threadRef.environmentId
+      : null;
+
   let view: React.ReactNode = null;
   let redirect: React.ReactNode = null;
   if (target.kind === "draft") {
@@ -240,7 +253,16 @@ export function ThreadRouteView({
       inert={background}
     >
       <BackgroundThreadContext value={background}>
-        <HiddenThreadContext value={background}>{view}</HiddenThreadContext>
+        <HiddenThreadContext value={background}>
+          {view !== null && needsYouEnvironmentId !== null ? (
+            <div className="flex h-full min-h-0">
+              <div className="flex min-w-0 flex-1 flex-col">{view}</div>
+              <NeedsYouPanel environmentId={needsYouEnvironmentId} />
+            </div>
+          ) : (
+            view
+          )}
+        </HiddenThreadContext>
       </BackgroundThreadContext>
       {background ? null : redirect}
     </SidebarInset>
