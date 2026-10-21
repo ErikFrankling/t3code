@@ -42,52 +42,37 @@ T3 Code uses the Claude configuration on the connected server.
 
 ## Resume the same session with another account
 
-To continue an existing thread when one Max account reaches its limit, opt both
-Claude instances into a **Shared session group**. They must also share their
-`projects` directory on the environment's machine. The group setting declares
-that transcripts are shared; T3 Code does not create links or copy files for you.
+When one Max account reaches its limit, switch the thread to another Claude
+instance and it continues the same conversation. Every Claude instance on the
+environment's machine shares one continuation group, so T3 Code resumes the
+original Claude session ID (the SDK's `resume` option launches
+`claude --resume <session-id>`) instead of creating a summary handoff. Before
+resuming, T3 Code copies the newest session transcript and its subagent files
+from the other instance's `CLAUDE_CONFIG_DIR/projects` directory into this
+instance's, so switching back and forth keeps the full conversation.
 
 For account A in `~/.claude` and a new account B in `~/.claude_2`:
 
-1. Stop any Claude turns using these directories before changing storage.
-2. Sign in separately:
+1. Sign in separately:
 
    ```bash
    mkdir -p ~/.claude_2
    CLAUDE_CONFIG_DIR=~/.claude_2 claude auth login
    ```
 
-3. Share only the transcript directory. If `~/.claude_2/projects` already exists,
-   back it up first and merge any sessions you want to retain into the shared
-   directory without overwriting files. The link destination must not already
-   exist; do not run `ln` against an existing directory.
+2. In **Settings > Providers**, add a Claude instance and set its
+   **CLAUDE_CONFIG_DIR path** to `~/.claude_2`. Credentials and other settings
+   stay separate.
+3. When a turn stops at the usage limit, tap **Continue on <account>** on the
+   limit notice (mobile), or select account B in the thread's model picker and
+   send your next message.
 
-   ```bash
-   mkdir -p ~/.claude/projects
-   ln -s ~/.claude/projects ~/.claude_2/projects
-   ```
-
-4. In **Settings > Providers**, set account B's **CLAUDE_CONFIG_DIR path** to
-   `~/.claude_2`. Set **Shared session group** to the same name, such as
-   `personal-max`, on **both** instances. Leave each instance's credentials and
-   other settings separate.
-5. Stop the limited turn, select account B in the existing thread's model picker,
-   and send your next message. T3 Code resumes the original Claude session ID
-   (the SDK's `resume` option launches `claude --resume <session-id>`), retaining
-   its saved context instead of creating a summary handoff. Switching back works
-   the same way. Threads started before enabling the group are supported.
-
-Only group names that match after trimming whitespace share continuation.
-Blank groups retain the default config-directory behavior. Clear the setting on
-both instances to opt out of cross-directory continuation; this does not undo
-the filesystem link. To separate storage again, stop all affected turns and
-replace the link with an independent directory, preserving any sessions you need.
-
-The shared directory includes transcripts, subagent transcripts, and project
-auto memory; it exposes those to both accounts. It does not share login credentials,
-settings, or skills. Do not run the same session concurrently from another CLI
-or thread. A matching group without accessible transcripts cannot resume a session.
-See Claude Code's [directory reference](https://code.claude.com/docs/en/claude-directory)
+A `projects` directory linked between the two config directories also works;
+T3 Code then has nothing to copy. To keep some instances apart, give them a
+**Shared session group** name: instances only continue each other's sessions
+when their group names match, and a blank group joins the default group of all
+Claude instances. Do not run the same session concurrently from another CLI or
+thread. See Claude Code's [directory reference](https://code.claude.com/docs/en/claude-directory)
 and [CLI reference](https://code.claude.com/docs/en/cli-reference).
 
 ## Compact long conversations
