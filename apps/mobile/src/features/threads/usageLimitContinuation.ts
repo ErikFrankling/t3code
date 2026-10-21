@@ -1,4 +1,5 @@
 import type { ProviderInstanceId, ServerProvider } from "@t3tools/contracts";
+import { providerContinuationSiblings } from "@t3tools/shared/providerFailover";
 
 export interface UsageLimitContinuationTarget {
   readonly instanceId: ProviderInstanceId;
@@ -14,21 +15,17 @@ export function usageLimitContinuationTargets(
   providers: ReadonlyArray<ServerProvider>,
   currentInstanceId: ProviderInstanceId,
 ): ReadonlyArray<UsageLimitContinuationTarget> {
-  const current = providers.find((provider) => provider.instanceId === currentInstanceId);
-  const groupKey = current?.continuation?.groupKey;
-  if (current === undefined || groupKey === undefined) return [];
-  return providers
-    .filter(
-      (provider) =>
-        provider.instanceId !== currentInstanceId &&
-        provider.driver === current.driver &&
-        provider.continuation?.groupKey === groupKey &&
-        provider.enabled &&
-        provider.status !== "error" &&
-        provider.status !== "disabled",
-    )
-    .map((provider) => ({
+  return providerContinuationSiblings(
+    providers.map((provider) => ({
       instanceId: provider.instanceId,
-      label: provider.displayName ?? provider.instanceId,
-    }));
+      driver: provider.driver,
+      continuationGroupKey: provider.continuation?.groupKey,
+      available: provider.enabled && provider.status !== "error" && provider.status !== "disabled",
+      provider,
+    })),
+    currentInstanceId,
+  ).map(({ provider }) => ({
+    instanceId: provider.instanceId,
+    label: provider.displayName ?? provider.instanceId,
+  }));
 }
