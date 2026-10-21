@@ -310,8 +310,10 @@ export function VoiceModeOverlay({
             aria-label={big.label}
             onClick={big.action}
             className={cn(
-              "flex size-40 flex-col items-center justify-center gap-1 rounded-full font-semibold text-lg text-white shadow-lg transition-transform active:scale-95",
-              talking ? "bg-destructive" : "bg-primary",
+              "flex size-40 flex-col items-center justify-center gap-1 rounded-full font-semibold text-lg shadow-lg transition-transform active:scale-95",
+              talking
+                ? "border-2 border-destructive/40 bg-destructive/15 text-destructive-foreground"
+                : "bg-primary text-primary-foreground",
             )}
           >
             <BigIcon className="size-12" />
