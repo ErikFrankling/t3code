@@ -12,7 +12,9 @@ import android.os.Build
 import android.util.Log
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import org.json.JSONObject
@@ -35,6 +37,7 @@ object SelfUpdater {
   private const val TAG = "T3SelfUpdate"
   private const val PREFS = "t3_self_update"
   private const val PERIODIC_WORK = "t3-self-update"
+  private const val BACKGROUND_WORK = "t3-self-update-background"
   private const val CHANNEL = "t3-app-updates"
   const val NOTIFICATION_ID = 0x5e1f
 
@@ -58,6 +61,20 @@ object SelfUpdater {
       .build()
     WorkManager.getInstance(context)
       .enqueueUniquePeriodicWork(PERIODIC_WORK, ExistingPeriodicWorkPolicy.KEEP, periodic)
+  }
+
+  /**
+   * The app just left the screen. Android freezes a cached app's process
+   * within seconds, so no JS timer can do this; a job a few seconds out runs
+   * once the process' importance has dropped, frozen or not.
+   */
+  fun checkAfterBackgrounding(context: Context) {
+    val request = OneTimeWorkRequestBuilder<SelfUpdateWorker>()
+      .setInitialDelay(5, TimeUnit.SECONDS)
+      .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+      .build()
+    WorkManager.getInstance(context)
+      .enqueueUniqueWork(BACKGROUND_WORK, ExistingWorkPolicy.REPLACE, request)
   }
 
   fun installedVersionCode(context: Context): Long {
@@ -88,7 +105,10 @@ object SelfUpdater {
       }
       val apk = download(context, release)
       prefs(context).edit().putLong("downloadedVersionCode", release.versionCode).apply()
-      if (!installEvenIfForeground && isInForeground()) return "downloaded"
+      if (!installEvenIfForeground && isInForeground()) {
+        Log.i(TAG, "${release.versionName} downloaded; waiting until the app is off screen")
+        return "downloaded"
+      }
       // Give a running install time to finish, and a pending confirmation an
       // hour before posting it again.
       val waitMs = if (prefs(context).getBoolean("awaitingConfirmation", false)) 3_600_000 else 60_000
