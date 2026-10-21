@@ -490,6 +490,10 @@
     "./PtyAdapter": {
       "types": "./src/PtyAdapter.ts",
       "import": "./src/PtyAdapter.ts"
+    },
+    "./providerFailover": {
+      "types": "./src/providerFailover.ts",
+      "import": "./src/providerFailover.ts"
     }
   },
   "scripts": {
