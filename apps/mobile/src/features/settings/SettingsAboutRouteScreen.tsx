@@ -168,7 +168,7 @@ function AppSettingsSection() {
  */
 function describeRunningBuild(version: string): string | null {
   const parts: string[] = [];
-  const native = Constants.nativeAppVersion;
+  const native = Application.nativeApplicationVersion;
   if (native && native !== version) parts.push(native.replace(`${version}-`, ""));
   if (Updates.isEnabled && !Updates.isEmbeddedLaunch && Updates.createdAt) {
     parts.push(
