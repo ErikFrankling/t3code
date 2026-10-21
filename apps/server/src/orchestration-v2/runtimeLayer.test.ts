@@ -72,6 +72,7 @@ import * as PullRequestService from "../pullRequest/PullRequestService.ts";
 import * as ProjectStore from "./ProjectStore.ts";
 import * as ProviderSessionManager from "./ProviderSessionManager.ts";
 import * as RuntimeLayer from "./runtimeLayer.ts";
+import * as UsageLimitFailover from "./UsageLimitFailover.ts";
 import { shellStreamItemFromThreadShell } from "./ShellStream.ts";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
 import * as ThreadManagementService from "./ThreadManagementService.ts";
@@ -7088,3 +7089,167 @@ it.layer(layerQueueResumeDisabledInstanceTest)(
     );
   },
 );
+
+const sameGroupAlternateInstance = {
+  ...alternateProviderInstance,
+  continuationIdentity: { driverKind: driver, continuationKey: "codex:test" },
+} satisfies ProviderInstance;
+
+const layerUsageLimitFailoverTest = Layer.mergeAll(
+  RuntimeLayer.layer,
+  RuntimeLayer.layerEventSink,
+  ProjectStore.layer,
+  ProjectionStore.layer,
+  EffectOutbox.layer,
+  ThreadCommandExecutor.layer,
+).pipe(
+  Layer.provide(McpSessionRegistryTestkit.layer),
+  Layer.provide(McpProviderSessions.layer),
+  Layer.provide(SqlitePersistence.layerMemory),
+  Layer.provide(layerCheckpointStoreTest),
+  Layer.provide(layerServerConfig),
+  Layer.provide(
+    ServerSettings.layerTest({
+      providerInstances: {
+        [alternateInstanceId]: { driver: "codex", enabled: true, displayName: "Codex 2" },
+      },
+    }),
+  ),
+  Layer.provide(
+    Layer.succeed(ProviderInstanceRegistry.ProviderInstanceRegistry, {
+      getInstance: (instanceId) =>
+        Effect.succeed(
+          [providerInstance, sameGroupAlternateInstance].find(
+            (instance) => instanceId === instance.instanceId,
+          ),
+        ),
+      listInstances: Effect.succeed([providerInstance, sameGroupAlternateInstance]),
+      listUnavailable: Effect.succeed([]),
+      streamChanges: Stream.empty,
+      subscribeChanges: Effect.never,
+    }),
+  ),
+  Layer.provide(layerGitWorkflowTest),
+  Layer.provide(layerProjectServiceTest),
+  Layer.provide(layerPlatformTest),
+);
+
+it.layer(layerUsageLimitFailoverTest)("usage-limit failover", (it) => {
+  it.effect(
+    "continues a limited thread on a sibling account and routes new threads away from it",
+    () =>
+      Effect.gen(function* () {
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
+        const events = yield* EventSink.EventSinkV2;
+        const reactor = yield* UsageLimitFailover.UsageLimitFailoverReactor;
+        const threadId = ThreadId.make("failover:thread");
+        const projectId = ProjectId.make("failover:project");
+        const now = yield* DateTime.now;
+        const createdAt = DateTime.formatIso(now);
+        yield* seedProject({
+          projectId,
+          title: "Failover project",
+          workspaceRoot: process.cwd(),
+          defaultModelSelection: modelSelection,
+          createdAt,
+        });
+        const create = (id: ThreadId, suffix: string) =>
+          orchestrator.dispatch({
+            type: "thread.create",
+            commandId: CommandId.make(`failover:create:${suffix}`),
+            threadId: id,
+            projectId,
+            title: "Limited thread",
+            modelSelection,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            branch: null,
+            worktreePath: null,
+            createdBy: "user",
+            creationSource: "web",
+          });
+        yield* create(threadId, "first");
+        yield* orchestrator.dispatch({
+          type: "message.dispatch",
+          commandId: CommandId.make("failover:start"),
+          threadId,
+          messageId: MessageId.make("failover:start"),
+          text: "Remember PINEAPPLE-42.",
+          attachments: [],
+          dispatchMode: { type: "defer_start" },
+          createdBy: "user",
+          creationSource: "web",
+        });
+        const [source] = (yield* orchestrator.getThreadProjection(threadId)).runs as [
+          OrchestrationV2Run,
+        ];
+        const resetAt = DateTime.formatIso(DateTime.add(now, { hours: 2 }));
+        const errorEvent = {
+          id: EventId.make("failover:error"),
+          type: "turn-item.updated" as const,
+          threadId,
+          occurredAt: now,
+          payload: {
+            id: TurnItemId.make("failover:error"),
+            type: "error" as const,
+            threadId,
+            runId: source.id,
+            nodeId: source.rootNodeId,
+            providerThreadId: null,
+            providerTurnId: null,
+            nativeItemRef: null,
+            parentItemId: null,
+            ordinal: 2,
+            status: "failed" as const,
+            title: "Usage limit reached",
+            startedAt: now,
+            completedAt: now,
+            updatedAt: now,
+            failure: {
+              class: "usage_limit" as const,
+              message: "You've hit your session limit.",
+              code: "usageLimitExceeded",
+              retryable: null,
+              resetAt,
+            },
+          },
+        };
+        yield* events.write({
+          events: [
+            {
+              id: EventId.make("failover:failed"),
+              type: "run.updated",
+              threadId,
+              occurredAt: now,
+              payload: {
+                ...source,
+                status: "failed",
+                providerInstanceId: modelSelection.instanceId,
+                completedAt: now,
+              },
+            },
+            errorEvent,
+          ],
+        });
+
+        yield* reactor.handle(errorEvent);
+        // A replayed event does not fail over twice.
+        yield* reactor.handle(errorEvent);
+        const after = yield* orchestrator.getThreadProjection(threadId);
+        assert.lengthOf(after.runs, 2);
+        assert.equal(after.runs[1]?.status, "starting");
+        assert.equal(after.thread.modelSelection.instanceId, alternateInstanceId);
+        const note = after.messages.at(-1)?.text ?? "";
+        assert.include(note, "Codex reached its usage limit");
+        assert.include(note, "continued this thread on Codex 2");
+
+        // New work skips the exhausted account while its limit holds.
+        const routedId = ThreadId.make("failover:routed");
+        yield* create(routedId, "routed");
+        assert.equal(
+          (yield* orchestrator.getThreadProjection(routedId)).thread.modelSelection.instanceId,
+          alternateInstanceId,
+        );
+      }),
+  );
+});
