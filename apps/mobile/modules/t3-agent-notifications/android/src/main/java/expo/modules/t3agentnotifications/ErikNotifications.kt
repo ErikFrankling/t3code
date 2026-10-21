@@ -17,6 +17,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
+import com.google.firebase.messaging.FirebaseMessaging
 
 /**
  * Fork: agents' phone notifications (`notify-erik`, Executor `notify`), sent
@@ -100,6 +101,28 @@ object ErikNotifications {
       builder.setTimeoutAfter(10 * 60 * 1000L)
     }
     context.getSystemService(NotificationManager::class.java).notify(TAG, id, builder.build())
+  }
+
+  /**
+   * Release pings: CI sends a content-free `t3_kind: "erik_update"` to this
+   * topic after publishing. Topics have no access control, so nothing else
+   * may ever be sent on it.
+   */
+  private const val UPDATE_TOPIC = "erik-updates"
+
+  fun subscribeToUpdates() {
+    try {
+      FirebaseMessaging.getInstance().subscribeToTopic(UPDATE_TOPIC)
+    } catch (_: IllegalStateException) {
+      // Built without google-services.json: no Firebase, nothing to subscribe.
+    }
+  }
+
+  /** Hands the ping to the self-updater (its own receiver); fields are ignored. */
+  fun requestUpdateCheck(context: Context) {
+    context.sendBroadcast(
+      Intent("${context.packageName}.T3_SELF_UPDATE_CHECK").setPackage(context.packageName)
+    )
   }
 
   fun cancel(context: Context, id: Int) {
