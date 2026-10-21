@@ -55,7 +55,16 @@ export type VoiceInputControllerDependencies = {
     selection: { readonly start: number; readonly end: number },
   ) => void;
   readonly onStateChange: (state: VoiceInputState) => void;
+  /**
+   * Runs `run` after `ms` and returns a cancel. With it, a recording whose
+   * transcription failed (no network, the server down) is tried again by
+   * itself; without it, it waits for Retry.
+   */
+  readonly setTimer?: (run: () => void, ms: number) => () => void;
 };
+
+// Waits between automatic retries of a failed recording; the last repeats.
+const AUTO_RETRY_MS = [5_000, 15_000, 30_000, 60_000, 120_000] as const;
 
 type TranscriptCommitResult =
   | {
@@ -195,6 +204,10 @@ export class VoiceInputController {
   private failed: string | null = null;
   private recordingConfigured = false;
   private finishing = false;
+  private cancelAutoRetry: (() => void) | null = null;
+  private autoRetries = 0;
+  // The draft the failed recording belongs to: retries wait until it is open.
+  private retryOwner: string | null = null;
 
   constructor(dependencies: VoiceInputControllerDependencies) {
     this.dependencies = dependencies;
@@ -364,6 +377,7 @@ export class VoiceInputController {
   }
 
   dispose(): void {
+    this.stopRetrying();
     if (this.state.phase === "recording") {
       this.discardRecording(null);
       return;
@@ -426,6 +440,7 @@ export class VoiceInputController {
         if (this.isCurrent(operationToken)) {
           this.setError(transcriptionErrorMessage(error), "retry");
         }
+        this.retryLater();
         return;
       }
       if (!this.isCurrent(operationToken)) return;
@@ -458,6 +473,7 @@ export class VoiceInputController {
       if (this.isCurrent(operationToken)) {
         this.setError("Could not finish voice recording.", "retry");
       }
+      this.retryLater();
     } finally {
       this.finishing = false;
       await this.releaseResources();
@@ -498,13 +514,54 @@ export class VoiceInputController {
       }
       this.dependencies.commitDraft(result.text, result.selection);
       this.failed = null;
+      this.stopRetrying();
       try {
         this.dependencies.deleteRecording(uri);
       } catch {}
       this.setState(IDLE_STATE);
     } catch (error) {
       this.setError(transcriptionErrorMessage(error), "retry");
+      this.retryLater();
     }
+  }
+
+  /**
+   * A transcription that failed (no network, the server down) is tried again
+   * by itself, waiting longer each time, until it worked or the recording was
+   * discarded. Its words go to the draft, as with Retry; nothing is sent.
+   */
+  private retryLater(): void {
+    this.cancelAutoRetry?.();
+    this.cancelAutoRetry = null;
+    const setTimer = this.dependencies.setTimer;
+    if (!setTimer || !this.failed) return;
+    if (this.autoRetries === 0) this.retryOwner = this.dependencies.readDraft()?.ownerKey ?? null;
+    const delay = AUTO_RETRY_MS[Math.min(this.autoRetries, AUTO_RETRY_MS.length - 1)]!;
+    this.autoRetries++;
+    if (this.state.phase === "error" && this.state.error) {
+      this.setState({ ...this.state, error: `${this.state.error} Trying again by itself.` });
+    }
+    this.cancelAutoRetry = setTimer(() => {
+      this.cancelAutoRetry = null;
+      // Busy with another recording, or another chat is open: the kept one
+      // waits, so its words never land in the wrong draft.
+      if (
+        this.state.phase === "recording" ||
+        this.state.phase === "transcribing" ||
+        (this.dependencies.readDraft()?.ownerKey ?? null) !== this.retryOwner
+      ) {
+        this.retryLater();
+        return;
+      }
+      void this.retryFailed();
+    }, delay);
+  }
+
+  private stopRetrying(): void {
+    this.cancelAutoRetry?.();
+    this.cancelAutoRetry = null;
+    this.autoRetries = 0;
+    this.retryOwner = null;
   }
 
   /**
@@ -527,6 +584,7 @@ export class VoiceInputController {
   discardFailed(): void {
     const uri = this.failed;
     this.failed = null;
+    this.stopRetrying();
     if (uri) {
       try {
         this.dependencies.deleteRecording(uri);
