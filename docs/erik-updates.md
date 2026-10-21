@@ -55,27 +55,41 @@ closed app the moment CI finishes needs a push service: FCM (a Firebase
 project with `google-services.json`, see `docs/operations/android-notifications.md`)
 or UnifiedPush through the ntfy app. Neither exists yet.
 
+## Never a rollback
+
+Installed apps take whatever `index.json` offers, and a version code only
+records when a build ran. So the workflow runs only on `erik/main`, and
+`scripts/erik-updates-guard.sh` checks content before publishing anything:
+
+- the commit must still be the tip of `erik/main`, or the run publishes
+  nothing (the newer run does);
+- every commit already shipped (the newest `android-v…` release and every
+  entry in `index.json`) must be in it, as an ancestor or, after the nightly
+  rebase, as an equivalent patch (`git cherry`). Otherwise the run fails and
+  lists the missing commits.
+
+If commits were removed from `erik/main` on purpose, run the workflow by hand
+on `erik/main` with `accept_dropped_commits`.
+
 ## Testing
 
-Run the workflow on a branch with another channel, so nothing reaches the
-phone:
+Never run the workflow on a branch. Test with local builds on the emulator,
+all served from the PC:
 
-```sh
-gh workflow run erik-android.yml -R ErikFrankling/t3code --ref <branch> \
-  -f channel=android-ota-test -f abis=x86_64 -f apk=true \
-  -f updates_url=http://10.0.2.2:8090/manifest
-```
-
-On the PC, serve that channel to the emulator:
-
-```sh
-INDEX_URL=https://github.com/ErikFrankling/t3code/releases/download/android-ota-test/index.json \
-  PORT=8090 node ~/projects/personal/homelab/kubernetes/homelab/config/t3-updates/server.mjs
-```
-
-Install the APK with `adb install`, then allow self-updates with
-`adb shell appops set com.t3tools.t3code.preview REQUEST_INSTALL_PACKAGES allow`
-(on the phone this is the one-time tap). Push a JS change and run the
-workflow again without `apk=true`; push a native change and the app installs
-the new APK once it is backgrounded. `adb logcat -s T3SelfUpdate` shows each
-step. Delete the test release afterwards.
+1. Serve a local channel: `index.json`, bundles and APKs in one directory over
+   HTTP (port 8091), and the update server on 8090:
+   `INDEX_URL=http://127.0.0.1:8091/index.json PORT=8090 node <homelab>/kubernetes/homelab/config/t3-updates/server.mjs`.
+2. Build a release APK with `APP_VARIANT=preview`,
+   `T3CODE_MOBILE_UPDATES_URL=http://10.0.2.2:8090/manifest` and
+   `T3CODE_MOBILE_SELF_UPDATE_URL=http://10.0.2.2:8091/index.json`
+   (`expo prebuild`, then `./gradlew assembleRelease -PreactNativeArchitectures=x86_64`
+   with a set `versionCode`). Install it with `adb install`, then
+   `adb shell appops set com.t3tools.t3code.preview REQUEST_INSTALL_PACKAGES allow`
+   (on the phone, that is the one-time tap).
+3. JS update: change JS, `expo export --platform android`, then
+   `scripts/erik-updates.mjs ota` with the APK's runtime
+   (`unzip -p app.apk assets/fingerprint`) into the local index.
+4. Native update: change native code, build again with a higher
+   `versionCode`, and record it with `scripts/erik-updates.mjs apk`.
+5. `adb logcat -s T3SelfUpdate` shows each step; Settings → About → Version
+   shows what is running.
