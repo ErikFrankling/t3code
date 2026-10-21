@@ -17,6 +17,7 @@ Ordinary coding tasks need no T3 tools.
 - A machine the user names that is not linked ("delegate this to my vps"): call \`t3_environment_link\` with a \`hint\` from their words. Never ask for a pairing code in chat.
 - In your reply, a thread's first mention is its \`link\` verbatim. No \`link\`: \`[title](t3-thread://v1/<exact id>)\`. Never a plain title or bare id. A thread on a linked machine: its title and machine, not its link.
 - A secret: call \`request_secret\` yourself. Pass its \`secretRef\` to a T3 tool, or use \`delivery: "file"\` for a shell command. Never ask in chat or invent one. When asked only to schedule, \`schedule_task\` without running its prompt.
+- Blocked on something only the user can do (sign in, decide, answer): file it with \`attention_item_upsert\` (a stable \`id\`, short \`title\`, \`unblocks\` listing this thread) and carry on with anything else. It appears on the user's Needs you list; when they tick it, the personal agent resumes the blocked threads. Resolve it with \`attention_item_resolve\` once it no longer applies.
 - T3 tools may load late. Try the name once before you call it absent.`,
   `### Visuals and preview
 

@@ -1266,6 +1266,10 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:scheduled-tasks:live",
       tag: WS_METHODS.scheduledTasksSubscribe,
     }),
+    attentionItemsLive: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
+      label: "environment-data:server:attention-items:live",
+      tag: WS_METHODS.attentionItemsSubscribe,
+    }),
     // A cold transcript scan is measured in seconds, so keep the result around
     // long enough that switching windows or re-rendering does not rescan.
     usageSummary: createEnvironmentRpcQueryAtomFamily(runtime, {
@@ -1503,6 +1507,16 @@ export function createServerEnvironmentAtoms<R, E>(
     runScheduledTaskNow: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:scheduled-task:run-now",
       tag: WS_METHODS.scheduledTasksRunNow,
+    }),
+    // Off the config lane: a tick also wakes the personal agent, and must not
+    // wait behind settings edits.
+    setAttentionItemDone: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:attention-item:set-done",
+      tag: WS_METHODS.attentionItemsSetDone,
+    }),
+    dismissAttentionItem: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:attention-item:dismiss",
+      tag: WS_METHODS.attentionItemsDismiss,
     }),
     rotateScheduledTaskWebhookToken: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:scheduled-task:rotate-webhook-token",
