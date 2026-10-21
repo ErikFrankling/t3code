@@ -181,6 +181,12 @@ export const voiceInputAtom = Atom.make((get) => {
         Platform.OS === "ios" && recordingMicrophoneOrder?.[0]?.kind === "builtIn";
       await configureVoiceRecordingAudio({ allowBluetoothRecording: !builtInMicFirst });
     },
+    // A recording whose transcription failed (no network, the server down)
+    // is tried again by itself until its words reach the draft.
+    setTimer: (run, ms) => {
+      const timer = setTimeout(run, ms);
+      return () => clearTimeout(timer);
+    },
     releaseRecording: releaseVoiceRecordingAudio,
     deleteRecording: (uri) => new File(uri).delete(),
     sampleRecording: () => {
