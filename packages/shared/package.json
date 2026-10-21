@@ -642,6 +642,10 @@
     "./paletteSearchCopy": {
       "types": "./src/paletteSearchCopy.ts",
       "import": "./src/paletteSearchCopy.ts"
+    },
+    "./providerFailover": {
+      "types": "./src/providerFailover.ts",
+      "import": "./src/providerFailover.ts"
     }
   },
   "scripts": {
