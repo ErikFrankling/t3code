@@ -151,3 +151,17 @@ diff --git a/android/src/main/java/expo/modules/audio/AudioPlaylist.kt b/android
      currentRate = boundedRate
      ref.setPlaybackSpeed(boundedRate)
    }
+diff --git a/android/src/main/java/expo/modules/audio/AudioModule.kt b/android/src/main/java/expo/modules/audio/AudioModule.kt
+--- a/android/src/main/java/expo/modules/audio/AudioModule.kt
++++ b/android/src/main/java/expo/modules/audio/AudioModule.kt
+@@ -400,7 +400,9 @@
+       shouldPlayInBackground = mode.shouldPlayInBackground
+       interruptionMode = mode.interruptionMode ?: previousInterruptionMode
+       playsInSilentMode = mode.playsInSilentMode
+-      updatePlaySoundThroughEarpiece(mode.shouldRouteThroughEarpiece ?: false)
++      // Only when asked: resetting the mode to NORMAL on every call pulled
++      // voice mode's call (communication mode, Bluetooth SCO) out of its call.
++      mode.shouldRouteThroughEarpiece?.let { updatePlaySoundThroughEarpiece(it) }
+       allowsBackgroundRecording = mode.allowsBackgroundRecording
+ 
+       recorders.values.forEach { recorder ->
