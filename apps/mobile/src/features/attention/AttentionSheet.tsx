@@ -36,6 +36,7 @@ const HEADER_SCROLL_EDGE_EFFECTS = nativeHeaderScrollEdgeEffects(Platform.OS, Pl
 const URL_PATTERN = /https?:\/\/[^\s)]+/g;
 
 export type AttentionTarget = { readonly environmentId: EnvironmentId };
+type AttentionTab = "needs_you" | "in_flight";
 
 /** Open items for the card's count. Null while the server lacks the list. */
 export function useOpenAttentionCount(environmentId: EnvironmentId | null): number | null {
@@ -241,7 +242,12 @@ function ProofImage(props: {
       onPress={() => void Linking.openURL(url)}
       className="w-[48%] overflow-hidden rounded-lg border border-border"
     >
-      <Image source={{ uri: url }} contentFit="cover" contentPosition="top" style={{ height: 120 }} />
+      <Image
+        source={{ uri: url }}
+        contentFit="cover"
+        contentPosition="top"
+        style={{ height: 120 }}
+      />
     </Pressable>
   );
 }
@@ -361,6 +367,7 @@ export function AttentionSheet({ route }: StaticScreenProps<AttentionTarget>) {
   const setDone = useAtomCommand(serverEnvironment.setAttentionItemDone, "Needs you item done");
   const dismiss = useAtomCommand(serverEnvironment.dismissAttentionItem, "Needs you item remove");
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(new Set());
+  const [tab, setTab] = useState<AttentionTab>("needs_you");
 
   const run = async (id: string, action: () => Promise<unknown>) => {
     setBusyIds((current) => new Set(current).add(id));
@@ -409,47 +416,83 @@ export function AttentionSheet({ route }: StaticScreenProps<AttentionTarget>) {
     />
   );
 
-  const content = (
-    <ScrollView
-      className="flex-1"
-      contentInsetAdjustmentBehavior={Platform.OS === "ios" ? "automatic" : "never"}
-      contentContainerClassName="px-5"
-      contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 16) + 8 }}
+  const needsYouLabel = open.length > 0 ? `Needs you · ${open.length}` : "Needs you";
+  const inFlightLabel =
+    inFlightOpen.length > 0 ? `In flight · ${inFlightOpen.length}` : "In flight";
+  const tabButton = (value: AttentionTab, label: string) => (
+    <Pressable
+      key={value}
+      accessibilityRole="tab"
+      accessibilityState={{ selected: tab === value }}
+      onPress={() => setTab(value)}
+      className={cn(
+        "flex-1 items-center rounded-full py-2",
+        tab === value ? "bg-subtle-strong" : null,
+      )}
     >
-      {error ? <Text className="pt-6 text-sm text-danger-foreground">{error}</Text> : null}
-      {!error && open.length === 0 ? (
-        <Text className="pt-6 text-center text-sm text-foreground-muted">
-          Nothing needs you right now. Your personal agent adds sign-ins, decisions and questions
-          here when work is waiting on you.
-        </Text>
-      ) : null}
-      {open.map(row)}
-      {done.length > 0 ? (
-        <>
-          <SectionTitle>Done this week</SectionTitle>
-          {done.map(row)}
-        </>
-      ) : null}
-      <Text className="mt-8 text-lg font-t3-bold text-foreground">
-        {inFlightOpen.length > 0 ? `In flight · ${inFlightOpen.length}` : "In flight"}
+      <Text
+        className={cn(
+          "text-sm font-t3-medium",
+          tab === value ? "text-foreground" : "text-foreground-muted",
+        )}
+      >
+        {label}
       </Text>
-      {inFlightOpen.length === 0 ? (
-        <Text className="pt-2 text-sm text-foreground-muted">
-          Nothing in flight. What you ask your personal agent for is tracked here until it is done
-          and proven.
-        </Text>
-      ) : null}
-      {inFlightOpen.map(inFlightRow)}
-      {inFlightDone.length > 0 ? (
-        <>
-          <SectionTitle>Delivered this week</SectionTitle>
-          {inFlightDone.map(inFlightRow)}
-        </>
-      ) : null}
-    </ScrollView>
+    </Pressable>
   );
 
-  const title = open.length > 0 ? `Needs you · ${open.length}` : "Needs you";
+  const content = (
+    <View className="flex-1">
+      <View accessibilityRole="tablist" className="mx-5 mt-2 flex-row rounded-full bg-subtle p-1">
+        {tabButton("needs_you", needsYouLabel)}
+        {tabButton("in_flight", inFlightLabel)}
+      </View>
+      <ScrollView
+        nestedScrollEnabled
+        className="flex-1"
+        contentInsetAdjustmentBehavior={Platform.OS === "ios" ? "automatic" : "never"}
+        contentContainerClassName="px-5"
+        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 16) + 8 }}
+      >
+        {error ? <Text className="pt-6 text-sm text-danger-foreground">{error}</Text> : null}
+        {tab === "needs_you" ? (
+          <>
+            {!error && open.length === 0 ? (
+              <Text className="pt-6 text-center text-sm text-foreground-muted">
+                Nothing needs you right now. Your personal agent adds sign-ins, decisions and
+                questions here when work is waiting on you.
+              </Text>
+            ) : null}
+            {open.map(row)}
+            {done.length > 0 ? (
+              <>
+                <SectionTitle>Done this week</SectionTitle>
+                {done.map(row)}
+              </>
+            ) : null}
+          </>
+        ) : (
+          <>
+            {!error && inFlightOpen.length === 0 ? (
+              <Text className="pt-6 text-center text-sm text-foreground-muted">
+                Nothing in flight. What you ask your personal agent for is tracked here until it is
+                done and proven.
+              </Text>
+            ) : null}
+            {inFlightOpen.map(inFlightRow)}
+            {inFlightDone.length > 0 ? (
+              <>
+                <SectionTitle>Delivered this week</SectionTitle>
+                {inFlightDone.map(inFlightRow)}
+              </>
+            ) : null}
+          </>
+        )}
+      </ScrollView>
+    </View>
+  );
+
+  const title = tab === "needs_you" ? needsYouLabel : inFlightLabel;
 
   if (Platform.OS === "ios") {
     // A formSheet screen never renders a stack header, so it comes from a
