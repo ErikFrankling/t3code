@@ -30,14 +30,10 @@ import { getNativeShowcaseScene } from "../showcase/nativeShowcaseScene";
 import { voiceInputBlocksSubmission } from "@t3tools/client-runtime/voice-input";
 import { voiceCall } from "../../native/voiceCall";
 import { createCallVoiceRecorder } from "./callVoiceRecorder";
+import { configureVoiceRecordingAudio, releaseVoiceRecordingAudio } from "./voiceRecordingAudio";
 import { createLazyVoiceRecorder } from "./lazyVoiceRecorder";
 import { VOICE_WAVEFORM_SAMPLE_COUNT } from "./voiceInputMetering";
 import { VoiceInputSession } from "./voiceInputSession";
-import {
-  acquireAudioSession,
-  activateAudioSession,
-  releaseAudioSession,
-} from "../../lib/audioSession";
 
 // The native constructor expects platform-flattened options, as built by useAudioRecorder.
 const { ios: IOS_RECORDING_OPTIONS, android: ANDROID_RECORDING_OPTIONS } =
@@ -87,7 +83,6 @@ const voiceInputAtom = Atom.make((get) => {
   );
   let keepAwakeSequence = 0;
   let permissionPrompt = false;
-  let audioToken: ReturnType<typeof acquireAudioSession> | null = null;
   const recorder = createLazyVoiceRecorder({
     create: () =>
       voiceCall.active
@@ -141,20 +136,8 @@ const voiceInputAtom = Atom.make((get) => {
         permissionPrompt = false;
       }
     },
-    configureRecording: async () => {
-      const token = acquireAudioSession("recording");
-      audioToken = token;
-      try {
-        await activateAudioSession(token);
-      } catch (error) {
-        await releaseAudioSession(token).catch(() => {});
-        throw error;
-      }
-    },
-    releaseRecording: async () => {
-      if (audioToken) await releaseAudioSession(audioToken);
-      audioToken = null;
-    },
+    configureRecording: configureVoiceRecordingAudio,
+    releaseRecording: releaseVoiceRecordingAudio,
     deleteRecording: (uri) => new File(uri).delete(),
     sampleRecording: () => {
       const status = recorder.getStatus();
