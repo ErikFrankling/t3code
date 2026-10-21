@@ -46,3 +46,16 @@ it with ×. Ticked items stay under **Done this week** for seven days.
 The personal agent keeps the list current, and any thread blocked on you can
 file its own item, through the `attention_item_upsert`, `attention_item_resolve`
 and `attention_item_list` tools of the T3 Code MCP server.
+
+## In flight
+
+Below Needs you is **In flight**: what you asked the personal agent for and it
+owns until it is done. Each entry shows its state (open, in progress, waiting on
+you, done), the thread doing the work, the date you asked, the proof that will
+close it and, once done, that proof (screenshots as thumbnails, links). A
+**Repeated** badge marks something you had to ask for twice; those sort first.
+
+You don't tick these. Only the personal agent closes an entry, and only with
+proof, through the `commitment_upsert`, `commitment_resolve` and
+`commitment_list` tools. Delivered entries stay under **Delivered this week**
+for seven days.
