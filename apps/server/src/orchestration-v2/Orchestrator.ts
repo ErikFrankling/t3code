@@ -141,6 +141,7 @@ import {
   type ShellSnapshotOptions,
 } from "./ProjectionStore.ts";
 import { ProviderAdapterRegistryV2 } from "./ProviderAdapterRegistry.ts";
+import { ProviderInstanceLimits, routeAroundExhaustedInstance } from "./ProviderInstanceLimits.ts";
 import * as ProviderContinuationRequests from "@t3tools/provider-core/server/ProviderContinuationRequests";
 import { makeProviderFailure } from "@t3tools/provider-core/server/failure";
 import * as RunExecutionService from "./RunExecutionService.ts";
@@ -976,6 +977,37 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const providerAdapters = yield* ProviderAdapterRegistryV2;
+  const instanceLimits = yield* Effect.serviceOption(ProviderInstanceLimits);
+  // New turns skip an account that is out of usage when a sibling can continue
+  // the same native session; the failover reactor moves already-failed runs.
+  const routeCommandAroundLimits = (command: OrchestrationV2ServerCommand) =>
+    Effect.gen(function* () {
+      if (Option.isNone(instanceLimits)) return command;
+      const route = (selection: ModelSelection) =>
+        routeAroundExhaustedInstance(selection, instanceLimits.value, providerAdapters);
+      switch (command.type) {
+        case "thread.create":
+        case "delegated_task.request": {
+          const modelSelection = yield* route(command.modelSelection);
+          return modelSelection === command.modelSelection
+            ? command
+            : { ...command, modelSelection };
+        }
+        case "message.dispatch": {
+          const current =
+            command.modelSelection ??
+            (yield* projectionStore.getThread(command.threadId).pipe(
+              Effect.map((thread) => thread.modelSelection),
+              Effect.orElseSucceed(() => undefined),
+            ));
+          if (current === undefined) return command;
+          const modelSelection = yield* route(current);
+          return modelSelection === current ? command : { ...command, modelSelection };
+        }
+        default:
+          return command;
+      }
+    });
   const continuationRequests = yield* ProviderContinuationRequests.ProviderContinuationRequests;
   const providerSessions = yield* ProviderSessionManagerV2;
   const providerSwitchService = yield* ProviderSwitchServiceV2;
@@ -12313,7 +12345,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
   }, withCommandMetrics);
 
   // dispatchWithReceiptEffect owns the dispatch span; this wrapper selects the thread locks.
-  const dispatchWithReceipt = Effect.fnUntraced(function* (command: OrchestrationV2ServerCommand) {
+  const dispatchWithReceipt = Effect.fnUntraced(function* (input: OrchestrationV2ServerCommand) {
+    const command = yield* routeCommandAroundLimits(input);
     const dispatch = threadDispatch.withLock(
       commandThreadId(command),
       dispatchWithReceiptEffect(command),
