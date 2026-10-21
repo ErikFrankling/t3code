@@ -4,6 +4,8 @@ import {
   AttentionItemListResult,
   AttentionItemResult,
   AttentionItemUpsertInput,
+  CommitmentState,
+  CommitmentUpsertInput,
   OrchestratorMcpFailure,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
@@ -80,8 +82,68 @@ const AttentionItemListTool = Tool.make("attention_item_list", {
   .annotate(Tool.Idempotent, true)
   .annotate(Tool.OpenWorld, false);
 
+const IN_FLIGHT =
+  "The In flight list, beside Needs you in T3 Code, is the personal agent's ledger of what the user asked for and the agent owns until it is truly done. The user does not tick these; only the agent closes an item, and only with proof it looked at itself.";
+
+const CommitmentUpsertTool = Tool.make("commitment_upsert", {
+  description: `${IN_FLIGHT} Add a commitment, or update the one with the same id: title, the user's words in detail, the owner thread, state (open, in_progress, waiting), the proof that will close it, the date asked, and repeated when the user had to ask again. Record every request in the turn it is made. Close it with commitment_resolve.`,
+  parameters: CommitmentUpsertInput,
+  success: AttentionItemResult,
+  failure: OrchestratorMcpFailure,
+  failureMode: "return",
+  dependencies,
+})
+  .annotate(Tool.Title, "Add or update a commitment")
+  .annotate(Tool.Readonly, false)
+  .annotate(Tool.Destructive, false)
+  .annotate(Tool.Idempotent, true)
+  .annotate(Tool.OpenWorld, false);
+
+export const CommitmentResolveInput = Schema.Struct({
+  id: AttentionItemId,
+  state: CommitmentState,
+  proof: Schema.optional(
+    Schema.NullOr(
+      Schema.String.annotate({
+        description:
+          "Required for done: screenshot paths, a log excerpt, test output or a link you checked yourself.",
+      }),
+    ),
+  ),
+});
+
+const CommitmentResolveTool = Tool.make("commitment_resolve", {
+  description: `${IN_FLIGHT} Move a commitment to another state. done needs proof and fails without it.`,
+  parameters: CommitmentResolveInput,
+  success: AttentionItemResult,
+  failure: OrchestratorMcpFailure,
+  failureMode: "return",
+  dependencies,
+})
+  .annotate(Tool.Title, "Resolve a commitment")
+  .annotate(Tool.Readonly, false)
+  .annotate(Tool.Destructive, false)
+  .annotate(Tool.Idempotent, true)
+  .annotate(Tool.OpenWorld, false);
+
+const CommitmentListTool = Tool.make("commitment_list", {
+  description: `${IN_FLIGHT} List the commitments: open ones first (repeated requests lead), then ones closed in the last week.`,
+  success: AttentionItemListResult,
+  failure: OrchestratorMcpFailure,
+  failureMode: "return",
+  dependencies,
+})
+  .annotate(Tool.Title, "List commitments")
+  .annotate(Tool.Readonly, true)
+  .annotate(Tool.Destructive, false)
+  .annotate(Tool.Idempotent, true)
+  .annotate(Tool.OpenWorld, false);
+
 export const AttentionToolkit = Toolkit.make(
   AttentionItemUpsertTool,
   AttentionItemResolveTool,
   AttentionItemListTool,
+  CommitmentUpsertTool,
+  CommitmentResolveTool,
+  CommitmentListTool,
 );
