@@ -151,6 +151,7 @@ export function createReadAloudAudio(deps: {
         }
       });
     },
+    setRate: (rate) => owner?.player.setPlaybackRate(rate, "high"),
     pause: () => {
       owner?.player.pause();
       silenceOthers();
