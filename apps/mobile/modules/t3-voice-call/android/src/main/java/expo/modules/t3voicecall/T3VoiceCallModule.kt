@@ -12,7 +12,9 @@ class T3VoiceCallModule : Module() {
     Events("onVoiceCallEvent")
 
     OnCreate {
-      VoiceCall.listener = { event -> sendEvent("onVoiceCallEvent", mapOf("type" to event)) }
+      VoiceCall.listener = { event, data ->
+        sendEvent("onVoiceCallEvent", data + mapOf("type" to event))
+      }
     }
 
     OnDestroy {
@@ -31,11 +33,26 @@ class T3VoiceCallModule : Module() {
 
     Function("setListening") { listening: Boolean -> VoiceCall.setListening(listening) }
 
+    Function("route") { VoiceCall.route() }
+
+    Function("audioLog") { VoiceCall.audioLog() }
+
+    // Clips decode and time-stretch off the JS thread.
+    AsyncFunction("play") { id: String, wav: String, speed: Double, startFraction: Double ->
+      VoiceCall.play(id, wav, speed, startFraction)
+    }
+
+    Function("clearPlayback") { VoiceCall.clearPlayback() }
+
+    Function("pausePlayback") { VoiceCall.pausePlayback() }
+
+    Function("resumePlayback") { VoiceCall.resumePlayback() }
+
     Function("prepareRecording") { VoiceCall.prepareRecording() }
 
-    AsyncFunction("startRecording") { preferBluetooth: Boolean ->
-      VoiceCall.startRecording(preferBluetooth)
-    }
+    // The microphone is open for the whole call (on the call's route); a turn
+    // only records what it hears. The argument is kept for older callers.
+    AsyncFunction("startRecording") { _: Boolean -> VoiceCall.startRecording() }
 
     AsyncFunction("stopRecording") { VoiceCall.stopRecording() }
 
