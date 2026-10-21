@@ -22,3 +22,7 @@ web-build/
 
 # TypeScript
 *.tsbuildinfo
+
+# Gradle runs the Kotlin daemon with a session file here while it builds,
+# so the build-time fingerprint would differ from one resolved beforehand.
+**/expo-updates-gradle-plugin/.kotlin/
