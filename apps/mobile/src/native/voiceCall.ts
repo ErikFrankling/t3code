@@ -2,11 +2,23 @@ import { requireOptionalNativeModule } from "expo";
 import { AppRegistry, Platform } from "react-native";
 
 /**
- * Voice mode's phone "call" (Android, `modules/t3-voice-call`): a foreground
- * service that keeps the microphone, playback and the JS timers going with the
- * screen off, and reports the volume keys and the earbud button.
+ * Voice mode's phone "call" (Android, `modules/t3-voice-call`): communication
+ * mode, one route (a headset, else the speaker), one speaker and one open
+ * microphone, set up once when voice mode starts and held until it ends. A
+ * foreground service keeps them and the JS timers going with the screen off.
+ * It reports the volume keys and the earbud button, and plays replies on the
+ * call's route.
  */
-export type VoiceCallEvent = "volume" | "button" | "hangUp";
+export type VoiceCallEvent =
+  | { readonly type: "volume"; readonly direction?: "up" | "down" }
+  | { readonly type: "button"; readonly source?: string }
+  | { readonly type: "hangUp" }
+  | { readonly type: "progress"; readonly id: string; readonly fraction: number }
+  | { readonly type: "ended"; readonly id: string }
+  | { readonly type: "route"; readonly kind: string; readonly name: string }
+  | { readonly type: "routeLost"; readonly name: string }
+  | { readonly type: "interrupted" }
+  | { readonly type: "resumed" };
 
 type RecordingStatus = {
   readonly isRecording: boolean;
@@ -20,14 +32,23 @@ type VoiceCallModule = {
   stop(): void;
   isActive(): boolean;
   setListening(listening: boolean): void;
+  route(): { readonly kind: string; readonly name: string };
+  /** The current or last call's audio mode and route changes (AudioLog.kt). */
+  audioLog(): string;
+  play(id: string, wav: string, speed: number, startFraction: number): Promise<void>;
+  clearPlayback(): void;
+  pausePlayback(): void;
+  resumePlayback(): void;
   prepareRecording(): string;
   startRecording(preferBluetooth: boolean): Promise<void>;
   stopRecording(): Promise<void>;
   recordingStatus(): RecordingStatus;
   addListener(
     event: "onVoiceCallEvent",
-    listener: (event: { type: VoiceCallEvent }) => void,
-  ): { remove(): void };
+    listener: (event: VoiceCallEvent) => void,
+  ): {
+    remove(): void;
+  };
 };
 
 const native =
@@ -74,7 +95,7 @@ export const voiceCall = {
     if (active) native?.setListening(listening);
   },
   onEvent(listener: (event: VoiceCallEvent) => void) {
-    const subscription = native?.addListener("onVoiceCallEvent", (event) => listener(event.type));
+    const subscription = native?.addListener("onVoiceCallEvent", listener);
     return () => subscription?.remove();
   },
   native,
