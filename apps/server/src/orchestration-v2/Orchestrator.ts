@@ -1491,10 +1491,42 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         readonly failedRunId?: RunId;
         readonly endedRunId?: RunId;
         readonly queuedRunId?: RunId;
+        /**
+         * The run that just ended resumed a turn a server restart interrupted.
+         * Recovery held the queue so no queued message jumped that turn; now it
+         * has finished, so those messages must start instead of waiting for a
+         * user to notice and resume them.
+         */
+        readonly releaseRestartHold?: boolean;
       },
     ) {
-      if (!(yield* projectionStore.canStartQueuedRun(threadId))) return;
-      const projection = yield* readCommandProjection(threadId);
+      // canStartQueuedRun is a cheap pre-check that also refuses held queues,
+      // so releasing a restart hold has to read the projection itself.
+      if (
+        options?.releaseRestartHold !== true &&
+        !(yield* projectionStore.canStartQueuedRun(threadId))
+      )
+        return;
+      let projection = yield* readCommandProjection(threadId);
+      if (options?.releaseRestartHold === true) {
+        const held = projection.runs.filter(
+          (run) => run.status === "queued" && run.queueHeld === true,
+        );
+        if (held.length > 0 && !projection.runs.some(isBlockingRun)) {
+          const releasedAt = yield* DateTime.now;
+          yield* writeSystemEvents(
+            held.map((run) => ({
+              type: "run.updated" as const,
+              threadId,
+              runId: run.id,
+              providerInstanceId: run.providerInstanceId,
+              occurredAt: releasedAt,
+              payload: { ...run, queueHeld: false },
+            })),
+          );
+          projection = yield* readCommandProjection(threadId);
+        }
+      }
       if (
         projection.thread.archivedAt !== null ||
         projection.thread.deletedAt !== null ||
@@ -13025,6 +13057,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             startNextQueuedRun(threadId, {
               endedRunId: run.id,
               ...(run.status === "failed" ? { failedRunId: run.id } : {}),
+              ...(run.status === "completed" && run.restartContinuationOfRunId !== undefined
+                ? { releaseRestartHold: true }
+                : {}),
             }),
           )
           .pipe(
