@@ -47,3 +47,6 @@ node_modules/
 
 # pnpm content-addressable store; never belongs in the repo.
 .pnpm-store/
+
+# Fork-only: scripts/erik-updates-e2e.sh output (APKs, logs, screenshots)
+/.erik-updates-e2e/
