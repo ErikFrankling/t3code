@@ -1,114 +1,25 @@
 import { RegistryContext } from "@effect/atom-react";
-import {
-  READ_ALOUD_SPEEDS,
-  ReadAloudPlayer,
-  readAloudSpeed,
-} from "@t3tools/client-runtime/read-aloud";
-import type { PreparedConnection } from "@t3tools/client-runtime/connection";
-import { ReadAloudState, type EnvironmentId, type ReadAloudMode } from "@t3tools/contracts";
+import { READ_ALOUD_SPEEDS } from "@t3tools/client-runtime/read-aloud";
+import type { EnvironmentId, ReadAloudMode } from "@t3tools/contracts";
 import * as Option from "effect/Option";
-import * as Schema from "effect/Schema";
-import { createAudioPlayer, setAudioModeAsync, setIsAudioActiveAsync } from "expo-audio";
-import { fetch } from "expo/fetch";
-import { File, Paths } from "expo-file-system";
-import {
-  memo,
-  useContext,
-  useEffect,
-  useRef,
-  useSyncExternalStore,
-  type ComponentRef,
-} from "react";
+import { memo, useContext, useEffect, useRef, type ComponentRef } from "react";
 import { Pressable, ScrollView, View, type ColorValue } from "react-native";
 
 import { AppText as Text } from "../../components/ui/AppText";
 import { SymbolView, type AppSymbolName } from "../../components/ui/AppSymbol";
 import { Menu } from "../../components/ui/Menu";
-import { voiceCall } from "../../native/voiceCall";
-import { createReadAloudAudio } from "./readAloudAudio";
 import { environmentSession } from "../../state/session";
+import { readAloudPlayer, setReadAloudConnection, useReadAloud } from "./readAloudPlayback";
 
-/**
- * Read-aloud on the phone: the environment writes a short spoken summary with
- * its local models and streams the audio sentence by sentence (the server's
- * `/api/read-aloud`, shared with web and desktop); the shared player in
- * client-runtime drives it, this file only plays the clips.
- */
-const decodeReadAloudState = Schema.decodeUnknownSync(ReadAloudState);
-
-let connection: PreparedConnection | null = null;
-
-let backgroundPlayback: boolean | null = null;
-let clipNumber = 0;
-
-const audio = createReadAloudAudio({
-  createPlayer: () => createAudioPlayer(null, { updateInterval: 250 }),
-  writeClip: async (base64) => {
-    // Rotating files: neither the playing nor the preloaded clip is overwritten.
-    const file = new File(Paths.cache, `read-aloud-${clipNumber++ % 6}.wav`);
-    await file.write(base64, { encoding: "base64" });
-    return file.uri;
-  },
-  prepare: async () => {
-    // Voice mode reads replies with the screen off; otherwise reading stops when you leave.
-    if (backgroundPlayback !== voiceCall.active) {
-      backgroundPlayback = voiceCall.active;
-      await setAudioModeAsync({
-        playsInSilentMode: true,
-        shouldPlayInBackground: backgroundPlayback,
-      });
-    }
-    // Dictation turns the audio session off when it stops recording; playback needs it on.
-    await setIsAudioActiveAsync(true);
-  },
-});
-
-/** Frees the players (voice mode drops them while you talk; see readAloudAudio.ts). */
-export function releaseReadAloudAudio() {
-  audio.release();
-}
-
-// The chosen speed outlives the app: read once at startup, written on every change.
-const speedFile = new File(Paths.document, "read-aloud-speed.json");
-
-export const readAloudPlayer = new ReadAloudPlayer({
-  audio,
-  onSpeedChange: (speed) => {
-    void Promise.resolve(speedFile.write(JSON.stringify({ speed }))).catch(() => undefined);
-  },
-  request: async (body) => {
-    const authorization = connection?.httpAuthorization ?? null;
-    if (!connection || authorization?._tag === "Dpop") {
-      throw new Error("Read aloud needs a direct connection to your computer.");
-    }
-    const response = await fetch(new URL("/api/read-aloud", connection.httpBaseUrl).toString(), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(authorization ? { Authorization: `Bearer ${authorization.token}` } : {}),
-      },
-      body: JSON.stringify(body),
-    });
-    if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
-    return decodeReadAloudState(await response.json());
-  },
-});
-
-void (async () => {
-  if (!speedFile.exists) return;
-  const stored = readAloudSpeed((JSON.parse(await speedFile.text()) as { speed?: unknown }).speed);
-  if (readAloudPlayer.getSnapshot().speed !== stored) readAloudPlayer.setSpeed(stored);
-})().catch(() => undefined);
-
-export const useReadAloud = () =>
-  useSyncExternalStore(readAloudPlayer.subscribe, readAloudPlayer.getSnapshot);
+// The player itself lives in readAloudPlayback.ts (no UI there, so tests can load it).
+export { readAloudPlayer, releaseReadAloudAudio, useReadAloud } from "./readAloudPlayback";
 
 /** Returns a function that points read-aloud at an environment's connection. */
 export function useReadAloudEnvironment(environmentId: EnvironmentId) {
   const registry = useContext(RegistryContext);
   return () => {
-    connection = Option.getOrNull(
-      registry.get(environmentSession.preparedConnectionValueAtom(environmentId)),
+    setReadAloudConnection(
+      Option.getOrNull(registry.get(environmentSession.preparedConnectionValueAtom(environmentId))),
     );
   };
 }
@@ -226,7 +137,7 @@ export function ReadAloudSpeedMenu(props: { readonly speed: number; readonly lar
           {speedLabel(props.speed)}
         </Text>
         <SymbolView
-          name={{ ios: "chevron.down", android: "expand_more" }}
+          name={{ ios: "chevron.down", android: "keyboard_arrow_down" }}
           size={props.large ? 18 : 14}
           tintColorClassName="accent-foreground"
           type="monochrome"
