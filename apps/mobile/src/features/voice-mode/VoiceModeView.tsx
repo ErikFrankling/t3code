@@ -136,7 +136,7 @@ export function VoiceModeView(props: {
 
   return (
     <View
-      className="flex-1 bg-background"
+      className="flex-1 bg-screen"
       style={{ paddingTop: insets.top + 8, paddingBottom: insets.bottom + 16 }}
     >
       <View className="flex-row items-center gap-3 px-4">
@@ -172,7 +172,7 @@ export function VoiceModeView(props: {
               onPress={() => readAloudPlayer.seek(index)}
               className={
                 index === reading.current
-                  ? "text-2xl leading-9 text-foreground font-t3-semibold"
+                  ? "text-2xl leading-9 text-foreground font-t3-medium"
                   : "text-2xl leading-9 text-foreground-muted"
               }
             >
@@ -211,12 +211,25 @@ export function VoiceModeView(props: {
           style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
           className={
             talking
-              ? "size-40 items-center justify-center rounded-full bg-red-600"
+              ? "size-40 items-center justify-center rounded-full border-2 border-danger-border bg-danger"
               : "size-40 items-center justify-center rounded-full bg-primary"
           }
         >
-          <SymbolView name={big.icon} size={56} tintColor="#ffffff" type="monochrome" />
-          <Text className="mt-1 text-lg font-t3-semibold text-white">{big.label}</Text>
+          <SymbolView
+            name={big.icon}
+            size={56}
+            tintColorClassName={talking ? "accent-danger-foreground" : "accent-primary-foreground"}
+            type="monochrome"
+          />
+          <Text
+            className={
+              talking
+                ? "mt-1 text-lg font-t3-bold text-danger-foreground"
+                : "mt-1 text-lg font-t3-bold text-primary-foreground"
+            }
+          >
+            {big.label}
+          </Text>
         </Pressable>
         {!mode.loop && props.reply && !speaking && !recording ? (
           <Pressable
