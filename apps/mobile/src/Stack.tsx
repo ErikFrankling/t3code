@@ -73,6 +73,7 @@ import { ThreadPullRequestsSheet } from "./features/threads/ThreadPullRequestsSh
 import { ThreadAgentsSheet } from "./features/threads/ThreadAgentsSheet";
 import { ThreadBackgroundWorkSheet } from "./features/threads/ThreadBackgroundWorkSheet";
 import { ThreadQueueSheet } from "./features/threads/ThreadQueueControl";
+import { AttentionSheet } from "./features/attention/AttentionSheet";
 import { ThreadRouteScreen } from "./features/threads/ThreadRouteScreen";
 import { McpAppFullscreenScreen } from "./features/threads/McpAppFullscreenScreen";
 import { ConnectionsRouteScreen } from "./features/connection/ConnectionsRouteScreen";
@@ -562,6 +563,7 @@ const WORKSPACE_OVERLAY_ROUTES = new Set([
   "ThreadBackgroundWork",
   "ThreadPullRequests",
   "ThreadQueue",
+  "Attention",
   "ThreadReviewComment",
   "ThreadDevicePreview",
   "ThreadBrowserPreview",
@@ -877,6 +879,15 @@ const RootStackConfig = createWorkspaceStackNavigator({
         ...FORM_SHEET_PRESENTATION_OPTIONS,
         headerShown: false,
         sheetAllowedDetents: [0.5, 0.9],
+        sheetGrabberVisible: true,
+      },
+    }),
+    Attention: createNativeStackScreen({
+      screen: AttentionSheet,
+      options: {
+        ...FORM_SHEET_PRESENTATION_OPTIONS,
+        headerShown: false,
+        sheetAllowedDetents: [0.65, 0.95],
         sheetGrabberVisible: true,
       },
     }),
