@@ -28,6 +28,8 @@ export type ReadAloudPlayOptions = {
 export interface ReadAloudAudio {
   /** Plays one clip; resolves when it ends, rejects if stopped. */
   play(clip: ReadAloudClip, options: ReadAloudPlayOptions): Promise<void>;
+  /** Loads the clip that plays next, when it arrives after the current one started. */
+  preload?(clip: ReadAloudClip): void;
   pause(): void;
   resume(): void;
   stop(): void;
@@ -88,6 +90,9 @@ export class ReadAloudPlayer {
   // plays the remaining clips faster or slower instead of re-synthesizing.
   #jobSpeed = 1;
   #text = "";
+  // The chunk after the one playing, when it had not arrived yet as it started:
+  // preloaded the moment it does, so it follows without a gap.
+  #awaitingNext: number | null = null;
 
   constructor(deps: ReadAloudDependencies) {
     this.#deps = deps;
@@ -205,6 +210,13 @@ export class ReadAloudPlayer {
     ) {
       this.#covered += chunk.span;
     }
+    if (this.#awaitingNext !== null) {
+      const next = this.#clip(this.#awaitingNext);
+      if (next) {
+        this.#awaitingNext = null;
+        this.#deps.audio.preload?.(next);
+      }
+    }
     this.#complete = state.status !== "working";
     this.#set({
       sentences: state.sentences.map((sentence) => sentence.text),
@@ -265,6 +277,7 @@ export class ReadAloudPlayer {
       const next = this.#clip(first + chunk.span);
       if (!clip) return;
       this.#set({ phase: "playing" });
+      this.#awaitingNext = next ? null : first + chunk.span;
       try {
         await this.#deps.audio.play(clip, {
           rate: this.#state.speed / this.#jobSpeed,
