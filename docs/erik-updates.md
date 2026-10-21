@@ -94,7 +94,7 @@ test is one script for the homelab worker:
 ```sh
 heavy -e PHASE=build --shell .#android -- scripts/erik-updates-e2e.sh   # no emulator needed
 heavy emulator start                                                     # once it is free
-heavy -e PHASE=device --no-sync --shell .#android -- scripts/erik-updates-e2e.sh
+heavy --big -e PHASE=device --shell .#android -- scripts/erik-updates-e2e.sh   # big: no build may share the node
 heavy pull .erik-updates-e2e
 heavy emulator stop
 ```
