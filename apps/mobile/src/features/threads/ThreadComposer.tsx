@@ -66,6 +66,7 @@ import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 
 import { AppText as Text } from "../../components/ui/AppText";
 import { ComposerAttachmentButton } from "./ComposerAttachmentButton";
+import { useComposerEditorMaxHeight } from "./composerEditorHeight";
 import {
   ComposerAttachmentStrip,
   ComposerAttachmentThumbnail,
@@ -531,6 +532,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
   const rowGeometryRef = useRef({ surfaceWidth: 0, leadingWidth: 0, trailingWidth: 0 });
   const [draftOverflowsRow, setDraftOverflowsRow] = useState(false);
   const lineHeight = bodyText.lineHeight;
+  const editorMaxHeight = useComposerEditorMaxHeight(lineHeight);
   const updateDraftOverflow = () => {
     const { width, height } = draftSizeRef.current;
     const row = rowGeometryRef.current;
@@ -1032,9 +1034,9 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                 style={
                   usesCard
                     ? {
-                        // A stacked draft shows two to four lines, then scrolls.
+                        // A stacked draft grows with its text, then scrolls.
                         minHeight: lineHeight * 2 + 8,
-                        maxHeight: lineHeight * 4 + 8,
+                        maxHeight: editorMaxHeight,
                         paddingVertical: 4,
                       }
                     : {

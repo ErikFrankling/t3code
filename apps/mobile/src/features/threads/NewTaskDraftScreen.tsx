@@ -319,7 +319,6 @@ export function NewTaskDraftScreen(props: {
     });
   const queuesInsteadOfStarting = !environmentConnected || attachmentsUploading;
   const promptInputRef = useRef<ComposerEditorHandle>(null);
-  const editorMaxHeight = useComposerEditorMaxHeight();
   const loadedBranchesProjectKeyRef = useRef<string | null>(null);
   const [isComposerFocused, setIsComposerFocused] = useState(false);
   const [previewVideo, setPreviewVideo] = useState<VideoPreviewSource | null>(null);
@@ -640,6 +639,7 @@ export function NewTaskDraftScreen(props: {
   const foregroundColor = theme["--color-foreground"];
   const regularFontFamily = FONT_FAMILIES.regular;
   const bodyText = useScaledTextRole("body");
+  const editorMaxHeight = useComposerEditorMaxHeight(bodyText.lineHeight);
 
   const lastInitialProjectRefRef = useRef(props.initialProjectRef);
 
