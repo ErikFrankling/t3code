@@ -92,8 +92,9 @@ the PC (Erik, 2026-10-21: heavy work goes to the homelab). The end-to-end
 test is one script for the homelab worker:
 
 ```sh
-heavy emulator start
-heavy --shell .#android -- scripts/erik-updates-e2e.sh
+heavy -e PHASE=build --shell .#android -- scripts/erik-updates-e2e.sh   # no emulator needed
+heavy emulator start                                                     # once it is free
+heavy -e PHASE=device --no-sync --shell .#android -- scripts/erik-updates-e2e.sh
 heavy pull .erik-updates-e2e
 heavy emulator stop
 ```
