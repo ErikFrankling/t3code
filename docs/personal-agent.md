@@ -30,3 +30,19 @@ launches in those projects, never into its own folder.
 
 Unpinning, archiving or renaming the thread are ordinary thread actions.
 Opening the personal agent again unarchives it.
+
+## Needs you
+
+Beside the personal agent's chat (and from the **Needs you** pill on its card in
+the Android app) is a list of what only you can do: sign in somewhere, make a
+decision, answer a question. Each item says which threads it unblocks and which
+thread filed it.
+
+Tick an item when it is done. The personal agent gets a message naming the item
+and its blocked threads, checks it, and resumes them; if it is not actually
+done, the agent puts it back. Untick an item to put it back yourself, or remove
+it with ×. Ticked items stay under **Done this week** for seven days.
+
+The personal agent keeps the list current, and any thread blocked on you can
+file its own item, through the `attention_item_upsert`, `attention_item_resolve`
+and `attention_item_list` tools of the T3 Code MCP server.
