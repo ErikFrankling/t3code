@@ -538,6 +538,10 @@
     "./speech": {
       "types": "./src/speech.ts",
       "import": "./src/speech.ts"
+    },
+    "./providerFailover": {
+      "types": "./src/providerFailover.ts",
+      "import": "./src/providerFailover.ts"
     }
   },
   "scripts": {
