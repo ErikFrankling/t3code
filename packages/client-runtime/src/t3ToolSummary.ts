@@ -196,6 +196,12 @@ export function summarizeT3ToolCalls(
     case "schedule-list":
       label = phrase("Listed", "list", `scheduled tasks ${times}`);
       break;
+    case "attention-update":
+      label = phrase("Updated", "update", quantity(selected.length, "Needs you item"));
+      break;
+    case "attention-list":
+      label = phrase("Listed", "list", `Needs you items ${times}`);
+      break;
     case "schedule-update":
       label = phrase(
         "Updated",
