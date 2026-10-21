@@ -2,7 +2,12 @@ import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime"
 import { AsyncResult } from "effect/reactivity";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import { limitRecoveryOwnsSnooze } from "@t3tools/client-runtime/state/thread-execution";
-import type { EnvironmentId } from "@t3tools/contracts";
+import {
+  MessageId,
+  type EnvironmentId,
+  type ModelSelection,
+  type ServerProvider,
+} from "@t3tools/contracts";
 import {
   CHATGPT_USAGE_LIMIT_CODE,
   CHATGPT_USAGE_URL,
@@ -17,15 +22,22 @@ import { AppText as Text } from "../../components/ui/AppText";
 import { useDeadlinePassed } from "../../lib/clock";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { uuidv4 } from "../../lib/uuid";
+import { usageLimitContinuationTargets } from "./usageLimitContinuation";
 
 export function UsageLimitRecoveryCard({
   thread,
   environmentId,
+  providers,
+  onSelectModel,
 }: {
   thread: EnvironmentThreadShell;
   environmentId: EnvironmentId;
+  providers: ReadonlyArray<ServerProvider>;
+  onSelectModel: (modelSelection: ModelSelection) => void;
 }) {
   const updateMetadata = useAtomCommand(threadEnvironment.updateMetadata);
+  const startTurn = useAtomCommand(threadEnvironment.startTurn, "continue on another account");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const resetAt = thread.runtime?.usageLimitResetAt ?? null;
@@ -72,6 +84,39 @@ export function UsageLimitRecoveryCard({
       recovery,
       snoozedUntil: thread.snoozedUntil,
     }) && !resetPassed;
+  const continuationTargets = usageLimitContinuationTargets(
+    providers,
+    thread.modelSelection.instanceId,
+  );
+  async function continueOn(instanceId: ModelSelection["instanceId"]) {
+    if (!runId) return;
+    const modelSelection = { ...thread.modelSelection, instanceId };
+    setPending(true);
+    setError(null);
+    onSelectModel(modelSelection);
+    const result = await startTurn({
+      environmentId,
+      input: {
+        threadId: thread.id,
+        manualContinuationOfRunId: runId,
+        modelSelection,
+        message: {
+          messageId: MessageId.make(uuidv4()),
+          role: "user",
+          text: "Continue where you left off.",
+          attachments: [],
+        },
+        runtimeMode: thread.runtimeMode,
+        interactionMode: thread.interactionMode,
+        dispatchMode: "start",
+      },
+    });
+    setPending(false);
+    if (AsyncResult.isFailure(result)) {
+      const cause = squashAtomCommandFailure(result);
+      setError(cause instanceof Error ? cause.message : "Could not continue on that account.");
+    }
+  }
   async function toggle(action: "resume" | "snooze") {
     if (!resetAt || !runId || !canSchedule) return;
     if (action === "snooze" && !snoozed && Date.parse(resetAt) <= Date.now()) {
@@ -155,7 +200,7 @@ export function UsageLimitRecoveryCard({
                 ? `Usage limit reached. ${resetText}`
                 : "Usage limit reached. The provider did not report a reset time. Retry manually when your limit is available."}
         </Text>
-        {chatGptLimit || canSchedule ? (
+        {chatGptLimit || canSchedule || continuationTargets.length > 0 ? (
           // The margins cancel the 44pt touch height so the links sit 8pt under the text.
           <View className="-mb-3 -mt-2 flex-row flex-wrap gap-x-4">
             {chatGptLimit ? (
@@ -166,6 +211,14 @@ export function UsageLimitRecoveryCard({
                 onPress={action.run}
               />
             ) : null}
+            {continuationTargets.map((target) => (
+              <RecoveryAction
+                key={target.instanceId}
+                label={`Continue on ${target.label}`}
+                disabled={pending}
+                onPress={() => void continueOn(target.instanceId)}
+              />
+            ))}
             {canSchedule ? (
               <>
                 <RecoveryAction
