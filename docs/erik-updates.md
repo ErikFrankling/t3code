@@ -88,28 +88,23 @@ on `erik/main` with `accept_dropped_commits`.
 ## Testing
 
 Never run the workflow on a branch, and never build APKs or run emulators on
-the PC (Erik, 2026-10-21: heavy work goes to the homelab, which has `/dev/kvm`).
-Build and test on the homelab:
+the PC (Erik, 2026-10-21: heavy work goes to the homelab). The end-to-end
+test is one script for the homelab worker:
 
-1. Serve a local channel: `index.json`, bundles and APKs in one directory over
-   HTTP (port 8091), and the update server on 8090:
-   `INDEX_URL=http://127.0.0.1:8091/index.json PORT=8090 node <homelab>/kubernetes/homelab/config/t3-updates/server.mjs`.
-2. Build a release APK with `APP_VARIANT=preview`,
-   `T3CODE_MOBILE_UPDATES_URL=http://10.0.2.2:8090/manifest` and
-   `T3CODE_MOBILE_SELF_UPDATE_URL=http://10.0.2.2:8091/index.json`
-   (`expo prebuild`, then `./gradlew assembleRelease --max-workers=2
--PreactNativeArchitectures=x86_64 -Pkotlin.compiler.execution.strategy=in-process`
-   with a set `versionCode`). Run one emulator and `adb emu kill` it when done. Install the APK
-   with `adb install`, then
-   `adb shell appops set com.t3tools.t3code.preview REQUEST_INSTALL_PACKAGES allow`
-   (on the phone, that is the one-time tap).
-3. JS update: change JS, `expo export --platform android`, then
-   `scripts/erik-updates.mjs ota` with the APK's runtime
-   (`unzip -p app.apk assets/fingerprint`) into the local index.
-4. Native update: change native code, build again with a higher
-   `versionCode`, and record it with `scripts/erik-updates.mjs apk`.
-5. Leaving the app (Home) installs a downloaded APK about 5 s later through
-   a WorkManager job: Android freezes a backgrounded app, so JS timers cannot
-   do it.
-6. `adb logcat -s T3SelfUpdate` shows each step; Settings → About → Version
-   shows what is running.
+```sh
+heavy emulator start
+heavy --shell .#android -- scripts/erik-updates-e2e.sh
+heavy pull .erik-updates-e2e
+heavy emulator stop
+```
+
+It builds APK 1000 and 1001 (a native change) with a throwaway signing key,
+serves a local channel to the emulator (10.0.2.2), and checks: the APK's
+runtime matches the resolved one; a JS update published while the app is open
+downloads without a tap and applies when the app leaves the screen; APK 1001
+downloads while the app is open, waits, and installs silently about 5 s after
+Home (a WorkManager job: Android freezes a backgrounded app, so JS timers
+cannot do it). `.erik-updates-e2e/summary.txt` says PASS or where it failed,
+with logs and light/dark screenshots next to it. On a phone the one extra
+step is the one-time "Install unknown apps" tap, which the script grants with
+`appops`.
