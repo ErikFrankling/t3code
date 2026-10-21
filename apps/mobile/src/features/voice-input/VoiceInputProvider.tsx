@@ -29,16 +29,12 @@ import {
 } from "@t3tools/client-runtime/voice-input";
 import { voiceCall } from "../../native/voiceCall";
 import { createCallVoiceRecorder } from "./callVoiceRecorder";
+import { configureVoiceRecordingAudio, releaseVoiceRecordingAudio } from "./voiceRecordingAudio";
 import { createLazyVoiceRecorder } from "./lazyVoiceRecorder";
 import { VOICE_WAVEFORM_SAMPLE_COUNT } from "./voiceInputMetering";
 import { VoiceInputSession } from "./voiceInputSession";
 import { createVoiceRecordingPermission } from "./voiceRecordingPermission";
 import { makePermissionStatusAtom } from "../../lib/permissionStatusAtom";
-import {
-  acquireAudioSession,
-  activateAudioSession,
-  releaseAudioSession,
-} from "../../lib/audioSession";
 
 // The native constructor expects platform-flattened options, as built by useAudioRecorder.
 const { ios: IOS_RECORDING_OPTIONS, android: ANDROID_RECORDING_OPTIONS } =
@@ -113,7 +109,6 @@ const voiceInputAtom = Atom.make((get) => {
     Array<number>(VOICE_WAVEFORM_SAMPLE_COUNT).fill(0),
   );
   let keepAwakeSequence = 0;
-  let audioToken: ReturnType<typeof acquireAudioSession> | null = null;
   const permission = createVoiceRecordingPermission(() => {
     // In voice mode the call's service keeps recording with the screen off.
     if (!voiceCall.active) void session.controller.appMovedToBackground();
@@ -163,20 +158,8 @@ const voiceInputAtom = Atom.make((get) => {
       return transcriber === "checking" ? null : transcriber;
     },
     requestPermission: permission.requestPermission,
-    configureRecording: async () => {
-      const token = acquireAudioSession("recording");
-      audioToken = token;
-      try {
-        await activateAudioSession(token);
-      } catch (error) {
-        await releaseAudioSession(token).catch(() => {});
-        throw error;
-      }
-    },
-    releaseRecording: async () => {
-      if (audioToken) await releaseAudioSession(audioToken);
-      audioToken = null;
-    },
+    configureRecording: configureVoiceRecordingAudio,
+    releaseRecording: releaseVoiceRecordingAudio,
     deleteRecording: (uri) => new File(uri).delete(),
     sampleRecording: () => {
       const status = recorder.getStatus();
