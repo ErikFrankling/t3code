@@ -1,7 +1,6 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import type { EnvironmentId } from "@t3tools/contracts";
-import { READ_ALOUD_SPEEDS } from "@t3tools/client-runtime/read-aloud";
 import {
   VOICE_LOOP_CUE_KEY,
   VoiceLoop,
@@ -21,7 +20,12 @@ import {
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { Switch } from "../ui/switch";
-import { readAloudPlayer, setReadAloudEnvironment, useReadAloud } from "./ReadAloud";
+import {
+  ReadAloudSpeedMenu,
+  readAloudPlayer,
+  setReadAloudEnvironment,
+  useReadAloud,
+} from "./ReadAloud";
 
 /**
  * Voice mode on web and desktop: the thread over the whole window as speech.
@@ -223,8 +227,6 @@ export function VoiceModeOverlay({
         : working
           ? "Thinking…"
           : "Press Talk or Space";
-  const nextSpeed =
-    READ_ALOUD_SPEEDS.find((speed) => speed > reading.speed + 0.001) ?? READ_ALOUD_SPEEDS[0];
   const error = loop.error ?? (reading.phase === "error" ? reading.error : null);
   const BigIcon = big.icon;
 
@@ -298,14 +300,7 @@ export function VoiceModeOverlay({
             >
               {reading.phase === "playing" ? <PauseIcon /> : <PlayIcon />}
             </Button>
-            <Button
-              aria-label="Playback speed"
-              size="lg"
-              variant="outline"
-              onClick={() => readAloudPlayer.setSpeed(nextSpeed)}
-            >
-              {reading.speed}×
-            </Button>
+            <ReadAloudSpeedMenu speed={reading.speed} size="lg" />
           </div>
         ) : null}
 

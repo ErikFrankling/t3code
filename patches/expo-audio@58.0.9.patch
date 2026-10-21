@@ -127,3 +127,27 @@ diff --git a/android/src/main/java/expo/modules/audio/AudioModule.kt b/android/s
 +      Function("pause") { player: AudioPlayer, /* deactivateSession - iOS only */ _: Boolean? ->
          runOnMain {
            player.isPaused = false
+diff --git a/android/src/main/java/expo/modules/audio/AudioPlayer.kt b/android/src/main/java/expo/modules/audio/AudioPlayer.kt
+--- a/android/src/main/java/expo/modules/audio/AudioPlayer.kt
++++ b/android/src/main/java/expo/modules/audio/AudioPlayer.kt
+@@ -146,7 +146,7 @@
+   }
+ 
+   override fun setPlaybackRate(rate: Float) {
+-    val playbackRate = rate.coerceIn(0.1f, 2.0f)
++    val playbackRate = rate.coerceIn(0.1f, 4.0f)
+     val pitch = if (preservesPitch) {
+       1f
+     } else {
+diff --git a/android/src/main/java/expo/modules/audio/AudioPlaylist.kt b/android/src/main/java/expo/modules/audio/AudioPlaylist.kt
+--- a/android/src/main/java/expo/modules/audio/AudioPlaylist.kt
++++ b/android/src/main/java/expo/modules/audio/AudioPlaylist.kt
+@@ -191,7 +191,7 @@
+   }
+ 
+   override fun setPlaybackRate(rate: Float) {
+-    val boundedRate = rate.coerceIn(0.1f, 2.0f)
++    val boundedRate = rate.coerceIn(0.1f, 4.0f)
+     currentRate = boundedRate
+     ref.setPlaybackSpeed(boundedRate)
+   }

@@ -1,5 +1,9 @@
 import { RegistryContext } from "@effect/atom-react";
-import { READ_ALOUD_SPEEDS, ReadAloudPlayer } from "@t3tools/client-runtime/read-aloud";
+import {
+  READ_ALOUD_SPEEDS,
+  ReadAloudPlayer,
+  readAloudSpeed,
+} from "@t3tools/client-runtime/read-aloud";
 import type { PreparedConnection } from "@t3tools/client-runtime/connection";
 import { ReadAloudState, type EnvironmentId, type ReadAloudMode } from "@t3tools/contracts";
 import * as Option from "effect/Option";
@@ -19,6 +23,7 @@ import { Pressable, ScrollView, View, type ColorValue } from "react-native";
 
 import { AppText as Text } from "../../components/ui/AppText";
 import { SymbolView, type AppSymbolName } from "../../components/ui/AppSymbol";
+import { Menu } from "../../components/ui/Menu";
 import { voiceCall } from "../../native/voiceCall";
 import { createReadAloudAudio } from "./readAloudAudio";
 import { environmentSession } from "../../state/session";
@@ -63,8 +68,14 @@ export function releaseReadAloudAudio() {
   audio.release();
 }
 
+// The chosen speed outlives the app: read once at startup, written on every change.
+const speedFile = new File(Paths.document, "read-aloud-speed.json");
+
 export const readAloudPlayer = new ReadAloudPlayer({
   audio,
+  onSpeedChange: (speed) => {
+    void Promise.resolve(speedFile.write(JSON.stringify({ speed }))).catch(() => undefined);
+  },
   request: async (body) => {
     const authorization = connection?.httpAuthorization ?? null;
     if (!connection || authorization?._tag === "Dpop") {
@@ -82,6 +93,12 @@ export const readAloudPlayer = new ReadAloudPlayer({
     return decodeReadAloudState(await response.json());
   },
 });
+
+void (async () => {
+  if (!speedFile.exists) return;
+  const stored = readAloudSpeed((JSON.parse(await speedFile.text()) as { speed?: unknown }).speed);
+  if (readAloudPlayer.getSnapshot().speed !== stored) readAloudPlayer.setSpeed(stored);
+})().catch(() => undefined);
 
 export const useReadAloud = () =>
   useSyncExternalStore(readAloudPlayer.subscribe, readAloudPlayer.getSnapshot);
@@ -180,6 +197,45 @@ export const ReadAloudButton = memo(function ReadAloudButton(props: {
   );
 });
 
+/** "1.25×", the way the speed is shown on its button and in the menu. */
+export const speedLabel = (speed: number) => `${speed}×`;
+
+/** Every playback speed in one menu; a tap picks one (the current one is checked). */
+export function ReadAloudSpeedMenu(props: { readonly speed: number; readonly large?: boolean }) {
+  return (
+    <Menu
+      title="Playback speed"
+      accessible
+      accessibilityRole="button"
+      accessibilityLabel={`Playback speed, ${speedLabel(props.speed)}`}
+      actions={READ_ALOUD_SPEEDS.map((speed) => ({
+        id: String(speed),
+        title: speedLabel(speed),
+        state: speed === props.speed ? ("on" as const) : ("off" as const),
+      }))}
+      onPressAction={({ nativeEvent }) => readAloudPlayer.setSpeed(Number(nativeEvent.event))}
+    >
+      <View
+        className={
+          props.large
+            ? "h-14 min-w-14 flex-row items-center justify-center gap-1 rounded-full bg-card px-4"
+            : "flex-row items-center gap-0.5 rounded-lg px-2 py-1"
+        }
+      >
+        <Text className={props.large ? "text-lg text-foreground" : "text-sm text-foreground"}>
+          {speedLabel(props.speed)}
+        </Text>
+        <SymbolView
+          name={{ ios: "chevron.down", android: "expand_more" }}
+          size={props.large ? 18 : 14}
+          tintColorClassName="accent-foreground"
+          type="monochrome"
+        />
+      </View>
+    </Menu>
+  );
+}
+
 const VOICE_LABEL: Record<string, string> = { big: "Higgs", small: "Kokoro" };
 
 /**
@@ -248,8 +304,6 @@ export function ReadAloudDock(props: {
     );
   }
 
-  const nextSpeed =
-    READ_ALOUD_SPEEDS.find((speed) => speed > state.speed + 0.001) ?? READ_ALOUD_SPEEDS[0];
   const otherMode: ReadAloudMode = state.mode === "summary" ? "full" : "summary";
 
   return (
@@ -310,15 +364,7 @@ export function ReadAloudDock(props: {
             icon={{ ios: "forward.end.fill", android: "skip_next" }}
             onPress={() => readAloudPlayer.seek(state.current + 1)}
           />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Playback speed"
-            hitSlop={6}
-            onPress={() => readAloudPlayer.setSpeed(nextSpeed)}
-            className="rounded-lg px-2 py-1"
-          >
-            <Text className="text-sm text-foreground">{state.speed}×</Text>
-          </Pressable>
+          <ReadAloudSpeedMenu speed={state.speed} />
           <Pressable
             accessibilityRole="button"
             hitSlop={6}
