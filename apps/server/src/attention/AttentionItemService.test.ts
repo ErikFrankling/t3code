@@ -147,3 +147,59 @@ it.effect("lists open items by priority before done ones, and dismiss removes", 
     }),
   ),
 );
+
+it.effect("a commitment closes only with proof and never through a user tick", () =>
+  withService((service, sent) =>
+    Effect.gen(function* () {
+      const id = AttentionItemId.make("composer-grows");
+      const { item } = yield* service.upsertCommitment({
+        id,
+        title: "Android composer grows to 6 lines",
+        ownerThreadId: blocked,
+        proofRequired: "Dark-theme screenshots at phone width",
+        askedAt: "2026-10-21",
+      });
+      assert.strictEqual(item.kind, "in_flight");
+      assert.strictEqual(item.state, "open");
+      assert.strictEqual(item.ownerThreadId, blocked);
+
+      const tick = yield* Effect.flip(
+        service.setDone({ id, done: true }, { wakePersonalAgent: true }),
+      );
+      assert.include(tick.message, "proof");
+      const bare = yield* Effect.flip(service.resolveCommitment({ id, state: "done" }));
+      assert.include(bare.message, "proof");
+
+      // A repeat request marks it repeated and keeps the other fields.
+      const repeated = yield* service.upsertCommitment({ id, title: item.title, repeated: true });
+      assert.isTrue(repeated.item.repeated);
+      assert.strictEqual(repeated.item.proofRequired, "Dark-theme screenshots at phone width");
+
+      const closed = yield* service.resolveCommitment({
+        id,
+        state: "done",
+        proof: "/home/erikf/shots/composer-6.png",
+      });
+      assert.isTrue(closed.item.done);
+      assert.strictEqual(closed.item.state, "done");
+      assert.strictEqual(closed.item.proof, "/home/erikf/shots/composer-6.png");
+      assert.lengthOf(yield* Ref.get(sent), 0);
+    }),
+  ),
+);
+
+it.effect("needs-you and in-flight ids do not cross over", () =>
+  withService((service) =>
+    Effect.gen(function* () {
+      const needs = yield* service.upsert({ title: "Sign in" });
+      const commitment = yield* service.upsertCommitment({ title: "Ship it" });
+      yield* Effect.flip(service.upsertCommitment({ id: needs.item.id, title: "Ship it" }));
+      yield* Effect.flip(service.upsert({ id: commitment.item.id, title: "Sign in" }));
+      yield* Effect.flip(service.resolveCommitment({ id: needs.item.id, state: "in_progress" }));
+      assert.deepStrictEqual(
+        (yield* service.list()).items.map((item) => item.kind).toSorted(),
+        ["in_flight", "needs_you"],
+      );
+    }),
+  ),
+);
