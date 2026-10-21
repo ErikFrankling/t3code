@@ -1,4 +1,8 @@
-import { type AttentionItemError, OrchestratorMcpFailure } from "@t3tools/contracts";
+import {
+  type AttentionItemError,
+  type AttentionItemKind,
+  OrchestratorMcpFailure,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
 import * as AttentionItemService from "../../../attention/AttentionItemService.ts";
@@ -11,6 +15,11 @@ const toFailure = (error: AttentionItemError) =>
 
 const make = Effect.gen(function* () {
   const service = yield* AttentionItemService.AttentionItemService;
+  const listKind = (kind: AttentionItemKind) =>
+    service.list().pipe(
+      Effect.map(({ items }) => ({ items: items.filter((item) => item.kind === kind) })),
+      Effect.mapError(toFailure),
+    );
   return {
     attention_item_upsert: McpToolAccess.writesWithCapability((input) =>
       Effect.gen(function* () {
@@ -37,7 +46,14 @@ const make = Effect.gen(function* () {
         return { id: input.id, item };
       }),
     ),
-    attention_item_list: McpToolAccess.reads(() => service.list().pipe(Effect.mapError(toFailure))),
+    attention_item_list: McpToolAccess.reads(() => listKind("needs_you")),
+    commitment_upsert: McpToolAccess.writesWithCapability((input) =>
+      service.upsertCommitment(input).pipe(Effect.mapError(toFailure)),
+    ),
+    commitment_resolve: McpToolAccess.writesWithCapability((input) =>
+      service.resolveCommitment(input).pipe(Effect.mapError(toFailure)),
+    ),
+    commitment_list: McpToolAccess.reads(() => listKind("in_flight")),
   } satisfies McpToolAccess.Handlers<typeof AttentionToolkit.tools>;
 });
 
