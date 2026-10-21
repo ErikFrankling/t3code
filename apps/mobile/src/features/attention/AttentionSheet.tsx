@@ -1,8 +1,16 @@
 import { useAtomValue } from "@effect/atom-react";
 import { type StaticScreenProps, useNavigation } from "@react-navigation/native";
+import { splitCommitmentProof } from "@t3tools/client-runtime/commitment-proof";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import type { AttentionItem, EnvironmentId, ThreadId } from "@t3tools/contracts";
+import {
+  PERSONAL_AGENT_THREAD_ID,
+  type AttentionItem,
+  type CommitmentState,
+  type EnvironmentId,
+  type ThreadId,
+} from "@t3tools/contracts";
 import * as Haptics from "expo-haptics";
+import { Image } from "expo-image";
 import { useState } from "react";
 import { Linking, Platform, Pressable, ScrollView, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -16,6 +24,7 @@ import { ScreenContent } from "../../components/ui/ScreenContent";
 import { cn } from "../../lib/cn";
 import { useUniwindTheme } from "../../lib/useUniwindTheme";
 import { NativeStackScreenOptions, nativeHeaderScrollEdgeEffects } from "../../native/StackHeader";
+import { useAssetUrl } from "../../state/assets";
 import { useEnvironmentServerConfig, useThreadShell } from "../../state/entities";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
@@ -39,7 +48,7 @@ export function useOpenAttentionCount(environmentId: EnvironmentId | null): numb
       : null,
   );
   if (!supported) return null;
-  return data?.items.filter((item) => !item.done).length ?? 0;
+  return data?.items.filter((item) => item.kind === "needs_you" && !item.done).length ?? 0;
 }
 
 function DetailText({ text }: { text: string }) {
@@ -185,7 +194,157 @@ function AttentionRow(props: {
   );
 }
 
-/** The personal agent's Needs you list: what only the user can do. */
+const STATE_LABEL: Record<CommitmentState, string> = {
+  open: "Open",
+  in_progress: "In progress",
+  waiting: "Waiting on you",
+  done: "Done",
+};
+
+const STATE_CLASS: Record<CommitmentState, { readonly box: string; readonly text: string }> = {
+  open: { box: "bg-subtle", text: "text-foreground-muted" },
+  in_progress: { box: "bg-subtle-strong", text: "text-primary-text" },
+  waiting: { box: "bg-warning", text: "text-warning-foreground" },
+  done: { box: "bg-subtle", text: "text-foreground-muted" },
+};
+
+function Badge(props: { readonly box: string; readonly text: string; readonly label: string }) {
+  return (
+    <View className={cn("rounded px-1.5 py-0.5", props.box)}>
+      <Text className={cn("text-[10px] font-t3-bold uppercase tracking-wide", props.text)}>
+        {props.label}
+      </Text>
+    </View>
+  );
+}
+
+function ProofImage(props: {
+  readonly environmentId: EnvironmentId;
+  readonly source: string;
+  readonly local: boolean;
+}) {
+  const assetUrl = useAssetUrl(
+    props.environmentId,
+    props.local
+      ? { _tag: "media-file", threadId: PERSONAL_AGENT_THREAD_ID, path: props.source }
+      : null,
+  );
+  const url = props.local ? assetUrl : props.source;
+  const name = props.source.split("/").pop() ?? props.source;
+  if (url === null) {
+    return <Text className="text-xs text-foreground-muted">{name}</Text>;
+  }
+  return (
+    <Pressable
+      accessibilityRole="imagebutton"
+      accessibilityLabel={`Open proof ${name}`}
+      onPress={() => void Linking.openURL(url)}
+      className="w-[48%] overflow-hidden rounded-lg border border-border"
+    >
+      <Image source={{ uri: url }} contentFit="cover" contentPosition="top" style={{ height: 120 }} />
+    </Pressable>
+  );
+}
+
+function ProofView(props: { readonly environmentId: EnvironmentId; readonly proof: string }) {
+  const parts = splitCommitmentProof(props.proof);
+  const images = parts.flatMap((part) => (part.type === "image" ? [part] : []));
+  return (
+    <View className="gap-1.5">
+      <Text className="text-sm text-foreground-muted">
+        <Text className="text-sm font-t3-medium text-foreground-secondary">Proof: </Text>
+        {parts.map((part, index) =>
+          part.type === "text" ? (
+            part.text
+          ) : part.type === "link" ? (
+            <Text
+              key={index}
+              className="text-sm text-md-link underline"
+              onPress={() => void Linking.openURL(part.url)}
+            >
+              {part.url}
+            </Text>
+          ) : (
+            <Text key={index}>{part.source.split("/").pop()}</Text>
+          ),
+        )}
+      </Text>
+      {images.length > 0 ? (
+        <View className="flex-row flex-wrap gap-2">
+          {images.map((image) => (
+            <ProofImage
+              key={image.source}
+              environmentId={props.environmentId}
+              source={image.source}
+              local={image.local}
+            />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/** A commitment the personal agent owns. Only the agent closes it, with proof. */
+function InFlightRow(props: {
+  readonly environmentId: EnvironmentId;
+  readonly item: AttentionItem;
+  readonly onOpenThread: (threadId: ThreadId) => void;
+}) {
+  const { item } = props;
+  return (
+    <View className="gap-1.5 border-b border-border py-3">
+      <View className="flex-row flex-wrap items-center gap-1.5">
+        <Badge {...STATE_CLASS[item.state]} label={STATE_LABEL[item.state]} />
+        {item.repeated ? (
+          <Badge box="bg-danger" text="text-danger-foreground" label="Repeated" />
+        ) : null}
+        {item.askedAt ? (
+          <Text className="ml-auto text-xs text-foreground-tertiary">Asked {item.askedAt}</Text>
+        ) : null}
+      </View>
+      <Text
+        className={cn(
+          "text-base font-t3-medium",
+          item.done ? "text-foreground-muted" : "text-foreground",
+        )}
+      >
+        {item.title}
+      </Text>
+      {item.detail && !item.done ? <DetailText text={item.detail} /> : null}
+      {item.ownerThreadId ? (
+        <View className="flex-row flex-wrap items-center gap-1.5">
+          <Text className="text-xs text-foreground-tertiary">Owner</Text>
+          <ThreadChip
+            environmentId={props.environmentId}
+            threadId={item.ownerThreadId}
+            onOpen={props.onOpenThread}
+          />
+        </View>
+      ) : null}
+      {item.proofRequired && !item.done ? (
+        <Text className="text-sm text-foreground-muted">
+          <Text className="text-sm font-t3-medium text-foreground-secondary">Proof needed: </Text>
+          {item.proofRequired}
+        </Text>
+      ) : null}
+      {item.proof && item.done ? (
+        <ProofView environmentId={props.environmentId} proof={item.proof} />
+      ) : null}
+    </View>
+  );
+}
+
+function SectionTitle({ children }: { children: string }) {
+  return (
+    <Text className="mt-6 mb-1 text-xs font-t3-medium text-foreground-tertiary">{children}</Text>
+  );
+}
+
+/**
+ * The personal agent's two lists: Needs you (what only the user can do) and
+ * In flight (what the agent has committed to and owns until it is proven done).
+ */
 export function AttentionSheet({ route }: StaticScreenProps<AttentionTarget>) {
   const { environmentId } = route.params;
   const { layout } = useAdaptiveWorkspaceLayout();
@@ -219,8 +378,20 @@ export function AttentionSheet({ route }: StaticScreenProps<AttentionTarget>) {
   };
 
   const items = data?.items ?? [];
-  const open = items.filter((item) => !item.done);
-  const done = items.filter((item) => item.done);
+  const needsYou = items.filter((item) => item.kind === "needs_you");
+  const open = needsYou.filter((item) => !item.done);
+  const done = needsYou.filter((item) => item.done);
+  const inFlight = items.filter((item) => item.kind === "in_flight");
+  const inFlightOpen = inFlight.filter((item) => !item.done);
+  const inFlightDone = inFlight.filter((item) => item.done);
+  const inFlightRow = (item: AttentionItem) => (
+    <InFlightRow
+      key={item.id}
+      environmentId={environmentId}
+      item={item}
+      onOpenThread={openThread}
+    />
+  );
   const row = (item: AttentionItem) => (
     <AttentionRow
       key={item.id}
@@ -255,10 +426,24 @@ export function AttentionSheet({ route }: StaticScreenProps<AttentionTarget>) {
       {open.map(row)}
       {done.length > 0 ? (
         <>
-          <Text className="mt-6 mb-1 text-xs font-t3-medium text-foreground-tertiary">
-            Done this week
-          </Text>
+          <SectionTitle>Done this week</SectionTitle>
           {done.map(row)}
+        </>
+      ) : null}
+      <Text className="mt-8 text-lg font-t3-bold text-foreground">
+        {inFlightOpen.length > 0 ? `In flight · ${inFlightOpen.length}` : "In flight"}
+      </Text>
+      {inFlightOpen.length === 0 ? (
+        <Text className="pt-2 text-sm text-foreground-muted">
+          Nothing in flight. What you ask your personal agent for is tracked here until it is done
+          and proven.
+        </Text>
+      ) : null}
+      {inFlightOpen.map(inFlightRow)}
+      {inFlightDone.length > 0 ? (
+        <>
+          <SectionTitle>Delivered this week</SectionTitle>
+          {inFlightDone.map(inFlightRow)}
         </>
       ) : null}
     </ScrollView>
