@@ -140,6 +140,7 @@ import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
 import * as Workflows from "./workflows/Workflows.ts";
 import * as WorkflowRuntime from "./workflows/WorkflowRuntime.ts";
+import * as AttentionItems from "./attention/AttentionItemService.ts";
 import * as SecretRequests from "./secrets/SecretRequests.ts";
 import * as FeedbackStore from "./feedback/FeedbackStore.ts";
 import * as GuestShareService from "./guest/GuestShareService.ts";
@@ -1519,6 +1520,7 @@ export const layerWsRpc = (
       // The service's messages are built from its own attributes, so they are safe to send.
       const toWorkflowRequestError = (error: Workflows.WorkflowError) =>
         new WorkflowRequestError({ message: error.message });
+      const attentionItems = yield* AttentionItems.AttentionItemService;
       const secretRequests = yield* SecretRequests.SecretRequests;
       const feedbackStore = yield* FeedbackStore.FeedbackStore;
       const guestShares = yield* GuestShareService.GuestShareService;
@@ -2483,6 +2485,16 @@ export const layerWsRpc = (
         [WS_METHODS.scheduledTasksGetWebhookDelivery]: (input) =>
           Effect.annotateCurrentSpan({ "scheduled_task.id": input.id }).pipe(
             Effect.andThen(scheduledTasks.getWebhookDelivery(input)),
+          ),
+        [WS_METHODS.attentionItemsSubscribe]: (_input) => attentionItems.subscribeList(),
+        // A client tick is the user's, so it wakes the personal agent.
+        [WS_METHODS.attentionItemsSetDone]: (input) =>
+          Effect.annotateCurrentSpan({ "attention_item.id": input.id }).pipe(
+            Effect.andThen(attentionItems.setDone(input, { wakePersonalAgent: true })),
+          ),
+        [WS_METHODS.attentionItemsDismiss]: (input) =>
+          Effect.annotateCurrentSpan({ "attention_item.id": input.id }).pipe(
+            Effect.andThen(attentionItems.dismiss(input)),
           ),
         [WS_METHODS.serverProbe]: (_input) =>
           Effect.map(DateTime.now, (now) => ({ serverTime: DateTime.formatIso(now) })),

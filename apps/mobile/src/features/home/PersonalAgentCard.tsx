@@ -1,5 +1,6 @@
+import { useNavigation } from "@react-navigation/native";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-import { View } from "react-native";
+import { Pressable, View } from "react-native";
 
 import { SymbolView, type AppSymbolName } from "../../components/ui/AppSymbol";
 import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
@@ -7,6 +8,7 @@ import { AppText as Text } from "../../components/ui/AppText";
 import { RowPressable } from "../../components/ui/RowPressable";
 import { cn } from "../../lib/cn";
 import { resolveThreadListV2Status, threadHasUnseenCompletion } from "../threads/threadListV2";
+import { useOpenAttentionCount } from "../attention/AttentionSheet";
 import type { PersonalAgentEntry } from "./usePersonalAgentEntry";
 
 type Subtitle = {
@@ -67,9 +69,11 @@ export function PersonalAgentCard(props: {
   readonly entry: PersonalAgentEntry;
   readonly pane: "screen" | "sidebar";
 }) {
-  const { thread, opening, open } = props.entry;
+  const { environmentId, thread, opening, open } = props.entry;
   const subtitle = resolveSubtitle(thread);
   const sidebarPane = props.pane === "sidebar";
+  const navigation = useNavigation();
+  const needsYouCount = useOpenAttentionCount(environmentId);
   return (
     <View className={cn("pb-2 pt-1", sidebarPane ? "px-1" : "px-4")}>
       <RowPressable
@@ -115,6 +119,33 @@ export function PersonalAgentCard(props: {
             </Text>
           </View>
         </View>
+        {needsYouCount !== null ? (
+          // Its own target: the card opens the chat, the pill opens the list.
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              needsYouCount > 0
+                ? `${needsYouCount} ${needsYouCount === 1 ? "thing needs" : "things need"} you`
+                : "Needs you list"
+            }
+            onPress={() => navigation.navigate("Attention", { environmentId })}
+            hitSlop={8}
+            className={cn(
+              "flex-row items-center gap-1 rounded-full px-3 py-1.5",
+              needsYouCount > 0 ? "bg-primary" : "bg-adaptive-violet-500-a12-a16",
+            )}
+            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+          >
+            <Text
+              className={cn(
+                "text-sm font-t3-bold",
+                needsYouCount > 0 ? "text-primary-foreground" : "text-adaptive-violet-600-400",
+              )}
+            >
+              {needsYouCount > 0 ? `${needsYouCount} need you` : "Needs you"}
+            </Text>
+          </Pressable>
+        ) : null}
         {opening ? (
           <AppActivityIndicator size="small" colorClassName="accent-adaptive-violet-600-400" />
         ) : (
