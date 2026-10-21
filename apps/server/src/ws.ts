@@ -123,6 +123,7 @@ import * as DictationDelivery from "./DictationDelivery.ts";
 import { ensurePersonalAgent } from "./project/PersonalAgent.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
+import * as AttentionItems from "./attention/AttentionItemService.ts";
 import * as SecretRequests from "./secrets/SecretRequests.ts";
 import * as GuestShareService from "./guest/GuestShareService.ts";
 import {
@@ -1272,6 +1273,7 @@ export const layerWsRpc = (
       const commandOutputHub = yield* CommandOutputHub.CommandOutputHub;
       const providerSessionManager = yield* ProviderSessionManager.ProviderSessionManagerV2;
       const scheduledTasks = yield* ScheduledTasks.ScheduledTaskService;
+      const attentionItems = yield* AttentionItems.AttentionItemService;
       const secretRequests = yield* SecretRequests.SecretRequests;
       const guestShares = yield* GuestShareService.GuestShareService;
       const pullRequests = yield* PullRequestService.PullRequestService;
@@ -2173,6 +2175,16 @@ export const layerWsRpc = (
         [WS_METHODS.scheduledTasksGetWebhookDelivery]: (input) =>
           Effect.annotateCurrentSpan({ "scheduled_task.id": input.id }).pipe(
             Effect.andThen(scheduledTasks.getWebhookDelivery(input)),
+          ),
+        [WS_METHODS.attentionItemsSubscribe]: (_input) => attentionItems.subscribeList(),
+        // A client tick is the user's, so it wakes the personal agent.
+        [WS_METHODS.attentionItemsSetDone]: (input) =>
+          Effect.annotateCurrentSpan({ "attention_item.id": input.id }).pipe(
+            Effect.andThen(attentionItems.setDone(input, { wakePersonalAgent: true })),
+          ),
+        [WS_METHODS.attentionItemsDismiss]: (input) =>
+          Effect.annotateCurrentSpan({ "attention_item.id": input.id }).pipe(
+            Effect.andThen(attentionItems.dismiss(input)),
           ),
         [WS_METHODS.serverProbe]: (_input) => Effect.succeed({}),
         [WS_METHODS.serverGetConfig]: (_input) =>
