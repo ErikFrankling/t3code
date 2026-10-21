@@ -1717,7 +1717,29 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
           model: input.modelSelection.model,
           now,
         });
-        const events = yield* Queue.unbounded<ProviderAdapter.ProviderAdapterV2Event>();
+        const events = yield* Queue.unbounded<
+          ProviderAdapter.ProviderAdapterV2Event,
+          ProviderAdapter.ProviderAdapterEventStreamError
+        >();
+        // The app-server can die under us (an OOM kill, a crash). Fail the
+        // event stream so the session manager releases this session and the
+        // next turn opens a fresh app-server, instead of every turn failing on
+        // a dead process until the server restarts.
+        if (client.terminated !== undefined) {
+          yield* client.terminated.pipe(
+            Effect.flatMap((cause) =>
+              Queue.fail(
+                events,
+                new ProviderAdapter.ProviderAdapterEventStreamError({
+                  driver: CODEX_PROVIDER,
+                  providerSessionId: input.providerSessionId,
+                  cause,
+                }),
+              ),
+            ),
+            Effect.forkIn(scope),
+          );
+        }
         const rateLimitSnapshot = yield* Ref.make<CodexRateLimitSnapshot | undefined>(undefined);
         const limitedTurnItems = yield* Ref.make(
           new Map<ProviderThreadId, Extract<OrchestrationV2TurnItem, { type: "error" }>>(),
