@@ -1,5 +1,6 @@
 import * as Dialog from "../../components/ui/Dialog";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
+import * as Application from "expo-application";
 import Constants from "expo-constants";
 import * as Updates from "expo-updates";
 import { settlePromise } from "@t3tools/client-runtime/state/runtime";
@@ -155,7 +156,7 @@ function AppSettingsSection() {
  */
 function describeRunningBuild(version: string): string | null {
   const parts: string[] = [];
-  const native = Constants.nativeAppVersion;
+  const native = Application.nativeApplicationVersion;
   if (native && native !== version) parts.push(native.replace(`${version}-`, ""));
   if (Updates.isEnabled && !Updates.isEmbeddedLaunch && Updates.createdAt) {
     parts.push(
