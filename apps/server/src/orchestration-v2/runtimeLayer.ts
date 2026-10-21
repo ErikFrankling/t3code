@@ -1,6 +1,7 @@
 import * as GuestShareService from "../guest/GuestShareService.ts";
 import * as UsageLimitRecoveryWorker from "./UsageLimitRecoveryWorker.ts";
 import * as UsageLimitFailover from "./UsageLimitFailover.ts";
+import * as QueueWatchdog from "./QueueWatchdog.ts";
 import * as ProviderInstanceLimits from "./ProviderInstanceLimits.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 import * as Effect from "effect/Effect";
@@ -411,6 +412,7 @@ export const layerProduction = Layer.mergeAll(
       yield* reactor.start();
     }),
   ).pipe(Layer.provide(layerUsageLimitFailoverProvided)),
+  QueueWatchdog.layer.pipe(Layer.provide(layerOrchestratorProvided)),
   layerProviderContinuationWorkerProvided,
   layerAgentSessionImporterProvided,
   EffectOutbox.layerPruneWorker.pipe(Layer.provide(EffectOutbox.layer)),

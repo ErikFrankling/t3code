@@ -63,6 +63,29 @@ const ThreadOrganizeTool = Tool.make("t3_thread_organize", {
   .annotate(Tool.Title, "Organize a thread")
   .annotate(Tool.Destructive, true);
 
+const ThreadLimitRecoveryTool = Tool.make("t3_thread_limit_recovery", {
+  description:
+    "Act on a thread a provider usage limit stopped, like the limit card's buttons. resumeAtReset=true continues the stopped run by itself when the limit resets (false cancels that); snoozeUntilReset=true snoozes the thread until the reset (false wakes it). Omit threadId for this thread. t3_thread_read and t3_thread_list report the stopped run, its reset time and both settings in usageLimit. Fails when no usage limit stopped the thread's latest run or the provider gave no reset time.",
+  parameters: Schema.Struct({
+    threadId: Schema.optional(ThreadId),
+    resumeAtReset: Schema.optional(Schema.Boolean),
+    snoozeUntilReset: Schema.optional(Schema.Boolean),
+  }),
+  success: Schema.Struct({
+    sequence: OrchestrationV2DispatchCommandResult.fields.sequence,
+    stoppedRunId: RunId,
+    resetAt: IsoDateTime,
+  }),
+  failure: OrchestratorMcpFailure,
+  failureMode: "return" as const,
+  dependencies: [
+    McpInvocationContext.McpInvocationContext,
+    ThreadManagementService.ThreadManagementService,
+    Crypto.Crypto,
+  ],
+})
+  .annotate(Tool.Title, "Resume or snooze a limited thread at its reset")
+  .annotate(Tool.Destructive, false);
 const commandTool = {
   success: OrchestrationV2DispatchCommandResult,
   failure: OrchestratorMcpFailure,
@@ -243,4 +266,5 @@ export const ThreadToolkit = Toolkit.make(
   ThreadOrganizeTool,
   PendingRequestTool,
   QueueTool,
+  ThreadLimitRecoveryTool,
 );

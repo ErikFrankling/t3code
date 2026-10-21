@@ -351,6 +351,18 @@ export const OrchestratorMcpThreadPullRequest = Schema.Struct({
 });
 export type OrchestratorMcpThreadPullRequest = typeof OrchestratorMcpThreadPullRequest.Type;
 
+/** Set while the thread's latest run is stopped by a provider usage limit. */
+export const OrchestratorMcpThreadUsageLimit = Schema.Struct({
+  stoppedRunId: RunId,
+  /** When the limit resets, if the provider said. */
+  resetAt: Schema.NullOr(IsoDateTime),
+  /** "Resume at reset" is on: the run continues by itself when the limit resets. */
+  resumeAtReset: Schema.Boolean,
+  /** "Snooze until reset" is on: the thread is snoozed until the reset. */
+  snoozedUntilReset: Schema.Boolean,
+});
+export type OrchestratorMcpThreadUsageLimit = typeof OrchestratorMcpThreadUsageLimit.Type;
+
 export const OrchestratorMcpThreadListItem = Schema.Struct({
   threadId: ThreadId,
   title: Schema.String,
@@ -369,6 +381,8 @@ export const OrchestratorMcpThreadListItem = Schema.Struct({
   settledAt: Schema.NullOr(IsoDateTime),
   snoozed: Schema.Boolean,
   snoozedUntil: Schema.NullOr(IsoDateTime),
+  /** Missing on older servers; null when no usage limit stopped the thread. */
+  usageLimit: Schema.optional(Schema.NullOr(OrchestratorMcpThreadUsageLimit)),
   parentThreadId: Schema.NullOr(ThreadId),
   relationshipToParent: Schema.NullOr(Schema.Literals(["fork", "subagent"])),
   itemCount: NonNegativeInt,
@@ -448,6 +462,8 @@ export const OrchestratorMcpThreadDetail = Schema.Struct({
   settledAt: Schema.NullOr(IsoDateTime),
   snoozed: Schema.Boolean,
   snoozedUntil: Schema.NullOr(IsoDateTime),
+  /** Missing on older servers; null when no usage limit stopped the thread. */
+  usageLimit: Schema.optional(Schema.NullOr(OrchestratorMcpThreadUsageLimit)),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
 });

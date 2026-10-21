@@ -10,6 +10,10 @@ import {
 import * as Effect from "effect/Effect";
 import { modelSelectionCommandType } from "@t3tools/shared/model";
 import { formatThreadLink } from "@t3tools/shared/threadLinks";
+import {
+  latestRootProviderFailure,
+  usageLimitBlockedRun,
+} from "@t3tools/shared/orchestrationV2ThreadError";
 
 import * as McpToolAccess from "../../McpToolAccess.ts";
 import {
@@ -319,6 +323,46 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
         }
       }),
     ),
+  ),
+  t3_thread_limit_recovery: writesThread((input) =>
+    Effect.gen(function* () {
+      if (input.resumeAtReset === undefined && input.snoozeUntilReset === undefined) {
+        return yield* new OrchestratorMcpFailure({
+          code: "invalid_request",
+          message: "Set resumeAtReset, snoozeUntilReset, or both.",
+        });
+      }
+      const { threads, projection } = yield* readThread(input.threadId, ["runs", "turnItems"]);
+      const run = usageLimitBlockedRun(projection.runs, projection.turnItems, null);
+      const resetAt =
+        run === null ? undefined : latestRootProviderFailure(run, projection.turnItems)?.resetAt;
+      if (run === null) {
+        return yield* new OrchestratorMcpFailure({
+          code: "invalid_request",
+          message: "No usage limit stopped this thread's latest run.",
+        });
+      }
+      if (resetAt === undefined || resetAt === null) {
+        return yield* new OrchestratorMcpFailure({
+          code: "invalid_request",
+          message: "The provider did not report a reset time. Retry the thread manually.",
+        });
+      }
+      const result = yield* threads
+        .dispatch({
+          type: "thread.metadata.update",
+          commandId: yield* newCommandId(),
+          threadId: projection.thread.id,
+          limitRecovery: {
+            runId: run.id,
+            resetAt,
+            ...(input.resumeAtReset === undefined ? {} : { autoResume: input.resumeAtReset }),
+            ...(input.snoozeUntilReset === undefined ? {} : { snooze: input.snoozeUntilReset }),
+          },
+        })
+        .pipe(Effect.mapError(dispatchFailure));
+      return { sequence: result.sequence, stoppedRunId: run.id, resetAt };
+    }),
   ),
   t3_thread_organize: writesThread((input) =>
     Effect.gen(function* () {
