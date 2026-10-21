@@ -87,8 +87,9 @@ on `erik/main` with `accept_dropped_commits`.
 
 ## Testing
 
-Never run the workflow on a branch. Test with local builds on the emulator,
-all served from the PC:
+Never run the workflow on a branch, and never build APKs or run emulators on
+the PC (Erik, 2026-10-21: heavy work goes to the homelab, which has `/dev/kvm`).
+Build and test on the homelab:
 
 1. Serve a local channel: `index.json`, bundles and APKs in one directory over
    HTTP (port 8091), and the update server on 8090:
@@ -98,9 +99,7 @@ all served from the PC:
    `T3CODE_MOBILE_SELF_UPDATE_URL=http://10.0.2.2:8091/index.json`
    (`expo prebuild`, then `./gradlew assembleRelease --max-workers=2
 -PreactNativeArchitectures=x86_64 -Pkotlin.compiler.execution.strategy=in-process`
-   with a set `versionCode`; at 4 workers systemd-oomd killed the build in the
-   agent slice). Use the one emulator on the PC: reuse a running one
-   (`pgrep -fa qemu-system`) and `adb emu kill` it when done. Install the APK
+   with a set `versionCode`). Run one emulator and `adb emu kill` it when done. Install the APK
    with `adb install`, then
    `adb shell appops set com.t3tools.t3code.preview REQUEST_INSTALL_PACKAGES allow`
    (on the phone, that is the one-time tap).
@@ -109,5 +108,8 @@ all served from the PC:
    (`unzip -p app.apk assets/fingerprint`) into the local index.
 4. Native update: change native code, build again with a higher
    `versionCode`, and record it with `scripts/erik-updates.mjs apk`.
-5. `adb logcat -s T3SelfUpdate` shows each step; Settings → About → Version
+5. Leaving the app (Home) installs a downloaded APK about 5 s later through
+   a WorkManager job: Android freezes a backgrounded app, so JS timers cannot
+   do it.
+6. `adb logcat -s T3SelfUpdate` shows each step; Settings → About → Version
    shows what is running.
