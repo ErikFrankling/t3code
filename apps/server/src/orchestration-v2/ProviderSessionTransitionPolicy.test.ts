@@ -15,6 +15,8 @@ const base = {
 };
 
 it.each([
+  ["claude:host", "claude:host", "restart_and_resume"],
+  ["claude:host", "claude:shared:max", "create_with_handoff"],
   ["claude:shared:max", "claude:shared:max", "restart_and_resume"],
   ["claude:shared:max", "claude:shared:other", "create_with_handoff"],
   ["claude:home:/account-a", "claude:home:/account-b", "create_with_handoff"],
