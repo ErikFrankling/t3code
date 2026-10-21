@@ -40,6 +40,7 @@ import {
   type RenderFailureProps,
 } from "./components/RenderErrorBoundary";
 import { ArchivedThreadsRouteScreen } from "./features/archive/ArchivedThreadsRouteScreen";
+import { useErikPushRegistration } from "./features/agent-awareness/erikPushRegistration";
 import { useAgentNotificationNavigation } from "./features/agent-awareness/notificationNavigation";
 import { ConnectOnboardingRouteScreen } from "./features/cloud/ConnectOnboardingRouteScreen";
 import { useConnectOnboardingNavigation } from "./features/cloud/connectOnboardingNavigation";
@@ -538,6 +539,7 @@ function RootStackLayout(props: {
     ? draftParams.pendingTaskId[0]
     : draftParams?.pendingTaskId;
   useAgentNotificationNavigation(workspaceLocation.pathname);
+  useErikPushRegistration();
   useConnectOnboardingNavigation();
   useAppShortcuts(props.state);
   useEffect(() => {
