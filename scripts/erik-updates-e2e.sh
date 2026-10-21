@@ -45,6 +45,8 @@ fingerprint() { # <apk>: the runtime version the APK reports (no unzip in the de
 fail() {
   log "FAIL: $*"
   adb logcat -d > "$OUT/logcat-fail.txt" 2> /dev/null || true
+  adb exec-out screencap -p > "$OUT/fail.png" 2> /dev/null || true
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1 && adb shell cat /sdcard/ui.xml > "$OUT/fail-ui.xml" 2> /dev/null || true
   exit 1
 }
 
@@ -151,29 +153,52 @@ sleep 2
 
 # --- device helpers ---------------------------------------------------------
 
-screen_texts() {
-  adb shell uiautomator dump /sdcard/ui.xml > /dev/null
-  adb shell cat /sdcard/ui.xml | grep -o 'text="[^"]*"' | sed 's/^text="//; s/"$//' | grep -v '^$'
+dump_ui() { # refresh $OUT/ui.xml from the screen
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1
+  adb shell cat /sdcard/ui.xml > "$OUT/ui.xml" 2> /dev/null
 }
-tap_text() { # <exact text>
-  local bounds
-  bounds="$(adb shell cat /sdcard/ui.xml | grep -o "text=\"$1\"[^>]*bounds=\"[^\"]*\"" | grep -o '\[[0-9]*,[0-9]*\]' | head -1 | tr -d '[]')"
-  [ -n "$bounds" ] || return 1
-  adb shell input tap "${bounds%,*}" "${bounds#*,}"
+screen_texts() {
+  dump_ui
+  grep -o 'text="[^"]*"' "$OUT/ui.xml" | sed 's/^text="//; s/"$//' | grep -v '^$'
+}
+center_of() { # <attribute> <exact value>: "x y" of the first match in ui.xml
+  grep -o "$1=\"$2\"[^>]*bounds=\"\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]\"" "$OUT/ui.xml" |
+    head -1 | sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]"/\1 \2 \3 \4/' |
+    awk '{ print int(($1 + $3) / 2), int(($2 + $4) / 2) }'
+}
+tap_on() { # <attribute> <exact value> <seconds>: wait for the element, then tap it
+  local deadline=$((SECONDS + $3)) at
+  while ((SECONDS < deadline)); do
+    dump_ui
+    at="$(center_of "$1" "$2")"
+    if [ -n "$at" ]; then
+      # shellcheck disable=SC2086 # "x y"
+      adb shell input tap $at
+      return 0
+    fi
+    sleep 2
+  done
+  return 1
 }
 version_code() { adb shell dumpsys package "$pkg" | grep -m1 -o 'versionCode=[0-9]*' | cut -d= -f2; }
 launch() {
   adb shell monkey -p "$pkg" -c android.intent.category.LAUNCHER 1 > /dev/null 2>&1
-  sleep 12
 }
 open_about() {
-  screen_texts > /dev/null
-  adb shell input tap 997 210 # settings gear in the home header
-  sleep 3
-  for _ in 1 2 3; do adb shell input swipe 540 2000 540 400 300; done
-  sleep 1
-  screen_texts > /dev/null
-  tap_text "About T3 Code" || fail "no About T3 Code row"
+  # The home screen can open with a focused composer; Back hides the keyboard.
+  tap_on content-desc "Open settings" 90 || {
+    adb shell input keyevent KEYCODE_BACK
+    tap_on content-desc "Open settings" 30
+  } || fail "no Open settings button on the home screen"
+  local found=0
+  for _ in 1 2 3 4 5 6 7 8; do
+    dump_ui
+    if [ -n "$(center_of text "About T3 Code")" ]; then found=1; break; fi
+    adb shell input swipe 540 1900 540 700 300
+    sleep 1
+  done
+  [ "$found" = 1 ] || fail "no About T3 Code row in Settings"
+  tap_on text "About T3 Code" 10 || fail "could not open About"
   sleep 3
 }
 wait_log() { # <pattern> <seconds>
