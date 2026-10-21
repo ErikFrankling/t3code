@@ -20,8 +20,11 @@ import expo.modules.notifications.service.ExpoFirebaseMessagingService
 
 class AgentMessagingService : ExpoFirebaseMessagingService() {
   override fun onMessageReceived(remoteMessage: RemoteMessage) {
-    if (remoteMessage.data["t3_kind"] == "agent_activity") {
+    val kind = remoteMessage.data["t3_kind"]
+    if (kind == "agent_activity") {
       AgentNotifications.receive(this, remoteMessage.data)
+    } else if (kind == "erik_notify") {
+      ErikNotifications.receive(this, remoteMessage.data)
     } else {
       super.onMessageReceived(remoteMessage)
     }
@@ -96,6 +99,8 @@ object AgentNotifications {
   fun setThreadOnScreen(path: String?) {
     threadOnScreen = path
   }
+
+  fun visibleThread(): String? = threadOnScreen
 
   @Synchronized
   fun dismiss(context: Context) {
