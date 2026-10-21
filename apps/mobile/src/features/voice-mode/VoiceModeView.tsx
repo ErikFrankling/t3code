@@ -1,4 +1,3 @@
-import { READ_ALOUD_SPEEDS } from "@t3tools/client-runtime/read-aloud";
 import { VOICE_LOOP_CUE_KEY } from "@t3tools/client-runtime/voice-loop";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { useEffect, useRef, type ComponentRef } from "react";
@@ -9,7 +8,12 @@ import { AppText as Text } from "../../components/ui/AppText";
 import { SymbolView, type AppSymbolName } from "../../components/ui/AppSymbol";
 import { ThemedSwitch } from "../../components/ui/ThemedSwitch";
 import { voiceCall } from "../../native/voiceCall";
-import { readAloudPlayer, useReadAloud, useReadAloudEnvironment } from "../threads/ReadAloudButton";
+import {
+  ReadAloudSpeedMenu,
+  readAloudPlayer,
+  useReadAloud,
+  useReadAloudEnvironment,
+} from "../threads/ReadAloudButton";
 import { useDictationPreview } from "../voice-input/dictationPreview";
 import { useGlobalVoiceInput } from "../voice-input/VoiceInputProvider";
 import {
@@ -124,8 +128,6 @@ export function VoiceModeView(props: {
     return { label: "Talk", icon: { ios: "mic", android: "mic" }, onPress: voiceMode.talk };
   })();
 
-  const nextSpeed =
-    READ_ALOUD_SPEEDS.find((speed) => speed > reading.speed + 0.001) ?? READ_ALOUD_SPEEDS[0];
   const error =
     mode.error ??
     loop.error ??
@@ -197,14 +199,7 @@ export function VoiceModeView(props: {
             }
             onPress={() => readAloudPlayer.togglePause()}
           />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Playback speed"
-            onPress={() => readAloudPlayer.setSpeed(nextSpeed)}
-            className="h-14 min-w-14 items-center justify-center rounded-full bg-card px-3"
-          >
-            <Text className="text-lg text-foreground">{reading.speed}×</Text>
-          </Pressable>
+          <ReadAloudSpeedMenu speed={reading.speed} large />
         </View>
       ) : null}
 
