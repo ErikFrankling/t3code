@@ -704,8 +704,8 @@ export const ClaudeSettings = makeProviderSettingsSchema(
       Schema.annotateKey({
         title: "Shared session group",
         description:
-          "Allow resuming sessions across Claude instances with the same group. First link their projects directories to the same transcript store. Leave empty to keep config directories isolated.",
-        providerSettingsForm: { placeholder: "e.g. personal-max", clearWhenEmpty: "omit" },
+          "Claude instances on this machine continue each other's sessions when you switch a thread between them; T3 copies the session transcript to the other config directory. Set a name to share only with instances in the same group.",
+        providerSettingsForm: { placeholder: "All Claude instances", clearWhenEmpty: "omit" },
       }),
     ),
     autoCompactWindow: TrimmedString.check(
