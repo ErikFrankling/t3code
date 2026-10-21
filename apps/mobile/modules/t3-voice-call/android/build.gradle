@@ -17,4 +17,7 @@ android {
 dependencies {
   implementation 'com.facebook.react:react-android'
   implementation 'androidx.core:core:1.17.0'
+  // Sonic time-stretching for reply speed; the same version expo-audio ships.
+  implementation 'androidx.media3:media3-common:1.9.1'
+  implementation 'androidx.annotation:annotation-experimental:1.4.1'
 }
