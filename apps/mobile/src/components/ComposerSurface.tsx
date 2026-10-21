@@ -16,6 +16,7 @@ import { useAdaptiveWorkspaceLayout } from "../features/layout/AdaptiveWorkspace
 import { useSidebarWorkspaceTabs } from "../features/layout/workspace/useSystemWorkspaceTabBar";
 import { useAndroidFloatingTabs } from "../features/settings/appearance/AppearancePreferencesProvider";
 import { compactEditorInsets } from "../features/threads/compactEditorInsets";
+import { useComposerEditorMaxHeight } from "../features/threads/composerEditorHeight";
 import {
   useDeviceType,
   useDuoBottomBarInset,
@@ -47,6 +48,8 @@ const EXPANDED_EDITOR_BOTTOM = 52;
 export function useCompactComposerEditor(text: ScaledTextRole, value: string, animate: boolean) {
   const [contentSize, setContentSize] = useState({ width: 0, height: 0 });
   const [compactWidth, setCompactWidth] = useState(0);
+  // The fork lets a long draft grow to about a third of the window before it scrolls.
+  const maxEditorHeight = useComposerEditorMaxHeight(text.lineHeight);
   const contentHeight = contentSize.height;
   const rowWidth = useSharedValue(0);
   const editorX = useSharedValue(0);
@@ -56,7 +59,7 @@ export function useCompactComposerEditor(text: ScaledTextRole, value: string, an
   const minimum = Math.max(INLINE_EDITOR_HEIGHT, Math.ceil(text.lineHeight) + 2 * inset);
   const height = Math.max(
     minimum,
-    Math.min(text.lineHeight * 4 + 2 * inset, contentHeight + 2 * inset),
+    Math.min(maxEditorHeight + 2 * inset, contentHeight + 2 * inset),
   );
   // A line that fits the expanded editor may still overflow its compact slot.
   // Compare its measured width too so widening cannot trigger a collapse loop.
@@ -129,7 +132,7 @@ export function useCompactComposerEditor(text: ScaledTextRole, value: string, an
     },
     editorProps: {
       singleLineCentered: !isExpanded,
-      scrollEnabled: Platform.OS === "android" || contentHeight >= text.lineHeight * 4,
+      scrollEnabled: Platform.OS === "android" || contentHeight >= maxEditorHeight,
       contentInsetVertical: inset,
       onContentSizeChange: (size: { width: number; height: number }) => {
         setContentSize(size);
