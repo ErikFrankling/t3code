@@ -6,36 +6,35 @@ name: Erik Android APK
 # the next time it leaves the screen. Otherwise CI builds and signs a new APK,
 # and the app installs that itself. Both go through index.json on the rolling
 # `android-ota` release; the APK is also published as a normal release.
+#
+# Releases come only from erik/main, and scripts/erik-updates-guard.sh refuses
+# any build that lacks a commit already shipped. Test on the emulator with
+# local builds (docs/erik-updates.md), never by running this on a branch.
 on:
   push:
     branches:
       - erik/main
   workflow_dispatch:
     inputs:
-      channel:
-        description: Rolling release the build publishes to (test with another name)
-        default: android-ota
-      updates_url:
-        description: Update server the APK asks for JS updates
-        default: https://t3-updates.erikfrankling.duckdns.org/manifest
-      abis:
-        description: APK architectures
-        default: arm64-v8a
       apk:
         description: Build an APK even if a JS update would do
+        type: boolean
+        default: false
+      accept_dropped_commits:
+        description: Publish even though shipped commits are gone from erik/main (they were removed on purpose)
         type: boolean
         default: false
 
 # Never cancel a run: it may be halfway through publishing. GitHub keeps only
 # the newest waiting run, so a burst of pushes ends in one build of the last.
 concurrency:
-  group: erik-android-${{ inputs.channel || 'android-ota' }}
+  group: erik-android
   cancel-in-progress: false
 
 jobs:
   release:
     name: Build and publish
-    if: github.repository == 'ErikFrankling/t3code'
+    if: github.repository == 'ErikFrankling/t3code' && github.ref == 'refs/heads/erik/main'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
@@ -43,11 +42,11 @@ jobs:
       contents: write
     env:
       APP_VARIANT: preview
-      CHANNEL: ${{ inputs.channel || 'android-ota' }}
+      CHANNEL: android-ota
       # Updates come only from Erik's server and must carry the fork's
       # signature (apps/mobile/certs), so upstream's EAS updates never load.
-      T3CODE_MOBILE_UPDATES_URL: ${{ inputs.updates_url || 'https://t3-updates.erikfrankling.duckdns.org/manifest' }}
-      T3CODE_MOBILE_SELF_UPDATE_URL: https://github.com/${{ github.repository }}/releases/download/${{ inputs.channel || 'android-ota' }}/index.json
+      T3CODE_MOBILE_UPDATES_URL: https://t3-updates.erikfrankling.duckdns.org/manifest
+      T3CODE_MOBILE_SELF_UPDATE_URL: https://github.com/${{ github.repository }}/releases/download/android-ota/index.json
       EXPO_NO_GIT_STATUS: "1"
       EXPO_NO_TELEMETRY: "1"
       NODE_OPTIONS: --max-old-space-size=8192
@@ -67,6 +66,9 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          # The guard compares this commit with everything already shipped.
+          fetch-depth: 0
 
       - name: Firebase config
         env:
@@ -88,13 +90,20 @@ jobs:
 
       - id: plan
         name: Plan
+        env:
+          ACCEPT_DROPPED_COMMITS: ${{ inputs.accept_dropped_commits }}
         run: |
           scripts/erik-updates-release.sh ensure "$CHANNEL"
           scripts/erik-updates-release.sh fetch "$CHANNEL" "$RUNNER_TEMP/index.json"
           runtime="$(cd apps/mobile && npx expo-updates runtimeversion:resolve --platform android 2> /dev/null | jq -r .runtimeVersion)"
           installed="$(jq -r '.apk.runtimeVersion // ""' "$RUNNER_TEMP/index.json")"
           echo "runtime $runtime, newest APK runtime ${installed:-none}"
-          if [ -n "$runtime" ] && [ "$runtime" = "$installed" ] && [ "${{ inputs.apk }}" != "true" ]; then
+          # Fails the run if this commit lacks shipped work; skips it if erik/main
+          # has moved on.
+          decision="$(scripts/erik-updates-guard.sh "$RUNNER_TEMP/index.json")"
+          if [ "$decision" != publish=true ]; then
+            echo "kind=none" >> "$GITHUB_OUTPUT"
+          elif [ -n "$runtime" ] && [ "$runtime" = "$installed" ] && [ "${{ inputs.apk }}" != "true" ]; then
             echo "kind=ota" >> "$GITHUB_OUTPUT"
           else
             echo "kind=apk" >> "$GITHUB_OUTPUT"
@@ -118,8 +127,12 @@ jobs:
       - name: Publish JS update
         if: steps.plan.outputs.kind == 'ota'
         env:
+          ACCEPT_DROPPED_COMMITS: ${{ inputs.accept_dropped_commits }}
           ERIK_UPDATES_PRIVATE_KEY: ${{ secrets.ERIK_UPDATES_PRIVATE_KEY }}
         run: |
+          # Again right before publishing: erik/main may have moved meanwhile.
+          decision="$(scripts/erik-updates-guard.sh "$RUNNER_TEMP/index.json")"
+          [ "$decision" = publish=true ] || exit 0
           key="$RUNNER_TEMP/updates-key.pem"
           printf '%s\n' "$ERIK_UPDATES_PRIVATE_KEY" > "$key"
           node scripts/erik-updates.mjs ota --dist "$RUNNER_TEMP/dist" \
@@ -168,7 +181,7 @@ jobs:
         run: |
           sed -i -E "s/versionCode [0-9]+/versionCode $VERSION_CODE/; s/versionName \"[^\"]*\"/versionName \"$VERSION_NAME\"/" app/build.gradle
           grep -nE 'versionCode|versionName' app/build.gradle
-          ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=${{ inputs.abis || 'arm64-v8a' }}
+          ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
 
       - name: Sign
         if: steps.plan.outputs.kind == 'apk'
@@ -196,9 +209,12 @@ jobs:
       - name: Publish APK
         if: steps.plan.outputs.kind == 'apk'
         env:
+          ACCEPT_DROPPED_COMMITS: ${{ inputs.accept_dropped_commits }}
           VERSION_CODE: ${{ steps.plan.outputs.code }}
           VERSION_NAME: ${{ steps.plan.outputs.name }}
         run: |
+          decision="$(scripts/erik-updates-guard.sh "$RUNNER_TEMP/index.json")"
+          [ "$decision" = publish=true ] || exit 0
           apk="$RUNNER_TEMP/t3code-erik-$VERSION_CODE.apk"
           mv "$RUNNER_TEMP/t3code-erik.apk" "$apk"
           # The runtime version the app will report; JS updates must match it.
