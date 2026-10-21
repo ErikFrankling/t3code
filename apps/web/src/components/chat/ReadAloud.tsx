@@ -59,6 +59,8 @@ const audio: ReadAloudAudio = {
   play: (clip, { rate, startFraction, next, onProgress }) =>
     new Promise<void>((resolve, reject) => {
       const pair = slotPair();
+      // One voice at a time: the other element never sounds while this one plays.
+      for (const candidate of pair) candidate.element.pause();
       rejectClip?.(new Error("replaced"));
       rejectClip = reject;
       clipListeners?.abort();
@@ -98,6 +100,10 @@ const audio: ReadAloudAudio = {
     }),
   pause: () => active?.element.pause(),
   resume: () => void active?.element.play(),
+  preload: (clip) => {
+    const other = slots?.find((candidate) => candidate !== active);
+    if (other) load(other, clip);
+  },
   stop: () => {
     active?.element.pause();
     if (active) active.element.currentTime = 0;
