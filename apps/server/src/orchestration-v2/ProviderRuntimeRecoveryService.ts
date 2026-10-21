@@ -353,7 +353,9 @@ export const make = Effect.gen(function* () {
           runId: run.id,
           providerInstanceId: run.providerInstanceId,
           occurredAt: now,
-          payload: { ...run, queueHeld: true },
+          // The restart continuation goes first; the queue watchdog releases
+          // the rest once the thread is idle again.
+          payload: { ...run, queueHeld: true, queueHoldReason: "restart" },
         });
       }
       for (const question of questions) {
