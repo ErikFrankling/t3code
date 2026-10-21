@@ -1,6 +1,6 @@
 // @effect-diagnostics globalTimers:off -- Plain promise polling and playback, shared with React Native; no Effect runtime here.
 import type { ReadAloudRequest, ReadAloudState } from "@t3tools/contracts";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { ReadAloudPlayer, type ReadAloudAudio } from "./readAloud.ts";
 
@@ -179,5 +179,41 @@ describe("ReadAloudPlayer", () => {
     await until(() => sound.played.length === 2);
     expect(sound.played[1]?.clip).toBe("c0");
     expect(sound.played[1]?.startFraction).toBeCloseTo(0.5);
+  });
+});
+describe("ReadAloudPlayer preload", () => {
+  it("preloads the next chunk the moment it arrives while the current one plays", async () => {
+    let poll = 0;
+    const preloaded: string[] = [];
+    let finish: (() => void) | null = null;
+    const player = new ReadAloudPlayer({
+      pollMs: 1,
+      audio: {
+        play: () => new Promise<void>((resolve) => (finish = resolve)),
+        pause: () => {},
+        resume: () => {},
+        stop: () => {},
+        preload: (clip) => void preloaded.push(clip.audio),
+      },
+      request: async () => {
+        poll++;
+        // The first chunk arrives alone; the second only on a later poll.
+        const second = poll >= 3;
+        return {
+          id: "job",
+          status: second ? "complete" : "working",
+          voice: "small",
+          error: "",
+          sentences: [
+            { text: "One.", audio: "A", span: 1, ready: true },
+            { text: "Two.", ...(second ? { audio: "B", span: 1 } : {}), ready: second },
+          ],
+        };
+      },
+    });
+    player.start("key", "Text.");
+    await vi.waitFor(() => expect(finish).not.toBeNull());
+    await vi.waitFor(() => expect(preloaded).toEqual(["B"]));
+    player.stop();
   });
 });
