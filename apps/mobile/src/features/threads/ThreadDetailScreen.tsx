@@ -1515,6 +1515,8 @@ export const ThreadDetailScreen = function ThreadDetailScreen(props: ThreadDetai
                     key={props.selectedThread.latestRun?.runId}
                     thread={props.selectedThread}
                     environmentId={props.environmentId}
+                    providers={props.serverConfig?.providers ?? []}
+                    onSelectModel={props.onUpdateThreadModelSelection}
                   />
                   <ChatGptUsageLimitNotice
                     key={`chatgpt-limit:${props.selectedThread.latestRun?.runId}`}
