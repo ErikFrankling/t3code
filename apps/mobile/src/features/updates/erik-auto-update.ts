@@ -20,10 +20,10 @@ import {
 interface SelfUpdateModule {
   readonly configure: (indexUrl: string) => void;
   readonly check: (installNow: boolean) => Promise<string>;
+  readonly checkAfterBackgrounding: () => void;
 }
 
 export const ERIK_UPDATE_POLL_MS = 60 * 1000;
-const BACKGROUND_SETTLE_MS = 3000;
 
 const selfUpdate =
   Platform.OS === "android" ? requireOptionalNativeModule<SelfUpdateModule>("T3SelfUpdate") : null;
@@ -68,17 +68,13 @@ export function startErikAutoUpdates(): void {
     disarm();
     if (!native) return;
     // A downloaded APK installs once nothing is on screen. Installing
-    // replaces the process, so save drafts and the outbox first. The native
-    // side still refuses while a foreground service (voice mode) runs, and
-    // Android needs a moment to lower the process' importance.
+    // replaces the process, so save drafts and the outbox first. Android
+    // freezes a backgrounded app within seconds and JS timers stop, so the
+    // native side schedules the install itself; it still refuses while the
+    // app is visible or runs a foreground service (voice mode).
     void flushPendingAppWrites()
       .catch(() => undefined)
-      .then(() => new Promise((resolve) => setTimeout(resolve, BACKGROUND_SETTLE_MS)))
-      .then(() => {
-        if (AppState.currentState === "background") return native.check(false);
-        return undefined;
-      })
-      .catch(() => undefined);
+      .then(() => native.checkAfterBackgrounding());
   });
   if (AppState.currentState === "active") arm();
   void native?.check(false).catch(() => undefined);
