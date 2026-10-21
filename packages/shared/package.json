@@ -502,6 +502,10 @@
     "./markdownMath": {
       "types": "./src/markdownMath.ts",
       "import": "./src/markdownMath.ts"
+    },
+    "./providerFailover": {
+      "types": "./src/providerFailover.ts",
+      "import": "./src/providerFailover.ts"
     }
   },
   "scripts": {
