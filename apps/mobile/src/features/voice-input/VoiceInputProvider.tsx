@@ -4,8 +4,6 @@ import {
   RecordingPresets,
   getRecordingPermissionsAsync,
   requestRecordingPermissionsAsync,
-  setAudioModeAsync,
-  setIsAudioActiveAsync,
   type RecorderState,
   type RecordingStatus,
 } from "expo-audio";
@@ -45,6 +43,7 @@ import {
 } from "@t3tools/client-runtime/voice-input";
 import { voiceCall } from "../../native/voiceCall";
 import { createCallVoiceRecorder } from "./callVoiceRecorder";
+import { configureVoiceRecordingAudio, releaseVoiceRecordingAudio } from "./voiceRecordingAudio";
 import { createLazyVoiceRecorder, type LazyVoiceRecorder } from "./lazyVoiceRecorder";
 import { normalizeVoiceInputDecibels, VOICE_WAVEFORM_SAMPLE_COUNT } from "./voiceInputMetering";
 import { VoiceInputSession } from "./voiceInputSession";
@@ -78,38 +77,6 @@ const VOICE_RECORDING_OPTIONS = {
       }
     : {}),
 };
-
-async function releaseVoiceRecordingAudio(): Promise<void> {
-  try {
-    await setAudioModeAsync({ allowsRecording: false, shouldPlayInBackground: voiceCall.active });
-  } finally {
-    // Expo does not deactivate AVAudioSession when recording stops or its
-    // category changes. Explicit deactivation resumes interrupted app audio.
-    await setIsAudioActiveAsync(false);
-  }
-}
-
-async function configureVoiceRecordingAudio(): Promise<void> {
-  try {
-    await setAudioModeAsync({
-      allowsRecording: true,
-      interruptionMode: "doNotMix",
-      playsInSilentMode: true,
-      // Voice mode reads the reply aloud with the screen off.
-      shouldPlayInBackground: voiceCall.active,
-      // Locking the phone or a screen on top (a sign-in, a call) never stops a
-      // dictation: expo-audio records on in a foreground service. (Voice mode's
-      // call records with its own service.)
-      allowsBackgroundRecording: Platform.OS === "android" && !voiceCall.active,
-    });
-    await setIsAudioActiveAsync(true);
-  } catch (error) {
-    try {
-      await releaseVoiceRecordingAudio();
-    } catch {}
-    throw error;
-  }
-}
 
 const VoiceInputContext = createContext<ReturnType<typeof useVoiceInputRuntime> | null>(null);
 
