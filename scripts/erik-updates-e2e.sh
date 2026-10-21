@@ -184,18 +184,20 @@ version_code() { adb shell dumpsys package "$pkg" | grep -m1 -o 'versionCode=[0-
 launch() {
   adb shell monkey -p "$pkg" -c android.intent.category.LAUNCHER 1 > /dev/null 2>&1
 }
-open_settings() { # <seconds>
+open_settings() { # <seconds>: tap Settings until its screen shows (early taps get lost)
   local deadline=$((SECONDS + $1)) at
   while ((SECONDS < deadline)); do
     dump_ui
+    if grep -q 'text="\(Appearance\|Environments\|About T3 Code\)"' "$OUT/ui.xml"; then return 0; fi
     at="$(center_of text "Settings")"
     [ -n "$at" ] || at="$(center_of content-desc "Open settings")"
     if [ -n "$at" ]; then
       # shellcheck disable=SC2086 # "x y"
       adb shell input tap $at
-      return 0
+      sleep 3
+    else
+      sleep 2
     fi
-    sleep 2
   done
   return 1
 }
