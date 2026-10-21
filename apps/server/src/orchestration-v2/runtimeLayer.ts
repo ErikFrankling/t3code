@@ -1,7 +1,10 @@
 import * as WorktreeBranchSync from "./WorktreeBranchSync.ts";
 import * as GuestShareService from "../guest/GuestShareService.ts";
 import * as UsageLimitRecoveryWorker from "./UsageLimitRecoveryWorker.ts";
+import * as UsageLimitFailover from "./UsageLimitFailover.ts";
+import * as ProviderInstanceLimits from "./ProviderInstanceLimits.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
+import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as OrchestrationCommandReceipts from "../persistence/OrchestrationCommandReceipts.ts";
@@ -235,6 +238,8 @@ const layerOrchestratorProvided = Orchestrator.layer.pipe(
       layerProviderSwitchServiceProvided,
       layerRunExecutionServiceProvided,
       ThreadForkService.layer,
+      // Same layer reference as the failover reactor, so both see one limits state.
+      ProviderInstanceLimits.limitsLayer,
     ),
   ),
 );
@@ -370,7 +375,19 @@ const layerMcpAppRequestsProvided = McpAppRequests.layer.pipe(
   ),
 );
 
+const layerUsageLimitFailoverProvided = UsageLimitFailover.layer.pipe(
+  Layer.provide(
+    Layer.mergeAll(
+      layerOrchestratorProvided,
+      layerProviderAdapterRegistryProvided,
+      ProviderInstanceLimits.limitsLayer,
+    ),
+  ),
+);
+
 export const layer = Layer.mergeAll(
+  layerUsageLimitFailoverProvided,
+  ProviderInstanceLimits.limitsLayer,
   layerCommandOutputHubProvided,
   layerOrchestratorProvided,
   layerMcpAppRequestsProvided,
@@ -406,6 +423,12 @@ export const layerProduction = Layer.mergeAll(
       ),
     ),
   ),
+  Layer.effectDiscard(
+    Effect.gen(function* () {
+      const reactor = yield* UsageLimitFailover.UsageLimitFailoverReactor;
+      yield* reactor.start();
+    }),
+  ).pipe(Layer.provide(layerUsageLimitFailoverProvided)),
   layerProviderContinuationWorkerProvided,
   layerAgentSessionScannerProvided,
   layerAgentSessionImporterProvided,
