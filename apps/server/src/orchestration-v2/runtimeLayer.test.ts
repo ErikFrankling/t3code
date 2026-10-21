@@ -7253,3 +7253,124 @@ it.layer(layerUsageLimitFailoverTest)("usage-limit failover", (it) => {
       }),
   );
 });
+
+it.layer(layerTest)("queue after a server restart", (it) => {
+  it.effect.each(["restart-continuation", "ordinary-run"] as const)(
+    "starts held queued messages when a %s run completes",
+    (kind) =>
+      Effect.gen(function* () {
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
+        const events = yield* EventSink.EventSinkV2;
+        const threadId = ThreadId.make(`restart-queue:${kind}`);
+        const projectId = ProjectId.make(`restart-queue:project:${kind}`);
+        const now = yield* DateTime.now;
+        yield* seedProject({
+          projectId,
+          title: "Restart queue project",
+          workspaceRoot: process.cwd(),
+          defaultModelSelection: modelSelection,
+          createdAt: DateTime.formatIso(now),
+        });
+        yield* orchestrator.dispatch({
+          type: "thread.create",
+          commandId: CommandId.make(`restart-queue:create:${kind}`),
+          threadId,
+          projectId,
+          title: "Restarted thread",
+          modelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          worktreePath: null,
+          createdBy: "user",
+          creationSource: "web",
+        });
+        const send = (suffix: string, dispatchMode: "defer_start" | "queue_after_active") =>
+          orchestrator.dispatch({
+            type: "message.dispatch",
+            commandId: CommandId.make(`restart-queue:${suffix}:${kind}`),
+            threadId,
+            messageId: MessageId.make(`restart-queue:${suffix}:${kind}`),
+            text: suffix,
+            attachments: [],
+            dispatchMode: { type: dispatchMode },
+            createdBy: "user",
+            creationSource: "web",
+          });
+        yield* send("interrupted turn", "defer_start");
+        yield* send("queued follow up", "queue_after_active");
+        const [interrupted, queued] = (yield* orchestrator.getThreadProjection(threadId)).runs as [
+          OrchestrationV2Run,
+          OrchestrationV2Run,
+        ];
+        // Server restart: the running turn is interrupted and recovery holds the queue.
+        yield* events.write({
+          events: [
+            {
+              id: EventId.make(`restart-queue:hold:${kind}`),
+              type: "run.updated",
+              threadId,
+              occurredAt: now,
+              payload: { ...queued, queueHeld: true },
+            },
+            {
+              id: EventId.make(`restart-queue:interrupt:${kind}`),
+              type: "run.updated",
+              threadId,
+              occurredAt: now,
+              payload: { ...interrupted, status: "interrupted", completedAt: now },
+            },
+          ],
+        });
+        assert.equal((yield* orchestrator.getThreadProjection(threadId)).runs[1]?.status, "queued");
+
+        // The continuation (or, for the control, any other run) finishes.
+        yield* orchestrator.dispatch({
+          type: "message.dispatch",
+          commandId: CommandId.make(`restart-queue:continue:${kind}`),
+          threadId,
+          messageId: MessageId.make(`restart-queue:continue:${kind}`),
+          text: "Continue where you left off.",
+          attachments: [],
+          dispatchMode: { type: "start_immediately" },
+          createdBy: "user",
+          creationSource: "server",
+        });
+        const continuation = (yield* orchestrator.getThreadProjection(threadId)).runs.find(
+          (run) => run.id !== interrupted.id && run.id !== queued.id,
+        )!;
+        yield* events.write({
+          events: [
+            {
+              id: EventId.make(`restart-queue:complete:${kind}`),
+              type: "run.updated",
+              threadId,
+              occurredAt: now,
+              payload: {
+                ...continuation,
+                ...(kind === "restart-continuation"
+                  ? { restartContinuationOfRunId: interrupted.id }
+                  : {}),
+                status: "completed",
+                completedAt: now,
+              },
+            },
+          ],
+        });
+        for (let attempt = 0; attempt < 20; attempt += 1) {
+          yield* Effect.yieldNow;
+          yield* TestClock.adjust("100 millis");
+        }
+        const after = (yield* orchestrator.getThreadProjection(threadId)).runs.find(
+          (run) => run.id === queued.id,
+        )!;
+        if (kind === "restart-continuation") {
+          assert.notEqual(after.status, "queued");
+        } else {
+          // A hold that did not come from a restart (a user stop) stays until resumed.
+          assert.equal(after.status, "queued");
+          assert.equal(after.queueHeld, true);
+        }
+      }),
+  );
+});
