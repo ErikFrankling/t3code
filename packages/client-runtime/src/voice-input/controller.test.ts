@@ -528,4 +528,112 @@ describe("VoiceInputController", () => {
     expect(harness.recorder.record).not.toHaveBeenCalled();
     expect(harness.controller.currentState.error).toContain("background");
   });
+
+  describe("a failed transcription is tried again by itself", () => {
+    function timers() {
+      const pending: Array<{ run: () => void; ms: number; cancelled: boolean }> = [];
+      return {
+        pending,
+        setTimer: (run: () => void, ms: number) => {
+          const timer = { run, ms, cancelled: false };
+          pending.push(timer);
+          return () => {
+            timer.cancelled = true;
+          };
+        },
+        /** Fires the timer waiting now, then lets the retry settle. */
+        async fire() {
+          const timer = pending.findLast((candidate) => !candidate.cancelled);
+          if (!timer) throw new Error("no timer is waiting");
+          timer.cancelled = true;
+          timer.run();
+          for (let tick = 0; tick < 20; tick++) await Promise.resolve();
+        },
+      };
+    }
+
+    it("until it works, waiting longer each time; the words go to the draft", async () => {
+      const clock = timers();
+      const transcribe = vi
+        .fn<PreparedVoiceTranscription["transcribe"]>()
+        .mockRejectedValueOnce(new Error("server down"))
+        .mockRejectedValueOnce(new Error("server down"))
+        .mockRejectedValueOnce(new Error("server down"))
+        .mockResolvedValueOnce("kept");
+      const harness = createHarness({
+        setTimer: clock.setTimer,
+        getTranscriber: () => ({ prepare: async () => preparedTranscription(transcribe) }),
+      });
+      await harness.controller.start();
+      await harness.controller.stop();
+
+      expect(harness.controller.failedRecording).toBe("file:///voice.m4a");
+      expect(harness.controller.currentState.error).toContain("Trying again by itself.");
+      expect(harness.deleted).toEqual([]);
+      await clock.fire();
+      await clock.fire();
+      await clock.fire();
+
+      expect(clock.pending.map((timer) => timer.ms)).toEqual([5_000, 15_000, 30_000]);
+      expect(harness.commits).toEqual([{ text: "hello kept", selection: { start: 10, end: 10 } }]);
+      expect(harness.controller.failedRecording).toBeNull();
+      expect(harness.controller.currentState.phase).toBe("idle");
+      // Deleted only now that its words are in the draft.
+      expect(harness.deleted).toEqual(["file:///voice.m4a"]);
+      expect(clock.pending.filter((timer) => !timer.cancelled)).toEqual([]);
+    });
+
+    it("waits while another chat is open, so the words never land in the wrong draft", async () => {
+      const clock = timers();
+      const transcribe = vi
+        .fn<PreparedVoiceTranscription["transcribe"]>()
+        .mockRejectedValueOnce(new Error("server down"))
+        .mockResolvedValueOnce("kept");
+      const harness = createHarness({
+        setTimer: clock.setTimer,
+        getTranscriber: () => ({ prepare: async () => preparedTranscription(transcribe) }),
+      });
+      await harness.controller.start();
+      await harness.controller.stop();
+      harness.setDraft(draft({ ownerKey: "environment:other-thread" }));
+      await clock.fire();
+
+      expect(transcribe).toHaveBeenCalledTimes(1);
+      expect(harness.commits).toEqual([]);
+      harness.setDraft(draft());
+      await clock.fire();
+
+      expect(harness.commits).toEqual([{ text: "hello kept", selection: { start: 10, end: 10 } }]);
+    });
+
+    it("stops when the recording is discarded", async () => {
+      const clock = timers();
+      const harness = createHarness({
+        setTimer: clock.setTimer,
+        getTranscriber: () => ({
+          prepare: async () => preparedTranscription(async () => Promise.reject(new Error("down"))),
+        }),
+      });
+      await harness.controller.start();
+      await harness.controller.stop();
+      harness.controller.discardFailed();
+
+      expect(clock.pending.every((timer) => timer.cancelled)).toBe(true);
+      expect(harness.deleted).toEqual(["file:///voice.m4a"]);
+    });
+
+    it("does not try again when there was no speech", async () => {
+      const clock = timers();
+      const harness = createHarness({
+        setTimer: clock.setTimer,
+        getTranscriber: () => ({ prepare: async () => preparedTranscription(async () => "  ") }),
+      });
+      await harness.controller.start();
+      await harness.controller.stop();
+
+      expect(harness.controller.currentState.error).toBe("No speech was detected.");
+      expect(clock.pending).toEqual([]);
+      expect(harness.deleted).toEqual([]);
+    });
+  });
 });
