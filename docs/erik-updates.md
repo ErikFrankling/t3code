@@ -96,8 +96,12 @@ all served from the PC:
 2. Build a release APK with `APP_VARIANT=preview`,
    `T3CODE_MOBILE_UPDATES_URL=http://10.0.2.2:8090/manifest` and
    `T3CODE_MOBILE_SELF_UPDATE_URL=http://10.0.2.2:8091/index.json`
-   (`expo prebuild`, then `./gradlew assembleRelease -PreactNativeArchitectures=x86_64`
-   with a set `versionCode`). Install it with `adb install`, then
+   (`expo prebuild`, then `./gradlew assembleRelease --max-workers=2
+-PreactNativeArchitectures=x86_64 -Pkotlin.compiler.execution.strategy=in-process`
+   with a set `versionCode`; at 4 workers systemd-oomd killed the build in the
+   agent slice). Use the one emulator on the PC: reuse a running one
+   (`pgrep -fa qemu-system`) and `adb emu kill` it when done. Install the APK
+   with `adb install`, then
    `adb shell appops set com.t3tools.t3code.preview REQUEST_INSTALL_PACKAGES allow`
    (on the phone, that is the one-time tap).
 3. JS update: change JS, `expo export --platform android`, then
