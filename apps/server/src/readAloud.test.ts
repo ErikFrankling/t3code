@@ -3,7 +3,14 @@ import * as NodeHttp from "node:http";
 import type * as NodeNet from "node:net";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { polishClip, readAloud, readWav, takeSentences, whenSettled } from "./readAloud.ts";
+import {
+  dropFiller,
+  polishClip,
+  readAloud,
+  readWav,
+  takeSentences,
+  whenSettled,
+} from "./readAloud.ts";
 
 type Speech = { voice: string; input: string; speed: number; model: string };
 
@@ -112,6 +119,37 @@ describe("takeSentences", () => {
   });
 });
 
+describe("dropFiller", () => {
+  it.each([
+    ["Basically, the model fits.", "The model fits."],
+    ["Basically the model fits.", "The model fits."],
+    ["So basically, the fix works.", "The fix works."],
+    ["Ok so, the model fits.", "The model fits."],
+    ["Okay so basically it is done.", "It is done."],
+    ["So, the build passed.", "The build passed."],
+    ["So the build passed.", "The build passed."],
+    ["In short, nothing broke.", "Nothing broke."],
+    ["Essentially the cache missed.", "The cache missed."],
+    ["Alright, two things changed.", "Two things changed."],
+    ["The fix is basically done.", "The fix is done."],
+    ["It works, basically, on both machines.", "It works, on both machines."],
+  ])("%s", (sentence, expected) => {
+    expect(dropFiller(sentence)).toBe(expected);
+  });
+
+  it.each([
+    "So far nothing broke.",
+    "Right now the server is down.",
+    "Well-tested code ships first.",
+    "Sounds good to me.",
+    "Soon the cache catches up.",
+    "Okay is what it said.",
+    "Looking at the logs, it failed twice.",
+  ])("keeps %s", (sentence) => {
+    expect(dropFiller(sentence)).toBe(sentence);
+  });
+});
+
 describe("readAloud", () => {
   it("speaks the first sentence alone, then the rest in one chunk, with the small voice", async () => {
     summary = "Ok so, the model fits. Dictation stays loaded. Want me to build it?";
@@ -119,12 +157,12 @@ describe("readAloud", () => {
     expect(state.status).toBe("complete");
     expect(state.voice).toBe("small");
     expect(state.sentences.map((sentence) => sentence.text)).toEqual([
-      "Ok so, the model fits.",
+      "The model fits.",
       "Dictation stays loaded.",
       "Want me to build it?",
     ]);
     expect(spoken.map((speech) => speech.input)).toEqual([
-      "Ok so, the model fits.",
+      "The model fits.",
       "Dictation stays loaded. Want me to build it?",
     ]);
     expect(state.sentences.map((sentence) => sentence.span)).toEqual([1, 2, undefined]);
