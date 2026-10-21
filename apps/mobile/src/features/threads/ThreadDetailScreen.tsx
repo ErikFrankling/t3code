@@ -1755,6 +1755,8 @@ function ThreadDetailBody(
                       key={props.selectedThread.latestRun?.runId}
                       thread={props.selectedThread}
                       environmentId={props.environmentId}
+                      providers={props.serverConfig?.providers ?? []}
+                      onSelectModel={props.onUpdateThreadModelSelection}
                     />
                     <ChildThreadApprovals
                       threadRef={props.selectedThreadDetailRef}
