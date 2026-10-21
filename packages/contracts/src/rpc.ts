@@ -375,6 +375,15 @@ import {
   ScheduledTaskUpsertInput,
   ScheduledTaskMutationResult,
 } from "./scheduledTask.ts";
+import {
+  AttentionItemDismissInput,
+  AttentionItemDismissResult,
+  AttentionItemError,
+  AttentionItemListInput,
+  AttentionItemListResult,
+  AttentionItemResult,
+  AttentionItemSetDoneInput,
+} from "./attention.ts";
 import { SecretRequestAnswerInput, SecretRequestError } from "./secretRequest.ts";
 import {
   ProjectCloneActionInput,
@@ -552,6 +561,9 @@ export const WS_METHODS = {
   guestShareCreate: "guestShare.create",
   scheduledTasksListWebhookDeliveries: "scheduledTasks.listWebhookDeliveries",
   scheduledTasksGetWebhookDelivery: "scheduledTasks.getWebhookDelivery",
+  attentionItemsSubscribe: "attentionItems.subscribe",
+  attentionItemsSetDone: "attentionItems.setDone",
+  attentionItemsDismiss: "attentionItems.dismiss",
 
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
   cloudInstallRelayClient: "cloud.installRelayClient",
@@ -1938,6 +1950,25 @@ const WsScheduledTasksRotateWebhookTokenRpc = Rpc.make(
   },
 );
 
+const WsAttentionItemsSubscribeRpc = Rpc.make(WS_METHODS.attentionItemsSubscribe, {
+  payload: AttentionItemListInput,
+  success: AttentionItemListResult,
+  error: Schema.Union([AttentionItemError, EnvironmentAuthorizationError]),
+  stream: true,
+});
+
+const WsAttentionItemsSetDoneRpc = Rpc.make(WS_METHODS.attentionItemsSetDone, {
+  payload: AttentionItemSetDoneInput,
+  success: AttentionItemResult,
+  error: Schema.Union([AttentionItemError, EnvironmentAuthorizationError]),
+});
+
+const WsAttentionItemsDismissRpc = Rpc.make(WS_METHODS.attentionItemsDismiss, {
+  payload: AttentionItemDismissInput,
+  success: AttentionItemDismissResult,
+  error: Schema.Union([AttentionItemError, EnvironmentAuthorizationError]),
+});
+
 const WsGuestShareCreateRpc = Rpc.make(WS_METHODS.guestShareCreate, {
   payload: GuestShareCreateInput,
   success: GuestShareCreateResult,
@@ -2052,6 +2083,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsSecretsAnswerRequestRpc,
   WsScheduledTasksListWebhookDeliveriesRpc,
   WsScheduledTasksGetWebhookDeliveryRpc,
+  WsAttentionItemsSubscribeRpc,
+  WsAttentionItemsSetDoneRpc,
+  WsAttentionItemsDismissRpc,
   WsServerReportClientActivityRpc,
   WsCloudGetRelayClientStatusRpc,
   WsCloudInstallRelayClientRpc,
