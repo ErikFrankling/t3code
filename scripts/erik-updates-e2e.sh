@@ -184,11 +184,27 @@ version_code() { adb shell dumpsys package "$pkg" | grep -m1 -o 'versionCode=[0-
 launch() {
   adb shell monkey -p "$pkg" -c android.intent.category.LAUNCHER 1 > /dev/null 2>&1
 }
+open_settings() { # <seconds>
+  local deadline=$((SECONDS + $1)) at
+  while ((SECONDS < deadline)); do
+    dump_ui
+    at="$(center_of text "Settings")"
+    [ -n "$at" ] || at="$(center_of content-desc "Open settings")"
+    if [ -n "$at" ]; then
+      # shellcheck disable=SC2086 # "x y"
+      adb shell input tap $at
+      return 0
+    fi
+    sleep 2
+  done
+  return 1
+}
 open_about() {
-  tap_on content-desc "Open settings" 90 || {
+  # Settings is a bottom tab in newer builds, a header button in older ones.
+  open_settings 90 || {
     launch # the app may have been closed or covered; bring it back once
-    tap_on content-desc "Open settings" 60
-  } || fail "no Open settings button on the home screen"
+    open_settings 60
+  } || fail "no Settings tab or button on the home screen"
   local found=0
   for _ in 1 2 3 4 5 6 7 8; do
     dump_ui
