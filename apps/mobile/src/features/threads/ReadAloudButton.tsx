@@ -1,20 +1,10 @@
 import { RegistryContext } from "@effect/atom-react";
-import {
-  READ_ALOUD_SPEEDS,
-  ReadAloudPlayer,
-  type ReadAloudAudio,
-  type ReadAloudClip,
-} from "@t3tools/client-runtime/read-aloud";
+import { READ_ALOUD_SPEEDS, ReadAloudPlayer } from "@t3tools/client-runtime/read-aloud";
 import type { PreparedConnection } from "@t3tools/client-runtime/connection";
 import { ReadAloudState, type EnvironmentId, type ReadAloudMode } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import {
-  createAudioPlayer,
-  setAudioModeAsync,
-  setIsAudioActiveAsync,
-  type AudioPlayer,
-} from "expo-audio";
+import { createAudioPlayer, setAudioModeAsync, setIsAudioActiveAsync } from "expo-audio";
 import { fetch } from "expo/fetch";
 import { File, Paths } from "expo-file-system";
 import {
@@ -30,6 +20,7 @@ import { Pressable, ScrollView, View, type ColorValue } from "react-native";
 import { AppText as Text } from "../../components/ui/AppText";
 import { SymbolView, type AppSymbolName } from "../../components/ui/AppSymbol";
 import { voiceCall } from "../../native/voiceCall";
+import { createReadAloudAudio } from "./readAloudAudio";
 import { environmentSession } from "../../state/session";
 
 /**
@@ -42,110 +33,34 @@ const decodeReadAloudState = Schema.decodeUnknownSync(ReadAloudState);
 
 let connection: PreparedConnection | null = null;
 
-type Slot = { readonly player: AudioPlayer; id: string | null };
-
-// Two players: one plays while the other already holds the next chunk, so
-// chunks follow each other without a load gap.
-let slots: [Slot, Slot] | null = null;
-let active: Slot | null = null;
-let rejectClip: ((error: Error) => void) | null = null;
-let releaseClip: (() => void) | null = null;
+let backgroundPlayback: boolean | null = null;
 let clipNumber = 0;
 
-let backgroundPlayback: boolean | null = null;
-
-async function slotPair(): Promise<[Slot, Slot]> {
-  // Voice mode reads replies with the screen off; otherwise reading stops when you leave.
-  if (backgroundPlayback !== voiceCall.active) {
-    backgroundPlayback = voiceCall.active;
-    await setAudioModeAsync({
-      playsInSilentMode: true,
-      shouldPlayInBackground: backgroundPlayback,
-    });
-  }
-  // Dictation turns the audio session off when it stops recording; playback needs it on.
-  await setIsAudioActiveAsync(true);
-  if (!slots) {
-    slots = [
-      { player: createAudioPlayer(null, { updateInterval: 250 }), id: null },
-      { player: createAudioPlayer(null, { updateInterval: 250 }), id: null },
-    ];
-  }
-  return slots;
-}
-
-async function load(slot: Slot, clip: ReadAloudClip) {
-  if (slot.id === clip.id) return;
-  // Rotating files: neither the playing nor the preloaded clip is overwritten.
-  const file = new File(Paths.cache, `read-aloud-${clipNumber++ % 6}.wav`);
-  await file.write(clip.audio, { encoding: "base64" });
-  slot.player.replace({ uri: file.uri });
-  slot.id = clip.id;
-}
-
-const audio: ReadAloudAudio = {
-  play: async (clip, { rate, startFraction, next, onProgress }) => {
-    rejectClip?.(new Error("replaced"));
-    releaseClip?.();
-    const pair = await slotPair();
-    const slot =
-      pair.find((candidate) => candidate.id === clip.id) ??
-      pair.find((candidate) => candidate !== active) ??
-      pair[0];
-    // The same text gets the same clip from the server (voice mode's cue every
-    // turn), and a player holding it may still sit at its end.
-    const reused = slot.id === clip.id;
-    await load(slot, clip);
-    active = slot;
-    const { player } = slot;
-    if (reused && !startFraction) await player.seekTo(0);
-    await new Promise<void>((resolve, reject) => {
-      let seeked = !startFraction;
-      const subscription = player.addListener("playbackStatusUpdate", (status) => {
-        if (status.duration > 0) {
-          if (!seeked) {
-            seeked = true;
-            void player.seekTo(status.duration * (startFraction ?? 0));
-          }
-          onProgress?.(status.currentTime / status.duration);
-        }
-        if (status.didJustFinish) {
-          releaseClip?.();
-          resolve();
-        }
+const audio = createReadAloudAudio({
+  createPlayer: () => createAudioPlayer(null, { updateInterval: 250 }),
+  writeClip: async (base64) => {
+    // Rotating files: neither the playing nor the preloaded clip is overwritten.
+    const file = new File(Paths.cache, `read-aloud-${clipNumber++ % 6}.wav`);
+    await file.write(base64, { encoding: "base64" });
+    return file.uri;
+  },
+  prepare: async () => {
+    // Voice mode reads replies with the screen off; otherwise reading stops when you leave.
+    if (backgroundPlayback !== voiceCall.active) {
+      backgroundPlayback = voiceCall.active;
+      await setAudioModeAsync({
+        playsInSilentMode: true,
+        shouldPlayInBackground: backgroundPlayback,
       });
-      releaseClip = () => {
-        subscription.remove();
-        releaseClip = null;
-        rejectClip = null;
-      };
-      rejectClip = reject;
-      player.setPlaybackRate(rate, "high");
-      player.play();
-      const other = pair.find((candidate) => candidate !== slot);
-      if (next && other) void load(other, next).catch(() => undefined);
-    });
+    }
+    // Dictation turns the audio session off when it stops recording; playback needs it on.
+    await setIsAudioActiveAsync(true);
   },
-  pause: () => active?.player.pause(),
-  resume: () => active?.player.play(),
-  stop: () => {
-    active?.player.pause();
-    const reject = rejectClip;
-    releaseClip?.();
-    reject?.(new Error("stopped"));
-  },
-};
+});
 
-/**
- * Frees the players. Each one carries a media session that answers the
- * earbud button, so voice mode drops them while you talk, and its own
- * session gets the tap. The next clip creates them again.
- */
+/** Frees the players (voice mode drops them while you talk; see readAloudAudio.ts). */
 export function releaseReadAloudAudio() {
-  if (active && rejectClip) return;
-  for (const slot of slots ?? []) slot.player.remove();
-  slots = null;
-  active = null;
+  audio.release();
 }
 
 export const readAloudPlayer = new ReadAloudPlayer({
