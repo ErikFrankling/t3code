@@ -46,6 +46,8 @@ import {
   type RenderFailureProps,
 } from "./components/RenderErrorBoundary";
 import { ArchivedThreadsRouteScreen } from "./features/archive/ArchivedThreadsRouteScreen";
+import { useErikPushRegistration } from "./features/agent-awareness/erikPushRegistration";
+import { useAgentNotificationNavigation } from "./features/agent-awareness/notificationNavigation";
 import { ConnectOnboardingRouteScreen } from "./features/cloud/ConnectOnboardingRouteScreen";
 import { AttachmentFileScreen } from "./features/files/AttachmentFileScreen";
 import { ThreadFilesTreeScreen, ThreadFileScreen } from "./features/files/ThreadFilesRouteScreen";
@@ -522,6 +524,8 @@ function RootStackLayout(props: {
   const routeDraftId = Array.isArray(draftParams?.draftId)
     ? draftParams.draftId[0]
     : draftParams?.draftId;
+  useAgentNotificationNavigation(workspaceLocation.pathname);
+  useErikPushRegistration();
 
   return (
     <NewTaskFlowProvider
