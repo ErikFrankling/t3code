@@ -14,6 +14,8 @@ import {
   type AttentionItemResult,
   type AttentionItemSetDoneInput,
   type AttentionItemUpsertInput,
+  type CommitmentState,
+  type CommitmentUpsertInput,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
@@ -42,6 +44,19 @@ interface AttentionItemRow {
   readonly updated_at: string;
   readonly done: number;
   readonly done_at: string | null;
+  readonly kind: string | null;
+  readonly state: string | null;
+  readonly owner_thread_id: string | null;
+  readonly proof_required: string | null;
+  readonly proof: string | null;
+  readonly asked_at: string | null;
+  readonly repeated: number | null;
+}
+
+export interface CommitmentResolveInput {
+  readonly id: AttentionItemId;
+  readonly state: CommitmentState;
+  readonly proof?: string | null | undefined;
 }
 
 export interface AttentionItemSetDoneOptions {
@@ -68,6 +83,12 @@ export class AttentionItemService extends Context.Service<
     readonly dismiss: (
       input: AttentionItemDismissInput,
     ) => Effect.Effect<AttentionItemDismissResult, AttentionItemError>;
+    readonly upsertCommitment: (
+      input: CommitmentUpsertInput,
+    ) => Effect.Effect<AttentionItemResult, AttentionItemError>;
+    readonly resolveCommitment: (
+      input: CommitmentResolveInput,
+    ) => Effect.Effect<AttentionItemResult, AttentionItemError>;
   }
 >()("t3/attention/AttentionItemService") {}
 
@@ -89,11 +110,16 @@ function parseUnblocks(json: string): ReadonlyArray<ThreadId> {
   return Option.getOrElse(decodeUnblocks(json), () => []);
 }
 
+const COMMITMENT_STATES: ReadonlyArray<CommitmentState> = ["open", "in_progress", "waiting", "done"];
+
 function rowToItem(row: AttentionItemRow): AttentionItem {
   const priority: AttentionItemPriority =
     row.priority === "high" || row.priority === "low" ? row.priority : "normal";
+  const done = row.done !== 0;
+  const state = COMMITMENT_STATES.find((candidate) => candidate === row.state);
   return {
     id: AttentionItemId.make(row.item_id),
+    kind: row.kind === "in_flight" ? "in_flight" : "needs_you",
     title: row.title,
     detail: row.detail,
     unblocks: parseUnblocks(row.unblocks_json),
@@ -101,8 +127,14 @@ function rowToItem(row: AttentionItemRow): AttentionItem {
     priority,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    done: row.done !== 0,
+    done,
     doneAt: row.done_at,
+    state: done ? "done" : (state ?? "open"),
+    ownerThreadId: row.owner_thread_id === null ? null : ThreadId.make(row.owner_thread_id),
+    proofRequired: row.proof_required,
+    proof: row.proof,
+    askedAt: row.asked_at,
+    repeated: (row.repeated ?? 0) !== 0,
   };
 }
 
@@ -131,6 +163,21 @@ export const layer = Layer.effect(
       done INTEGER NOT NULL DEFAULT 0,
       done_at TEXT
     )`.pipe(Effect.orDie);
+    // Columns added after the table first shipped; existing databases get them here.
+    const columns = yield* sql<{ readonly name: string }>`PRAGMA table_info(attention_items)`.pipe(
+      Effect.orDie,
+    );
+    const addColumn = (name: string, definition: string) =>
+      columns.some((column) => column.name === name)
+        ? Effect.void
+        : sql.unsafe(`ALTER TABLE attention_items ADD COLUMN ${name} ${definition}`).pipe(Effect.orDie);
+    yield* addColumn("kind", "TEXT NOT NULL DEFAULT 'needs_you'");
+    yield* addColumn("state", "TEXT");
+    yield* addColumn("owner_thread_id", "TEXT");
+    yield* addColumn("proof_required", "TEXT");
+    yield* addColumn("proof", "TEXT");
+    yield* addColumn("asked_at", "TEXT");
+    yield* addColumn("repeated", "INTEGER NOT NULL DEFAULT 0");
 
     // Every change re-emits the whole (small) list, so subscribers only need
     // the latest signal.
@@ -188,6 +235,11 @@ export const layer = Layer.effect(
             .pipe(Effect.mapError((cause) => itemError("Could not create an id.", { cause }))),
         );
       const existing = yield* findItem(id);
+      if (existing !== null && existing.kind === "in_flight") {
+        return yield* Effect.fail(
+          itemError(`${id} is a commitment; use commitment_upsert.`, { itemId: id }),
+        );
+      }
       const detail = input.detail !== undefined ? input.detail : (existing?.detail ?? null);
       const unblocks = input.unblocks ?? existing?.unblocks ?? [];
       const sourceThreadId =
@@ -265,6 +317,13 @@ export const layer = Layer.effect(
       "AttentionItemService.setDone",
     )(function* (input, options) {
       const current = yield* requireItem(input.id);
+      if (current.kind === "in_flight") {
+        return yield* Effect.fail(
+          itemError("Only the personal agent closes in-flight items, and only with proof.", {
+            itemId: input.id,
+          }),
+        );
+      }
       if (current.done === input.done) return { item: current };
       const now = yield* nowIso;
       yield* sql`UPDATE attention_items
@@ -302,12 +361,107 @@ export const layer = Layer.effect(
       return { id: input.id };
     });
 
+    const upsertCommitment: AttentionItemService["Service"]["upsertCommitment"] = Effect.fn(
+      "AttentionItemService.upsertCommitment",
+    )(function* (input) {
+      if (input.state === "done") {
+        return yield* Effect.fail(
+          itemError("Close a commitment with commitment_resolve and its proof."),
+        );
+      }
+      const now = yield* nowIso;
+      const id =
+        input.id ??
+        AttentionItemId.make(
+          yield* crypto
+            .randomUUIDv4()
+            .pipe(Effect.mapError((cause) => itemError("Could not create an id.", { cause }))),
+        );
+      const existing = yield* findItem(id);
+      if (existing !== null && existing.kind !== "in_flight") {
+        return yield* Effect.fail(
+          itemError(`${id} is a Needs you item, not a commitment.`, { itemId: id }),
+        );
+      }
+      const pick = <K extends keyof CommitmentUpsertInput & keyof AttentionItem>(
+        key: K,
+        fallback: AttentionItem[K],
+      ) => (input[key] !== undefined ? input[key] : (existing?.[key] ?? fallback));
+      const detail = pick("detail", null);
+      const ownerThreadId = pick("ownerThreadId", null);
+      const proofRequired = pick("proofRequired", null);
+      const askedAt = pick("askedAt", now.slice(0, 10));
+      const repeated = pick("repeated", false);
+      // An update that does not name a state keeps it, so a done item stays done.
+      const state = input.state ?? existing?.state ?? "open";
+      yield* sql`INSERT INTO attention_items (
+          item_id, kind, title, detail, unblocks_json, source_thread_id, priority,
+          created_at, updated_at, done, done_at, state, owner_thread_id, proof_required,
+          proof, asked_at, repeated
+        ) VALUES (
+          ${id}, 'in_flight', ${input.title}, ${detail}, '[]', NULL, 'normal',
+          ${now}, ${now}, 0, NULL, ${state}, ${ownerThreadId}, ${proofRequired},
+          NULL, ${askedAt}, ${repeated ? 1 : 0}
+        )
+        ON CONFLICT (item_id) DO UPDATE SET
+          title = excluded.title,
+          detail = excluded.detail,
+          state = excluded.state,
+          owner_thread_id = excluded.owner_thread_id,
+          proof_required = excluded.proof_required,
+          asked_at = excluded.asked_at,
+          repeated = excluded.repeated,
+          updated_at = excluded.updated_at`.pipe(
+        Effect.mapError((cause) =>
+          itemError("Could not save the commitment.", { itemId: id, cause }),
+        ),
+      );
+      yield* notifyChanged;
+      return { item: yield* requireItem(id) };
+    });
+
+    const resolveCommitment: AttentionItemService["Service"]["resolveCommitment"] = Effect.fn(
+      "AttentionItemService.resolveCommitment",
+    )(function* (input) {
+      const current = yield* requireItem(input.id);
+      if (current.kind !== "in_flight") {
+        return yield* Effect.fail(
+          itemError(`${input.id} is a Needs you item; use attention_item_resolve.`, {
+            itemId: input.id,
+          }),
+        );
+      }
+      const proof = (input.proof !== undefined ? input.proof : current.proof)?.trim() || null;
+      if (input.state === "done" && proof === null) {
+        return yield* Effect.fail(
+          itemError(
+            "Done needs proof: screenshot paths, a log excerpt or a link you checked yourself.",
+            { itemId: input.id },
+          ),
+        );
+      }
+      const now = yield* nowIso;
+      const done = input.state === "done";
+      yield* sql`UPDATE attention_items
+        SET state = ${input.state}, proof = ${proof}, done = ${done ? 1 : 0},
+          done_at = ${done ? (current.doneAt ?? now) : null}, updated_at = ${now}
+        WHERE item_id = ${input.id}`.pipe(
+        Effect.mapError((cause) =>
+          itemError("Could not update the commitment.", { itemId: input.id, cause }),
+        ),
+      );
+      yield* notifyChanged;
+      return { item: yield* requireItem(input.id) };
+    });
+
     return {
       list,
       subscribeList,
       upsert,
       setDone,
       dismiss,
+      upsertCommitment,
+      resolveCommitment,
     } satisfies AttentionItemService["Service"];
   }),
 );
