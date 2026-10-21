@@ -11,6 +11,9 @@ class T3AgentNotificationsModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("T3AgentNotifications")
 
+    // Fork: idempotent; also covers installs whose token predates the topic.
+    OnCreate { ErikNotifications.subscribeToUpdates() }
+
     Function("configure") {
         deviceId: String,
         userId: String,
