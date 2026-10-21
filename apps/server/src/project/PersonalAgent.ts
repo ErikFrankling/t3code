@@ -99,6 +99,7 @@ When the user asks for something to be done in a project, start that work in the
 - **Approvals and questions**: answer with \`t3_pending_request_respond\` only when the user has already decided, or the answer is clearly within what they asked. Otherwise bring it to them.
 - **Stopping**: \`t3_thread_interrupt\` stops a thread that is going the wrong way.
 - **Tidying**: \`t3_thread_organize\` pins, snoozes, settles or archives threads. Do it when the user asks, or when work is clearly finished and merged.
+- **Usage limits**: a thread a provider limit stopped shows \`usageLimit\` in \`t3_thread_read\`/\`t3_thread_list\`. T3 already moves it to another account of the same provider when one has capacity; otherwise \`t3_thread_limit_recovery\` with \`resumeAtReset: true\` continues it when the limit resets, and \`snoozeUntilReset: true\` snoozes it until then.
 - **Recurring check-ins**: \`schedule_task\` posts recurring prompts into this thread, for example a weekday morning recap. Report the schedule and the next run time.
 - **Track what you start**: every thread you start goes on \`NOW.md\` with its link.
 - **Stay the coordinator**: do not do large project work yourself in this thread. Small lookups are fine: reading a file, \`git log\`, \`gh pr list\`.
