@@ -107,7 +107,7 @@ function layerTest(
   return ProviderSwitch.layer.pipe(Layer.provide(layerRegistry));
 }
 
-it.effect("uses current Claude group settings for an existing stopped thread", () =>
+it.effect("resumes natively across Claude accounts unless their groups differ", () =>
   Effect.gen(function* () {
     const targetId = ProviderInstanceId.make("claude-secondary");
     const providerThreadId = ProviderThreadId.make("existing-claude-thread");
@@ -124,15 +124,15 @@ it.effect("uses current Claude group settings for an existing stopped thread", (
         },
       ],
     } as unknown as OrchestrationV2ThreadProjection;
-    const plan = (sharedSessionGroup: string) =>
+    const plan = (sourceGroup: string, targetGroup = sourceGroup) =>
       Effect.gen(function* () {
         const sourceKey = yield* makeClaudeContinuationGroupKey({
           homePath: "~/.claude",
-          sharedSessionGroup,
+          sharedSessionGroup: sourceGroup,
         });
         const targetKey = yield* makeClaudeContinuationGroupKey({
           homePath: "~/.claude_2",
-          sharedSessionGroup,
+          sharedSessionGroup: targetGroup,
         });
         return yield* Effect.gen(function* () {
           const service = yield* ProviderSwitch.ProviderSwitchServiceV2;
@@ -153,10 +153,12 @@ it.effect("uses current Claude group settings for an existing stopped thread", (
           ),
         );
       });
-    assert.equal((yield* plan("")).transition.type, "create_with_handoff");
-    const shared = yield* plan("max");
-    assert.equal(shared.transition.type, "restart_and_resume");
-    assert.deepEqual(shared.releaseProviderSessionIds, []);
+    const defaults = yield* plan("");
+    assert.equal(defaults.transition.type, "restart_and_resume");
+    assert.deepEqual(defaults.releaseProviderSessionIds, []);
+    assert.equal((yield* plan("max")).transition.type, "restart_and_resume");
+    assert.equal((yield* plan("max", "work")).transition.type, "create_with_handoff");
+    assert.equal((yield* plan("", "work")).transition.type, "create_with_handoff");
   }).pipe(Effect.provide(NodeServices.layer)),
 );
 
