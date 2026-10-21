@@ -135,6 +135,8 @@ An empty database is a bad test. Seed your worktree's `.t3` with a copy of real 
 
 - Upon request, user-visible frontend changes should get one integrated pass in a real client: `test-t3-app` for web, `test-t3-mobile` for mobile. The primary agent does this once after integrating. Subagents do not launch their own dev servers. Ask permission before doing computer use or spinning up browsers.
 
+Fork rule (Erik): **every phone UI change is checked in both dark and light mode** before it ships (`adb shell cmd uimode night yes|no` on the emulator, then a screenshot of each). Use the mobile theme's tokens (`bg-screen`, `bg-card`, `text-foreground`, `bg-danger`, …, listed in `apps/mobile/generated-uniwind-default-theme-variables.json`), never raw palette colors or web token names: an unknown class such as `bg-background` silently does nothing on mobile (voice mode shipped white that way). The `voiceThemeTokens` tests (mobile and web) enforce this for the voice, dictation and read-aloud screens; add new screens to their lists.
+
 For authorized mobile verification, a missing or outdated native client is an install step, not a blocker. Run `vp run mobile:install <ios|android> [device-id]` on the device host before starting Metro; it targets the only booted simulator or connected Android device when the id is omitted. It installs the dev client for this checkout's native fingerprint from the shared cache in seconds and builds only when no machine has built it yet, so prefer it over `expo run:*`, `xcodebuild`, or `gradlew`, which rebuild from scratch. Its stdout is one JSON line; build output goes to the log it names. See `test-t3-mobile` for the full workflow.
 
 ## Evals
