@@ -5,7 +5,7 @@
 #
 #   heavy -e PHASE=build --shell .#android -- scripts/erik-updates-e2e.sh
 #   heavy emulator start           (the one shared emulator; check `heavy emulator status`)
-#   heavy -e PHASE=device --no-sync --shell .#android -- scripts/erik-updates-e2e.sh
+#   heavy --big -e PHASE=device --shell .#android -- scripts/erik-updates-e2e.sh   # big: no build may share the node
 #   heavy pull .erik-updates-e2e
 #   heavy emulator stop
 #
@@ -185,10 +185,9 @@ launch() {
   adb shell monkey -p "$pkg" -c android.intent.category.LAUNCHER 1 > /dev/null 2>&1
 }
 open_about() {
-  # The home screen can open with a focused composer; Back hides the keyboard.
   tap_on content-desc "Open settings" 90 || {
-    adb shell input keyevent KEYCODE_BACK
-    tap_on content-desc "Open settings" 30
+    launch # the app may have been closed or covered; bring it back once
+    tap_on content-desc "Open settings" 60
   } || fail "no Open settings button on the home screen"
   local found=0
   for _ in 1 2 3 4 5 6 7 8; do
@@ -218,6 +217,9 @@ shoot() { # <name>: light and dark screenshots
   sleep 2
 }
 
+# A freshly booted emulator is still busy for a while; tests started too early
+# hit ANRs in System UI.
+sleep 60
 for setting in window_animation_scale transition_animation_scale animator_duration_scale; do
   adb shell settings put global "$setting" 0
 done
