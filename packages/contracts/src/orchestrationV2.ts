@@ -626,6 +626,15 @@ export type OrchestrationV2ThreadLaunchWorkspaceStrategy =
 
 export const ORCHESTRATION_V2_WORKSPACE_PREPARATION_FAILURE_CODE = "workspace_preparation_failed";
 
+export const OrchestrationV2QueueHoldReason = Schema.Literals([
+  "stop",
+  "worktree",
+  "restart",
+  "failure",
+  "instance_disabled",
+]);
+export type OrchestrationV2QueueHoldReason = typeof OrchestrationV2QueueHoldReason.Type;
+
 export const OrchestrationV2Run = Schema.Struct({
   id: RunId,
   threadId: ThreadId,
@@ -639,6 +648,13 @@ export const OrchestrationV2Run = Schema.Struct({
   status: OrchestrationV2RunStatus,
   queuePosition: Schema.optional(Schema.NullOr(PositiveInt)),
   queueHeld: Schema.optional(Schema.Boolean),
+  /**
+   * Why the queue was held. Only a user stop (and a missing worktree) keeps a
+   * queue waiting for the user; the queue watchdog releases the others once
+   * the thread is idle. Absent on holds written before reasons existed, which
+   * stay held like a stop.
+   */
+  queueHoldReason: Schema.optional(OrchestrationV2QueueHoldReason),
   requestedAt: Schema.DateTimeUtc,
   startedAt: Schema.NullOr(Schema.DateTimeUtc),
   completedAt: Schema.NullOr(Schema.DateTimeUtc),

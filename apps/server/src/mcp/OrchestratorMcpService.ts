@@ -837,6 +837,33 @@ function threadSnooze(
   };
 }
 
+/** The limit that stopped the thread, and the recovery the UI's limit card offers. */
+export function threadUsageLimit(
+  thread: Pick<
+    OrchestrationV2ThreadShell,
+    "status" | "lastErrorClass" | "usageLimitResetAt" | "latestRunId" | "limitRecovery"
+  >,
+): OrchestratorMcpThreadListItem["usageLimit"] {
+  if (
+    thread.status !== "failed" ||
+    thread.lastErrorClass !== "usage_limit" ||
+    thread.latestRunId === null
+  ) {
+    return null;
+  }
+  const resetAt = thread.usageLimitResetAt ?? null;
+  const recovery = thread.limitRecovery;
+  const current =
+    recovery != null && recovery.runId === thread.latestRunId && recovery.resetAt === resetAt;
+  return {
+    stoppedRunId: thread.latestRunId,
+    resetAt,
+    resumeAtReset: current && recovery.autoResume,
+    snoozedUntilReset: current && recovery.snooze === true,
+  };
+}
+
+/** The same links `list_thread_pull_requests` reports, without the snapshot details. */
 function threadPullRequests(
   links: OrchestrationV2ThreadShell["pullRequests"],
 ): OrchestratorMcpThreadPullRequest[] {
@@ -870,6 +897,7 @@ function listItemFromShell(
     pullRequests: threadPullRequests(shell.pullRequests),
     ...threadSettlement(shell),
     ...threadSnooze(shell, nowMs),
+    usageLimit: threadUsageLimit(shell),
     parentThreadId: shell.lineage.parentThreadId,
     relationshipToParent: shell.lineage.relationshipToParent,
     itemCount: shell.visibleItemCount,
@@ -922,6 +950,7 @@ function threadDetail(
     archived: projection.thread.archivedAt !== null,
     ...threadSettlement(projection.thread),
     ...threadSnooze(shell, nowMs),
+    usageLimit: threadUsageLimit(shell),
     createdAt: DateTime.formatIso(projection.thread.createdAt),
     updatedAt: DateTime.formatIso(projection.thread.updatedAt),
   };

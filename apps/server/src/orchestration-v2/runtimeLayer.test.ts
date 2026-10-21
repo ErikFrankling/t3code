@@ -5016,7 +5016,7 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
         for (const run of queued) {
           assert.deepEqual(
             held.runs.find((row) => row.id === run.id),
-            { ...run, queueHeld: true },
+            { ...run, queueHeld: true, queueHoldReason: "restart" },
           );
           assert.deepEqual(
             held.messages.find((row) => row.id === run.userMessageId),
@@ -7149,5 +7149,228 @@ it.layer(layerTest)("queue after a server restart", (it) => {
           assert.equal(after.queueHeld, true);
         }
       }),
+  );
+});
+
+const queueWatchdogFixture = (name: string) =>
+  Effect.gen(function* () {
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    const events = yield* EventSink.EventSinkV2;
+    const threadId = ThreadId.make(`queue-watchdog:${name}`);
+    const projectId = ProjectId.make(`queue-watchdog:project:${name}`);
+    const now = yield* DateTime.now;
+    yield* seedProject({
+      projectId,
+      title: "Queue watchdog project",
+      workspaceRoot: process.cwd(),
+      defaultModelSelection: modelSelection,
+      createdAt: DateTime.formatIso(now),
+    });
+    yield* orchestrator.dispatch({
+      type: "thread.create",
+      commandId: CommandId.make(`queue-watchdog:create:${name}`),
+      threadId,
+      projectId,
+      title: "Queue watchdog thread",
+      modelSelection,
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      branch: null,
+      worktreePath: null,
+      createdBy: "user",
+      creationSource: "web",
+    });
+    const send = (
+      suffix: string,
+      dispatchMode: "defer_start" | "queue_after_active",
+      selection?: ModelSelection,
+    ) =>
+      orchestrator.dispatch({
+        type: "message.dispatch",
+        commandId: CommandId.make(`queue-watchdog:${suffix}:${name}`),
+        threadId,
+        messageId: MessageId.make(`queue-watchdog:${suffix}:${name}`),
+        text: suffix,
+        attachments: [],
+        ...(selection === undefined ? {} : { modelSelection: selection }),
+        dispatchMode: { type: dispatchMode },
+        createdBy: "agent",
+        creationSource: "mcp",
+      });
+    const runs = () =>
+      orchestrator.getThreadProjection(threadId).pipe(Effect.map((projection) => projection.runs));
+    const write = (id: string, payload: OrchestrationV2Run) =>
+      events.write({
+        events: [
+          {
+            id: EventId.make(`queue-watchdog:${id}:${name}`),
+            type: "run.updated",
+            threadId,
+            occurredAt: now,
+            payload,
+          },
+        ],
+      });
+    const limitRun = (run: OrchestrationV2Run, resetAt: string) =>
+      events.write({
+        events: [
+          {
+            id: EventId.make(`queue-watchdog:limit-run:${name}`),
+            type: "run.updated",
+            threadId,
+            occurredAt: now,
+            payload: {
+              ...run,
+              status: "failed",
+              providerInstanceId: run.modelSelection.instanceId,
+              completedAt: now,
+            },
+          },
+          {
+            id: EventId.make(`queue-watchdog:limit-item:${name}`),
+            type: "turn-item.updated",
+            threadId,
+            occurredAt: now,
+            payload: {
+              id: TurnItemId.make(`queue-watchdog:limit-item:${name}`),
+              type: "error",
+              threadId,
+              runId: run.id,
+              nodeId: run.rootNodeId,
+              providerThreadId: null,
+              providerTurnId: null,
+              nativeItemRef: null,
+              parentItemId: null,
+              ordinal: 2,
+              status: "failed",
+              title: "Usage limit reached",
+              startedAt: now,
+              completedAt: now,
+              updatedAt: now,
+              failure: {
+                class: "usage_limit",
+                message: "You've hit your session limit.",
+                code: "usageLimitExceeded",
+                retryable: null,
+                resetAt,
+              },
+            },
+          },
+        ],
+      });
+    return { orchestrator, threadId, now, send, runs, write, limitRun };
+  });
+
+it.layer(layerTest)("queue watchdog", (it) => {
+  it.effect(
+    "starts a message held by a restart once a failed continuation leaves the thread idle",
+    () =>
+      Effect.gen(function* () {
+        const fx = yield* queueWatchdogFixture("restart-failed-continuation");
+        yield* fx.send("interrupted turn", "defer_start");
+        // Queued for the other account, as after a switch or failover.
+        yield* fx.send("queued on the other account", "queue_after_active", {
+          ...modelSelection,
+          instanceId: alternateInstanceId,
+        });
+        const [interrupted, queued] = (yield* fx.runs()) as [
+          OrchestrationV2Run,
+          OrchestrationV2Run,
+        ];
+        assert.equal(queued.providerInstanceId, alternateInstanceId);
+        yield* fx.write("restart-hold", {
+          ...queued,
+          queueHeld: true,
+          queueHoldReason: "restart",
+        });
+        // A message queued behind the held one does not inherit the restart hold.
+        yield* fx.send("sent while held", "queue_after_active");
+        yield* fx.write("interrupt", {
+          ...interrupted,
+          status: "cancelled",
+          startedAt: fx.now,
+          completedAt: fx.now,
+        });
+        const later = (yield* fx.runs()).find(
+          (run) =>
+            run.userMessageId ===
+            MessageId.make("queue-watchdog:sent while held:restart-failed-continuation"),
+        )!;
+        assert.notEqual(later.queueHeld, true);
+
+        // Too soon after the run ended: the watchdog leaves it to the normal path.
+        assert.equal(yield* fx.orchestrator.superviseQueues, 0);
+        yield* TestClock.adjust("31 seconds");
+        assert.equal(yield* fx.orchestrator.superviseQueues, 1);
+        const started = (yield* fx.runs()).find((run) => run.id === queued.id)!;
+        assert.notEqual(started.status, "queued");
+        assert.equal(started.providerInstanceId, alternateInstanceId);
+      }),
+  );
+
+  it.effect("leaves a queue the user stopped held", () =>
+    Effect.gen(function* () {
+      const fx = yield* queueWatchdogFixture("user-stop");
+      yield* fx.send("stopped turn", "defer_start");
+      yield* fx.send("queued", "queue_after_active");
+      const [stopped, queued] = (yield* fx.runs()) as [OrchestrationV2Run, OrchestrationV2Run];
+      yield* fx.write("stop-hold", { ...queued, queueHeld: true, queueHoldReason: "stop" });
+      yield* fx.write("stop", { ...stopped, status: "interrupted", completedAt: fx.now });
+      yield* TestClock.adjust("10 minutes");
+      assert.equal(yield* fx.orchestrator.superviseQueues, 0);
+      const after = (yield* fx.runs()).find((run) => run.id === queued.id)!;
+      assert.equal(after.status, "queued");
+      assert.equal(after.queueHeld, true);
+    }),
+  );
+
+  it.effect("retries a queue held by a provider failure after a cooldown", () =>
+    Effect.gen(function* () {
+      const fx = yield* queueWatchdogFixture("failure-hold");
+      yield* fx.send("failed turn", "defer_start");
+      yield* fx.send("queued", "queue_after_active");
+      const [failed, queued] = (yield* fx.runs()) as [OrchestrationV2Run, OrchestrationV2Run];
+      yield* fx.write("failure-hold", { ...queued, queueHeld: true, queueHoldReason: "failure" });
+      yield* fx.write("fail", { ...failed, status: "failed", completedAt: fx.now });
+      yield* TestClock.adjust("1 minute");
+      assert.equal(yield* fx.orchestrator.superviseQueues, 0);
+      yield* TestClock.adjust("5 minutes");
+      assert.equal(yield* fx.orchestrator.superviseQueues, 1);
+      assert.notEqual((yield* fx.runs()).find((run) => run.id === queued.id)!.status, "queued");
+    }),
+  );
+
+  it.effect("starts a queue a usage limit stopped once the limit resets", () =>
+    Effect.gen(function* () {
+      const fx = yield* queueWatchdogFixture("limit-reset");
+      yield* fx.send("limited turn", "defer_start");
+      yield* fx.send("queued", "queue_after_active");
+      const [limited, queued] = (yield* fx.runs()) as [OrchestrationV2Run, OrchestrationV2Run];
+      yield* fx.limitRun(limited, DateTime.formatIso(DateTime.add(fx.now, { minutes: 10 })));
+      yield* TestClock.adjust("1 minute");
+      // No sibling account in this group: the queue waits for the reset.
+      assert.equal(yield* fx.orchestrator.superviseQueues, 1);
+      assert.equal((yield* fx.runs()).find((run) => run.id === queued.id)!.status, "queued");
+      yield* TestClock.adjust("10 minutes");
+      yield* fx.orchestrator.superviseQueues;
+      assert.notEqual((yield* fx.runs()).find((run) => run.id === queued.id)!.status, "queued");
+    }),
+  );
+});
+
+it.layer(layerUsageLimitFailoverTest)("queue watchdog with a sibling account", (it) => {
+  it.effect("starts a queue a usage limit stopped on the other account right away", () =>
+    Effect.gen(function* () {
+      const fx = yield* queueWatchdogFixture("limit-sibling");
+      yield* fx.send("limited turn", "defer_start");
+      yield* fx.send("queued", "queue_after_active");
+      const [limited, queued] = (yield* fx.runs()) as [OrchestrationV2Run, OrchestrationV2Run];
+      yield* fx.limitRun(limited, DateTime.formatIso(DateTime.add(fx.now, { hours: 2 })));
+      yield* TestClock.adjust("31 seconds");
+      yield* fx.orchestrator.superviseQueues;
+      const started = (yield* fx.runs()).find((run) => run.id === queued.id)!;
+      assert.notEqual(started.status, "queued");
+      assert.equal(started.providerInstanceId, alternateInstanceId);
+    }),
   );
 });
