@@ -30,6 +30,8 @@ export interface ReadAloudAudio {
   play(clip: ReadAloudClip, options: ReadAloudPlayOptions): Promise<void>;
   /** Loads the clip that plays next, when it arrives after the current one started. */
   preload?(clip: ReadAloudClip): void;
+  /** Changes the pace of the clip that is playing. */
+  setRate?(rate: number): void;
   pause(): void;
   resume(): void;
   stop(): void;
@@ -59,7 +61,22 @@ export type ReadAloudDependencies = {
   readonly onSpeedChange?: (speed: number) => void;
 };
 
-export const READ_ALOUD_SPEEDS = [0.9, 1, 1.15, 1.3, 1.5] as const;
+export const READ_ALOUD_SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3] as const;
+
+/** The fastest pace the server's voices synthesize; faster speeds add playback rate on top. */
+export const READ_ALOUD_MAX_SYNTH_SPEED = 2;
+
+/** The speed the server synthesizes at for a chosen speed (the rest is playback rate). */
+export const synthSpeed = (speed: number) =>
+  Math.min(Math.max(speed, 0.5), READ_ALOUD_MAX_SYNTH_SPEED);
+
+/** A stored or picked speed, snapped to the menu's choices. */
+export function readAloudSpeed(value: unknown): number {
+  const speed = typeof value === "number" && Number.isFinite(value) ? value : 1;
+  return READ_ALOUD_SPEEDS.reduce((best, choice) =>
+    Math.abs(choice - speed) < Math.abs(best - speed) ? choice : best,
+  );
+}
 
 const idle = (speed: number): ReadAloudSnapshot => ({
   phase: "idle",
@@ -96,7 +113,7 @@ export class ReadAloudPlayer {
 
   constructor(deps: ReadAloudDependencies) {
     this.#deps = deps;
-    this.#state = idle(deps.speed ?? 1);
+    this.#state = idle(readAloudSpeed(deps.speed ?? 1));
   }
 
   getSnapshot = (): ReadAloudSnapshot => this.#state;
@@ -164,11 +181,12 @@ export class ReadAloudPlayer {
   setSpeed(speed: number) {
     this.#set({ speed });
     this.#deps.onSpeedChange?.(speed);
+    this.#deps.audio.setRate?.(speed / this.#jobSpeed);
   }
 
   async #fetch(session: number, text: string, mode: ReadAloudMode) {
     try {
-      this.#jobSpeed = this.#state.speed;
+      this.#jobSpeed = synthSpeed(this.#state.speed);
       const state = await this.#deps.request({ text, mode, speed: this.#jobSpeed });
       if (session !== this.#session) return;
       this.#jobId = state.id;

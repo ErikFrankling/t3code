@@ -3,11 +3,13 @@ import { ReadAloudState, type EnvironmentId, type ReadAloudMode } from "@t3tools
 import {
   READ_ALOUD_SPEEDS,
   ReadAloudPlayer,
+  readAloudSpeed,
   type ReadAloudAudio,
   type ReadAloudClip,
 } from "@t3tools/client-runtime/read-aloud";
 import { Schema } from "effect";
 import {
+  ChevronDownIcon,
   HeadphonesIcon,
   LoaderCircleIcon,
   PauseIcon,
@@ -21,6 +23,14 @@ import {
 
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
+import {
+  Menu,
+  MenuPopup,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuRadioItemIndicator,
+  MenuTrigger,
+} from "../ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { environmentFetch } from "./environmentFetch";
 
@@ -98,6 +108,11 @@ const audio: ReadAloudAudio = {
       const other = pair.find((candidate) => candidate !== slot);
       if (next && other) load(other, next);
     }),
+  setRate: (rate) => {
+    if (!active) return;
+    active.element.defaultPlaybackRate = rate;
+    active.element.playbackRate = rate;
+  },
   pause: () => active?.element.pause(),
   resume: () => void active?.element.play(),
   preload: (clip) => {
@@ -116,7 +131,7 @@ const storedSpeed = Number(globalThis.localStorage?.getItem(SPEED_KEY));
 
 export const readAloudPlayer = new ReadAloudPlayer({
   audio,
-  speed: storedSpeed > 0 ? storedSpeed : 1,
+  speed: readAloudSpeed(storedSpeed),
   onSpeedChange: (speed) => globalThis.localStorage?.setItem(SPEED_KEY, String(speed)),
   request: async (body) => {
     if (!environment) throw new Error("No environment to read with.");
@@ -181,6 +196,41 @@ export function ReadAloudButton({
   );
 }
 
+/** Every playback speed in one menu; a click picks one (the current one is checked). */
+export function ReadAloudSpeedMenu({ speed, size = "xs" }: { speed: number; size?: "xs" | "lg" }) {
+  return (
+    <Menu>
+      <MenuTrigger
+        render={
+          <Button
+            aria-label={`Playback speed, ${speed}×`}
+            size={size}
+            variant={size === "lg" ? "outline" : "ghost"}
+          />
+        }
+      >
+        {speed}×
+        <ChevronDownIcon className="size-3 opacity-60" />
+      </MenuTrigger>
+      <MenuPopup align="center" side="top">
+        <MenuRadioGroup
+          value={String(speed)}
+          onValueChange={(value) => readAloudPlayer.setSpeed(Number(value))}
+        >
+          {READ_ALOUD_SPEEDS.map((choice) => (
+            <MenuRadioItem key={choice} value={String(choice)} closeOnClick>
+              <span className="flex items-center justify-between gap-6">
+                {choice}×
+                <MenuRadioItemIndicator />
+              </span>
+            </MenuRadioItem>
+          ))}
+        </MenuRadioGroup>
+      </MenuPopup>
+    </Menu>
+  );
+}
+
 const VOICE_LABEL: Record<string, string> = { big: "Higgs", small: "Kokoro" };
 
 /**
@@ -242,8 +292,6 @@ export function ReadAloudDock({
     );
   }
 
-  const nextSpeed =
-    READ_ALOUD_SPEEDS.find((speed) => speed > state.speed + 0.001) ?? READ_ALOUD_SPEEDS[0];
   const restartMode: ReadAloudMode = state.mode === "summary" ? "full" : "summary";
 
   return (
@@ -314,14 +362,7 @@ export function ReadAloudDock({
           >
             <SkipForwardIcon />
           </Button>
-          <Button
-            aria-label="Playback speed"
-            size="xs"
-            variant="ghost"
-            onClick={() => readAloudPlayer.setSpeed(nextSpeed)}
-          >
-            {state.speed}×
-          </Button>
+          <ReadAloudSpeedMenu speed={state.speed} />
           <Button size="xs" variant="ghost" onClick={() => readAloudPlayer.switchMode(restartMode)}>
             {restartMode === "full" ? "Read full message" : "Read summary"}
           </Button>
