@@ -49,7 +49,8 @@ What to include, in this order:
 3. What happens next, or what the message is asking the listener to decide. If it ends with a question, end with that question.
 
 How it must sound:
-- Plain spoken English. Short sentences. Casual and direct, a light "ok so" or "basically" is fine, but no jokes or filler.
+- Plain spoken English. Short sentences. Casual and direct, but no jokes or filler.
+- Start with the point itself. Never open a sentence with filler like "basically", "so", "ok so", "in short", "essentially" or "alright", and never say "basically" at all.
 - No markdown, no headings, no bullet points, no lists, no tables, no emoji, no code.
 - Never read out file paths, URLs, commands, code, IDs or version strings. Name the thing instead ("the llama-swap config", "your T3 Code fork").
 - Write numbers the way you would say them: "about twenty gigabytes", "two to three seconds". Keep only the numbers that matter.
@@ -255,6 +256,23 @@ async function synthesize(voice: Voice, text: string, speed: number): Promise<st
   return polishClip(readWav(Buffer.from(await response.arrayBuffer()))).toString("base64");
 }
 
+// Openers the model keeps reaching for; dropped even when it ignores the prompt.
+// Words that only count as filler with a comma after them ("Right now" stays),
+// "so" unless it starts "so far" and the like, and openers that never carry meaning.
+const FILLER_OPENER =
+  /^(?:(?:(?:ok(?:ay)?|alright|all right|well|right|anyway|honestly|look)(?:\s*[,:;.!]|\s+(?=so\b|basically\b))|so\b(?!\s+(?:far|much|many|long|that|few|little)\b)[,:;.!]?|(?:basically|essentially|in short|in summary|to sum up|to summarize|long story short)\b[,:;.!]?)\s*)+/i;
+
+/** A summary sentence without filler: no "basically", no "So,"-style opener. */
+export function dropFiller(sentence: string): string {
+  const trimmed = sentence
+    .replace(/(,?)\s*\bbasically\b(,?)/gi, (_, before, after) => (before && after ? "," : ""))
+    .replace(FILLER_OPENER, "")
+    .replace(/\s+([,.!?])/g, "$1")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+}
+
 /** Streams the summary, handing over each sentence as soon as it is complete. */
 async function summarize(text: string, onSentence: (sentence: string) => void): Promise<void> {
   const { llmUrl, llmModel } = config();
@@ -276,6 +294,10 @@ async function summarize(text: string, onSentence: (sentence: string) => void): 
     signal: AbortSignal.timeout(180_000),
   });
   if (!response.ok || !response.body) throw new Error(`summary model: HTTP ${response.status}`);
+  const say = (sentence: string) => {
+    const spoken = dropFiller(sentence);
+    if (/[\p{L}\p{N}]/u.test(spoken)) onSentence(spoken);
+  };
   const decoder = new TextDecoder();
   let pending = "";
   let buffer = "";
@@ -293,10 +315,10 @@ async function summarize(text: string, onSentence: (sentence: string) => void): 
       buffer += delta;
       const { sentences, rest } = takeSentences(buffer, false);
       buffer = rest;
-      sentences.forEach(onSentence);
+      sentences.forEach(say);
     }
   }
-  takeSentences(buffer, true).sentences.forEach(onSentence);
+  takeSentences(buffer, true).sentences.forEach(say);
 }
 
 // The first chunk is one sentence, so audio starts as soon as it exists; later
