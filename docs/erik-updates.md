@@ -42,9 +42,11 @@ On the phone:
 
 On Android 14+ Obtainium installs apps with _update ownership_, so the app's
 first self-update shows Android's "update from a different source?" prompt.
-The app also needs **Install unknown apps** allowed once. Both appear as one
-notification, "T3 Code update ready". After they are confirmed, Android
-clears Obtainium's ownership and later updates install silently. Obtainium is
+The app also needs **Install unknown apps** allowed once. When Android asks,
+the app shows the prompt if it is on screen, or posts a "T3 Code update
+ready" notification that opens it. After that, Android clears Obtainium's
+ownership (AOSP `InstallPackageHelper`: "Once the installer changes and users
+agree to proceed, clear the update owner") and later updates install silently. Obtainium is
 no longer needed for this app.
 
 ## What is not push-triggered
@@ -55,6 +57,17 @@ closed app the moment CI finishes needs a push service: FCM (a Firebase
 project with `google-services.json`, see `docs/operations/android-notifications.md`)
 or UnifiedPush through the ntfy app. Neither exists yet.
 
+## Runtime versions
+
+A JS update only reaches APKs with the same runtime version, Expo's native
+fingerprint. CI resolves it before building and the APK records it while
+building (`assets/fingerprint`), so the two must agree:
+`apps/mobile/.fingerprintignore` leaves out the Kotlin daemon's session files
+that Gradle writes into the expo-updates plugin directory mid-build. If they
+ever differ, the APK step warns and every push builds an APK, which is slow
+but safe. Do not build test APKs inside `nix develop .#android` without
+unsetting `T3CODE_MOBILE_UPDATES_ENABLED`: the dev shell turns updates off.
+
 ## Never a rollback
 
 Installed apps take whatever `index.json` offers, and a version code only
@@ -64,9 +77,10 @@ records when a build ran. So the workflow runs only on `erik/main`, and
 - the commit must still be the tip of `erik/main`, or the run publishes
   nothing (the newer run does);
 - every commit already shipped (the newest `android-v…` release and every
-  entry in `index.json`) must be in it, as an ancestor or, after the nightly
-  rebase, as an equivalent patch (`git cherry`). Otherwise the run fails and
-  lists the missing commits.
+  entry in `index.json`) must be in it: as an ancestor, or after the nightly
+  rebase as an equivalent patch (`git cherry`) or a commit with the same
+  subject (a conflict resolved during the rebase). Otherwise the run fails
+  and lists the missing commits.
 
 If commits were removed from `erik/main` on purpose, run the workflow by hand
 on `erik/main` with `accept_dropped_commits`.
