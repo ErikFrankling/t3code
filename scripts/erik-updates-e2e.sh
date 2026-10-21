@@ -3,8 +3,9 @@
 # Heavy: two release APK builds and an emulator. Run it on the homelab worker,
 # never on the PC:
 #
-#   heavy emulator start
-#   heavy --shell .#android -- scripts/erik-updates-e2e.sh
+#   heavy -e PHASE=build --shell .#android -- scripts/erik-updates-e2e.sh
+#   heavy emulator start           (the one shared emulator; check `heavy emulator status`)
+#   heavy -e PHASE=device --no-sync --shell .#android -- scripts/erik-updates-e2e.sh
 #   heavy pull .erik-updates-e2e
 #   heavy emulator stop
 #
@@ -27,7 +28,10 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="${OUT:-$root/.erik-updates-e2e}"
 pkg=com.t3tools.t3code.preview
 serve="$OUT/serve"
-rm -rf "$OUT"
+# PHASE=build makes the APKs and updates without touching the emulator (it is
+# shared); PHASE=device then runs the checks on what that left in $OUT.
+PHASE="${PHASE:-all}"
+case "$PHASE" in all | build) rm -rf "$OUT" ;; device) ;; *) echo "PHASE is all, build or device" >&2; exit 2 ;; esac
 mkdir -p "$serve/blobs"
 cd "$root"
 
@@ -44,9 +48,14 @@ fail() {
   exit 1
 }
 
-adb get-state > /dev/null 2>&1 || fail "no emulator on adb (heavy emulator start)"
+if [ "$PHASE" != build ]; then
+  adb get-state > /dev/null 2>&1 || fail "no emulator on adb (heavy emulator start)"
+fi
 
 # --- builds -----------------------------------------------------------------
+
+restore() { :; } # the build phase swaps in test edits and undoes them here
+if [ "$PHASE" != device ]; then
 
 unset T3CODE_MOBILE_UPDATES_ENABLED # the dev shell turns updates off
 export APP_VARIANT=preview EXPO_NO_GIT_STATUS=1 EXPO_NO_TELEMETRY=1
@@ -110,6 +119,11 @@ node scripts/erik-updates.mjs apk --apk "$OUT/1001.apk" --version-code 1001 \
   --version-name 2.0.0-erik.test1001 --runtime "$(fingerprint "$OUT/1001.apk")" \
   --url http://10.0.2.2:8091/t3code-erik-1001.apk --index "$OUT/index-apk.json" --commit e2e-native
 restore
+echo "$runtime_a" > "$OUT/runtime-1000"
+log "builds done"
+fi
+[ "$PHASE" = build ] && exit 0
+[ -f "$OUT/1001.apk" ] || fail "no builds in $OUT (run PHASE=build first)"
 
 # --- servers ----------------------------------------------------------------
 
