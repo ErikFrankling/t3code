@@ -51,3 +51,5 @@ node_modules/
 .pnpm-store/
 
 /packages/ssh/.ssh-launcher-test-*/
+# Fork-only: scripts/erik-updates-e2e.sh output (APKs, logs, screenshots)
+/.erik-updates-e2e/
