@@ -143,23 +143,22 @@ export const claudeLocalSettingsDirectory = Effect.fn("claudeLocalSettingsDirect
   }
 });
 
-export const makeClaudeContinuationGroupKey = Effect.fn("makeClaudeContinuationGroupKey")(
-  function* (
-    config: Pick<ClaudeSettings, "homePath"> & Partial<Pick<ClaudeSettings, "sharedSessionGroup">>,
-    environment?: NodeJS.ProcessEnv,
-  ): Effect.fn.Return<string, never, Path.Path | FileSystem.FileSystem> {
-    const fileSystem = yield* FileSystem.FileSystem;
-    const sharedSessionGroup = config.sharedSessionGroup?.trim();
-    if (sharedSessionGroup) return `claude:shared:${sharedSessionGroup}`;
-    const resolvedHomePath = yield* resolveClaudeHomePath(config, environment);
-    // Two instances that reach one Claude home through a symlink share sessions, so they can resume.
-    // Only the key uses the real path: the spawn keeps the literal path, which names the Keychain login.
-    const canonicalHomePath = yield* fileSystem
-      .realPath(resolvedHomePath)
-      .pipe(Effect.orElseSucceed(() => resolvedHomePath));
-    return `claude:home:${canonicalHomePath}`;
-  },
-);
+export const CLAUDE_HOST_CONTINUATION_KEY = "claude:host";
+
+/**
+ * Every Claude instance on this host continues the same native session:
+ * switching accounts copies the transcript (ClaudeSessionTranscripts) and
+ * resumes it. A named group keeps instances apart from the rest.
+ */
+export const makeClaudeContinuationGroupKey = (
+  config: Pick<ClaudeSettings, "homePath"> & Partial<Pick<ClaudeSettings, "sharedSessionGroup">>,
+  _environment?: NodeJS.ProcessEnv,
+): Effect.Effect<string, never, Path.Path> => {
+  const sharedSessionGroup = config.sharedSessionGroup?.trim();
+  return Effect.succeed(
+    sharedSessionGroup ? `claude:shared:${sharedSessionGroup}` : CLAUDE_HOST_CONTINUATION_KEY,
+  );
+};
 
 export const makeClaudeCapabilitiesCacheKey = Effect.fn("makeClaudeCapabilitiesCacheKey")(
   function* (

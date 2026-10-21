@@ -209,6 +209,11 @@ import {
   resolveClaudeHomePath,
 } from "../../provider/Drivers/ClaudeHome.ts";
 import {
+  registerClaudeConfigDir,
+  registeredClaudeConfigDirs,
+  syncClaudeSessionTranscript,
+} from "../../provider/Drivers/ClaudeSessionTranscripts.ts";
+import {
   BUNDLED_CLAUDE_MODEL_CATALOG,
   resolveClaudeCatalogContextWindowTokens,
   type ClaudeModelCatalog,
@@ -6194,6 +6199,8 @@ export interface ClaudeAdapterV2Options {
   readonly random: SecureRandom.SecureRandom["Service"];
   readonly idAllocator: IdAllocator.IdAllocatorV2["Service"];
   readonly queryRunner: ClaudeAgentSdkQueryRunnerShape;
+  /** This instance's CLAUDE_CONFIG_DIR; resumes first pull the newest transcript into it. */
+  readonly configDir?: string;
   readonly scopedLimitNames?: Ref.Ref<ClaudeScopedLimitNames>;
   readonly onUsageLimits?: ManagedServerProvider["applyUsageLimits"];
   /**
@@ -14243,6 +14250,33 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             turnInput.nativeThreadHasTurns ?? turnInput.providerTurnOrdinal > 1;
           const shouldResume =
             resumeSessionAt !== undefined || openedWithResume || hasPersistedProviderTurn;
+          const configDir = adapterOptions.configDir;
+          if (shouldResume && configDir !== undefined) {
+            // The thread may have last run on another Claude account.
+            yield* syncClaudeSessionTranscript({
+              configDir,
+              nativeThreadId,
+              candidateConfigDirs: registeredClaudeConfigDirs().filter((dir) => dir !== configDir),
+            }).pipe(
+              Effect.provideService(FileSystem.FileSystem, fileSystem),
+              Effect.provideService(Path.Path, path),
+              Effect.tap((copied) =>
+                copied
+                  ? Effect.logInfo("Copied Claude session transcript from another account", {
+                      nativeThreadId,
+                      configDir,
+                    })
+                  : Effect.void,
+              ),
+              Effect.catch((cause) =>
+                Effect.logWarning("Could not sync Claude session transcript", {
+                  nativeThreadId,
+                  configDir,
+                  cause,
+                }),
+              ),
+            );
+          }
           const queryOptions = makeClaudeQueryOptions({
             agentFeedback: turnInput.agentFeedback ?? "off",
             modelSelection: turnInput.modelSelection,
@@ -16168,6 +16202,8 @@ export const createClaudeAdapterV2 = Effect.fn("ClaudeAdapterV2Driver.create")(
     );
     const claudeEnvironment = yield* makeClaudeEnvironment(config, baseEnvironment);
     const path = yield* Path.Path;
+    const configDir = yield* resolveClaudeHomePath(config, baseEnvironment);
+    registerClaudeConfigDir(configDir);
     const random = yield* SecureRandom.SecureRandom;
     const binaryPath = yield* resolveClaudeSdkExecutablePath(
       expandHomePath(config.binaryPath, yield* HostProcess.HomeDirectory),
@@ -16183,6 +16219,7 @@ export const createClaudeAdapterV2 = Effect.fn("ClaudeAdapterV2Driver.create")(
       random,
       idAllocator,
       queryRunner,
+      configDir,
       continuationRequests,
       installationGate,
       ...hooks,
