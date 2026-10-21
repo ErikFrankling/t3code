@@ -19,12 +19,19 @@ import com.google.firebase.messaging.RemoteMessage
 import expo.modules.notifications.service.ExpoFirebaseMessagingService
 
 class AgentMessagingService : ExpoFirebaseMessagingService() {
+  override fun onNewToken(token: String) {
+    ErikNotifications.subscribeToUpdates()
+    super.onNewToken(token)
+  }
+
   override fun onMessageReceived(remoteMessage: RemoteMessage) {
     val kind = remoteMessage.data["t3_kind"]
     if (kind == "agent_activity") {
       AgentNotifications.receive(this, remoteMessage.data)
     } else if (kind == "erik_notify") {
       ErikNotifications.receive(this, remoteMessage.data)
+    } else if (kind == "erik_update") {
+      ErikNotifications.requestUpdateCheck(this)
     } else {
       super.onMessageReceived(remoteMessage)
     }
