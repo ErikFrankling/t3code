@@ -29,6 +29,9 @@ jobs:
       EXPO_NO_GIT_STATUS: "1"
       EXPO_NO_TELEMETRY: "1"
       NODE_OPTIONS: --max-old-space-size=8192
+      # Native push (FCM) through the fork's own Firebase project; the file is
+      # written from a secret below and is not in git. See apps/server/src/erikPush.ts.
+      T3CODE_ANDROID_GOOGLE_SERVICES_FILE: ./google-services.json
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
     steps:
@@ -42,6 +45,15 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Firebase config
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.T3CODE_ANDROID_GOOGLE_SERVICES_JSON }}
+        run: |
+          # Without it the APK builds fine but can never receive push: fail instead.
+          [ -n "$GOOGLE_SERVICES_JSON" ] || { echo "T3CODE_ANDROID_GOOGLE_SERVICES_JSON is not set" >&2; exit 1; }
+          printf '%s\n' "$GOOGLE_SERVICES_JSON" > apps/mobile/google-services.json
+          jq -e '.client[].client_info.android_client_info.package_name == "com.t3tools.t3code.preview"' apps/mobile/google-services.json > /dev/null
 
       - name: Setup Vite+
         uses: voidzero-dev/setup-vp@v1
