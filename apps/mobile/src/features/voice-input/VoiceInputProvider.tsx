@@ -32,17 +32,13 @@ import {
 } from "@t3tools/client-runtime/voice-input";
 import { voiceCall } from "../../native/voiceCall";
 import { createCallVoiceRecorder } from "./callVoiceRecorder";
+import { configureVoiceRecordingAudio, releaseVoiceRecordingAudio } from "./voiceRecordingAudio";
 import { createLazyVoiceRecorder } from "./lazyVoiceRecorder";
 import { VOICE_WAVEFORM_SAMPLE_COUNT } from "./voiceInputMetering";
 import { VoiceInputSession } from "./voiceInputSession";
 import { createVoiceRecordingPermission } from "./voiceRecordingPermission";
 import { voiceRouteAtom } from "./voiceDestination";
 import { makePermissionStatusAtom } from "../../lib/permissionStatusAtom";
-import {
-  acquireAudioSession,
-  activateAudioSession,
-  releaseAudioSession,
-} from "../../lib/audioSession";
 
 // The native constructor expects platform-flattened options, as built by useAudioRecorder.
 const { ios: IOS_RECORDING_OPTIONS, android: ANDROID_RECORDING_OPTIONS } =
@@ -116,7 +112,6 @@ export const voiceInputAtom = Atom.make((get) => {
     Array<number>(VOICE_WAVEFORM_SAMPLE_COUNT).fill(0),
   );
   let keepAwakeSequence = 0;
-  let audioToken: ReturnType<typeof acquireAudioSession> | null = null;
   let recordingMicrophoneOrder: ReadonlyArray<MicrophoneEntry> | null = null;
   const permission = createVoiceRecordingPermission(() => {
     // In voice mode the call's service keeps recording with the screen off.
@@ -171,32 +166,22 @@ export const voiceInputAtom = Atom.make((get) => {
     },
     requestPermission: permission.requestPermission,
     configureRecording: async () => {
-      const token = acquireAudioSession("recording");
-      audioToken = token;
-      try {
-        const current = registry.get(mobilePreferencesAtom);
-        const preferences = AsyncResult.isSuccess(current)
-          ? current.value
-          : await Effect.runPromise(
-              AtomRegistry.getResult(registry, mobilePreferencesAtom).pipe(
-                Effect.orElseSucceed(() => null),
-              ),
-            );
-        recordingMicrophoneOrder = preferences
-          ? deviceMicrophoneOrder(preferences.microphones)
-          : null;
-        const builtInMicFirst =
-          Platform.OS === "ios" && recordingMicrophoneOrder?.[0]?.kind === "builtIn";
-        await activateAudioSession(token, { allowBluetoothRecording: !builtInMicFirst });
-      } catch (error) {
-        await releaseAudioSession(token).catch(() => {});
-        throw error;
-      }
+      const current = registry.get(mobilePreferencesAtom);
+      const preferences = AsyncResult.isSuccess(current)
+        ? current.value
+        : await Effect.runPromise(
+            AtomRegistry.getResult(registry, mobilePreferencesAtom).pipe(
+              Effect.orElseSucceed(() => null),
+            ),
+          );
+      recordingMicrophoneOrder = preferences
+        ? deviceMicrophoneOrder(preferences.microphones)
+        : null;
+      const builtInMicFirst =
+        Platform.OS === "ios" && recordingMicrophoneOrder?.[0]?.kind === "builtIn";
+      await configureVoiceRecordingAudio({ allowBluetoothRecording: !builtInMicFirst });
     },
-    releaseRecording: async () => {
-      if (audioToken) await releaseAudioSession(audioToken);
-      audioToken = null;
-    },
+    releaseRecording: releaseVoiceRecordingAudio,
     deleteRecording: (uri) => new File(uri).delete(),
     sampleRecording: () => {
       const status = recorder.getStatus();
