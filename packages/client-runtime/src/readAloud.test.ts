@@ -2,7 +2,7 @@
 import type { ReadAloudRequest, ReadAloudState } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { ReadAloudPlayer, type ReadAloudAudio } from "./readAloud.ts";
+import { ReadAloudPlayer, readAloudSpeed, type ReadAloudAudio } from "./readAloud.ts";
 
 /** A job whose sentences and clips arrive over successive polls, like the server's. */
 function fakeServer(steps: { text: string; audio?: string; span?: number; ready?: boolean }[][]) {
@@ -31,6 +31,7 @@ function fakeServer(steps: { text: string; audio?: string; span?: number; ready?
 
 function fakeAudio() {
   const played: { clip: string; rate: number; next?: string; startFraction?: number }[] = [];
+  const rates: number[] = [];
   let finish: (() => void) | null = null;
   let fail: ((error: Error) => void) | null = null;
   let progress: ((fraction: number) => void) | undefined;
@@ -48,6 +49,7 @@ function fakeAudio() {
         fail = reject;
       });
     },
+    setRate: (rate) => rates.push(rate),
     pause: () => undefined,
     resume: () => undefined,
     stop: () => fail?.(new Error("stopped")),
@@ -56,7 +58,7 @@ function fakeAudio() {
     finish?.();
     await new Promise((resolve) => setTimeout(resolve, 5));
   };
-  return { audio, played, endClip, progress: (fraction: number) => progress?.(fraction) };
+  return { audio, played, rates, endClip, progress: (fraction: number) => progress?.(fraction) };
 }
 
 const until = async (check: () => boolean) => {
@@ -123,6 +125,33 @@ describe("ReadAloudPlayer", () => {
     await sound.endClip();
     await until(() => sound.played.length === 2);
     expect(sound.played[1]?.rate).toBe(1.5);
+    // The clip that was playing sped up at once, not only the next one.
+    expect(sound.rates).toEqual([1.5]);
+  });
+
+  it("synthesizes at most at twice the pace and plays faster speeds faster", async () => {
+    const server = fakeServer([[{ text: "One.", audio: "a1" }]]);
+    const sound = fakeAudio();
+    const player = new ReadAloudPlayer({
+      request: server.request,
+      audio: sound.audio,
+      pollMs: 0,
+      speed: 3,
+    });
+    player.start("message-1", "text");
+    await until(() => sound.played.length === 1);
+    expect(server.requests[0]?.speed).toBe(2);
+    expect(sound.played[0]?.rate).toBe(1.5);
+    player.setSpeed(0.75);
+    expect(sound.rates).toEqual([0.375]);
+  });
+
+  it("snaps a stored speed to one of the menu's choices", () => {
+    expect(readAloudSpeed(1.3)).toBe(1.25);
+    expect(readAloudSpeed(0.9)).toBe(1);
+    expect(readAloudSpeed(9)).toBe(3);
+    expect(readAloudSpeed("fast")).toBe(1);
+    expect(readAloudSpeed(Number.NaN)).toBe(1);
   });
 
   it("forgets the old message when a new one starts", async () => {
