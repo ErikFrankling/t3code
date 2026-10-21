@@ -4,7 +4,7 @@ import { getRecordingPermissionsAsync, requestRecordingPermissionsAsync } from "
 import { useSyncExternalStore } from "react";
 
 import { voiceCall } from "../../native/voiceCall";
-import { readAloudPlayer, releaseReadAloudAudio } from "../threads/ReadAloudButton";
+import { readAloudPlayer, releaseReadAloudAudio } from "../threads/readAloudPlayback";
 
 /**
  * Voice mode on the phone: the full-screen view and its loop. With the loop on,
@@ -105,8 +105,8 @@ voiceLoop.subscribe(() => {
 });
 
 voiceCall.onEvent((event) => {
-  if (event === "hangUp") setLoop(false);
-  else voiceLoop.endTurn();
+  if (event.type === "hangUp") setLoop(false);
+  else if (event.type === "volume" || event.type === "button") voiceLoop.endTurn();
 });
 
 export const voiceMode = {

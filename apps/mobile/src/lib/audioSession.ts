@@ -1,8 +1,5 @@
 import { AudioModule, setAudioModeAsync, setIsAudioActiveAsync } from "expo-audio";
-
 import { Platform } from "react-native";
-
-import { voiceCall } from "../native/voiceCall";
 
 type AudioSessionToken = {
   readonly kind: "playback" | "recording";
@@ -76,13 +73,11 @@ export function activateAudioSession(
       allowsRecording: token.kind === "recording",
       interruptionMode: "doNotMix",
       playsInSilentMode: true,
-      // Voice mode reads the reply aloud with the screen off.
-      shouldPlayInBackground: voiceCall.active,
+      shouldPlayInBackground: false,
       // Locking the phone or a screen on top (a sign-in, a call) never stops a
-      // dictation: expo-audio records on in a foreground service. (Voice mode's
-      // call records with its own service.)
+      // dictation: expo-audio records on in a foreground service.
       allowsBackgroundRecording:
-        token.kind === "recording" && Platform.OS === "android" && !voiceCall.active,
+        token.kind === "recording" && Platform.OS === "android",
     });
     if (!isAudioSessionOwner(token)) return false;
     await setIsAudioActiveAsync(true);
@@ -95,9 +90,7 @@ export function releaseAudioSession(token: AudioSessionToken): Promise<void> {
   return enqueue(async () => {
     if (owner !== token) return;
     try {
-      if (token.kind === "recording") {
-        await setAudioModeAsync({ allowsRecording: false, shouldPlayInBackground: voiceCall.active });
-      }
+      if (token.kind === "recording") await setAudioModeAsync({ allowsRecording: false });
     } finally {
       if (owner === token) {
         if (token.kind === "recording") await setIsAudioActiveAsync(false);
