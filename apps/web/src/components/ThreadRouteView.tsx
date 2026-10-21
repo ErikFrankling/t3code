@@ -1,13 +1,15 @@
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
+import { PERSONAL_AGENT_THREAD_ID } from "@t3tools/contracts";
 import { Navigate, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import ChatView from "./ChatView";
 import { BackgroundThreadContext } from "./chat/backgroundThread";
+import { NeedsYouPanel } from "./chat/NeedsYouPanel";
 import { SidebarInset } from "./ui/sidebar";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { useSidebarPendingFileDropStore } from "../sidebarPendingFileDropStore";
-import { useEnvironmentThreadRefs, useQuietThreadShell } from "../state/entities";
+import { useEnvironmentThreadRefs, useQuietThreadShell, useServerConfigs } from "../state/entities";
 import { useEnvironmentShellStatus } from "../state/shell";
 import { useEnvironmentThread } from "../state/threads";
 import {
@@ -102,6 +104,26 @@ export function ThreadRouteView({
     }
   }, [background, bootstrapComplete, environmentHasAnyThreads, navigate, renderState, target]);
 
+  // The personal agent's chat gets the Needs you list beside it.
+  const serverConfigs = useServerConfigs();
+  const needsYouEnvironmentId =
+    target.kind === "server" &&
+    target.threadRef.threadId === PERSONAL_AGENT_THREAD_ID &&
+    serverConfigs.get(target.threadRef.environmentId)?.environment.capabilities.attentionItems ===
+      true
+      ? target.threadRef.environmentId
+      : null;
+
+  // The personal agent's chat gets the Needs you list beside it.
+  const serverConfigs = useServerConfigs();
+  const needsYouEnvironmentId =
+    target.kind === "server" &&
+    target.threadRef.threadId === PERSONAL_AGENT_THREAD_ID &&
+    serverConfigs.get(target.threadRef.environmentId)?.environment.capabilities.attentionItems ===
+      true
+      ? target.threadRef.environmentId
+      : null;
+
   let view: React.ReactNode = null;
   let redirect: React.ReactNode = null;
   if (target.kind === "draft") {
@@ -152,7 +174,16 @@ export function ThreadRouteView({
       className="h-svh min-h-0 overflow-hidden overscroll-y-none md:h-dvh"
       inert={background}
     >
-      <BackgroundThreadContext value={background}>{view}</BackgroundThreadContext>
+      <BackgroundThreadContext value={background}>
+        {view !== null && needsYouEnvironmentId !== null ? (
+          <div className="flex h-full min-h-0">
+            <div className="flex min-w-0 flex-1 flex-col">{view}</div>
+            <NeedsYouPanel environmentId={needsYouEnvironmentId} />
+          </div>
+        ) : (
+          view
+        )}
+      </BackgroundThreadContext>
       {background ? null : redirect}
     </SidebarInset>
   );

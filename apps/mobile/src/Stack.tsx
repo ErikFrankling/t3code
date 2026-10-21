@@ -69,6 +69,8 @@ import {
   FullscreenThreadRouteScreen,
   ThreadRouteScreen,
 } from "./features/threads/ThreadRouteScreen";
+import { AttentionSheet } from "./features/attention/AttentionSheet";
+import { ThreadRouteScreen } from "./features/threads/ThreadRouteScreen";
 import { McpAppFullscreenScreen } from "./features/threads/McpAppFullscreenScreen";
 import { ConnectionsRouteScreen } from "./features/connection/ConnectionsRouteScreen";
 import { ConnectionsNewRouteScreen } from "./features/connection/ConnectionsNewRouteScreen";
@@ -903,6 +905,15 @@ const RootStackConfig = createWorkspaceStackNavigator({
         ...HORIZONTAL_FORM_SHEET_OPTIONS,
         headerShown: false,
         sheetAllowedDetents: formSheetDetents(0.5, 0.9),
+        sheetGrabberVisible: true,
+      },
+    }),
+    Attention: createNativeStackScreen({
+      screen: AttentionSheet,
+      options: {
+        ...HORIZONTAL_FORM_SHEET_OPTIONS,
+        headerShown: false,
+        sheetAllowedDetents: [0.65, 0.95],
         sheetGrabberVisible: true,
       },
     }),

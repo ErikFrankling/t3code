@@ -41,6 +41,8 @@ export type T3McpToolSummaryAction =
   | "question-read"
   | "question-respond"
   | "secret-request"
+  | "attention-update"
+  | "attention-list"
   | "worktree-handoff"
   | "worktree-list"
   | "worktree-status"
@@ -145,6 +147,15 @@ const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
     "schedule-delete",
   ),
   request_secret: tool(["Ask for", "Asking for", "Asked for", "a secret"], "secret-request"),
+  attention_item_upsert: tool(
+    ["Update", "Updating", "Updated", "the Needs you list"],
+    "attention-update",
+  ),
+  attention_item_resolve: tool(
+    ["Resolve", "Resolving", "Resolved", "a Needs you item"],
+    "attention-update",
+  ),
+  attention_item_list: tool(["List", "Listing", "Listed", "Needs you items"], "attention-list"),
   create_threads: tool(["Create", "Creating", "Created", "T3 threads"], "thread-create"),
   t3_thread_start: tool(["Start", "Starting", "Started", "a T3 thread"], "thread-create"),
   t3_thread_list: tool(["List", "Listing", "Listed", "T3 threads"], "thread-list"),
