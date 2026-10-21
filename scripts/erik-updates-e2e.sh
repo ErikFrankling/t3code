@@ -88,9 +88,9 @@ build_apk() { # <versionCode>
     npx expo prebuild --clean --platform android --no-install
     cd android
     sed -i -E "s/versionCode [0-9]+/versionCode $1/; s/versionName \"[^\"]*\"/versionName \"2.0.0-erik.test$1\"/" app/build.gradle
-    ./gradlew assembleRelease --max-workers=2 -PreactNativeArchitectures=x86_64 \
+    # No daemon: one could outlive the job inside heavy's memory cap.
+    ./gradlew assembleRelease --no-daemon --max-workers=2 -PreactNativeArchitectures=x86_64 \
       -Pkotlin.compiler.execution.strategy=in-process "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g"
-    ./gradlew --stop
   ) > "$OUT/build-$1.log" 2>&1 || fail "APK $1 build, see build-$1.log"
   cp apps/mobile/android/app/build/outputs/apk/release/app-release.apk "$OUT/$1.apk"
 }
