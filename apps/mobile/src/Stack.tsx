@@ -72,6 +72,7 @@ import { GitOverviewSheet } from "./features/threads/git/GitOverviewSheet";
 import { ThreadPullRequestsSheet } from "./features/threads/ThreadPullRequestsSheet";
 import { ThreadAgentsSheet } from "./features/threads/ThreadAgentsSheet";
 import { ThreadQueueSheet } from "./features/threads/ThreadQueueControl";
+import { AttentionSheet } from "./features/attention/AttentionSheet";
 import { ThreadRouteScreen } from "./features/threads/ThreadRouteScreen";
 import { McpAppFullscreenScreen } from "./features/threads/McpAppFullscreenScreen";
 import { ConnectionsRouteScreen } from "./features/connection/ConnectionsRouteScreen";
@@ -560,6 +561,7 @@ const WORKSPACE_OVERLAY_ROUTES = new Set([
   "ThreadAgents",
   "ThreadPullRequests",
   "ThreadQueue",
+  "Attention",
   "ThreadReviewComment",
   "ThreadDevicePreview",
   "ThreadBrowserPreview",
@@ -862,6 +864,15 @@ const RootStackConfig = createWorkspaceStackNavigator({
     }),
     ThreadQueue: createNativeStackScreen({
       screen: ThreadQueueSheet,
+      options: {
+        ...FORM_SHEET_PRESENTATION_OPTIONS,
+        headerShown: false,
+        sheetAllowedDetents: [0.65, 0.95],
+        sheetGrabberVisible: true,
+      },
+    }),
+    Attention: createNativeStackScreen({
+      screen: AttentionSheet,
       options: {
         ...FORM_SHEET_PRESENTATION_OPTIONS,
         headerShown: false,
