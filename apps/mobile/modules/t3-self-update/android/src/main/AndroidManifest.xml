@@ -5,5 +5,11 @@
   <uses-permission android:name="android.permission.INTERNET" />
   <application>
     <receiver android:name="expo.modules.t3selfupdate.InstallResultReceiver" android:exported="false" />
+    <!-- Release pings from FCM, handed over by t3-agent-notifications. -->
+    <receiver android:name="expo.modules.t3selfupdate.UpdatePingReceiver" android:exported="false">
+      <intent-filter>
+        <action android:name="${applicationId}.T3_SELF_UPDATE_CHECK" />
+      </intent-filter>
+    </receiver>
   </application>
 </manifest>

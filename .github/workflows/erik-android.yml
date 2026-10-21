@@ -240,3 +240,12 @@ jobs:
           gh release list --limit 100 --json tagName,createdAt \
             --jq '[.[] | select(.tagName | startswith("android-v"))] | sort_by(.createdAt) | reverse | .[5:] | .[].tagName' |
             while read -r old; do gh release delete "$old" --cleanup-tag --yes; done
+
+      # Installed apps would notice within 15 minutes; this makes it seconds.
+      # A content-free FCM ping to the erik-updates topic (scripts/erik-updates-ping.mjs).
+      - name: Ping installed apps
+        if: steps.plan.outputs.kind == 'apk'
+        continue-on-error: true
+        env:
+          T3CODE_FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.T3CODE_FCM_SERVICE_ACCOUNT_JSON }}
+        run: node scripts/erik-updates-ping.mjs
