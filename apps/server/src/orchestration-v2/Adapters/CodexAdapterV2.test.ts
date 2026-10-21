@@ -761,11 +761,10 @@ describe("CodexAdapterV2 app-server termination", () => {
       );
 
       const failure = yield* Fiber.join(streamFailure);
-      assert.strictEqual(failure._tag, "ProviderAdapterEventStreamError");
-      assert.strictEqual(
-        (failure as ProviderAdapter.ProviderAdapterEventStreamError).providerSessionId,
-        providerSessionId,
-      );
+      if (failure._tag !== "ProviderAdapterEventStreamError") {
+        return yield* Effect.die(`Expected an event stream error, got ${failure._tag}.`);
+      }
+      assert.strictEqual(failure.providerSessionId, providerSessionId);
     }).pipe(
       Effect.scoped,
       Effect.provide(
