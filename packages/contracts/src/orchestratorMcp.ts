@@ -372,6 +372,17 @@ export const OrchestratorMcpThreadBackgroundTask = Schema.Struct({
   childThreadId: Schema.optional(ThreadId),
 });
 export type OrchestratorMcpThreadBackgroundTask = typeof OrchestratorMcpThreadBackgroundTask.Type;
+/** Set while the thread's latest run is stopped by a provider usage limit. */
+export const OrchestratorMcpThreadUsageLimit = Schema.Struct({
+  stoppedRunId: RunId,
+  /** When the limit resets, if the provider said. */
+  resetAt: Schema.NullOr(IsoDateTime),
+  /** "Resume at reset" is on: the run continues by itself when the limit resets. */
+  resumeAtReset: Schema.Boolean,
+  /** "Snooze until reset" is on: the thread is snoozed until the reset. */
+  snoozedUntilReset: Schema.Boolean,
+});
+export type OrchestratorMcpThreadUsageLimit = typeof OrchestratorMcpThreadUsageLimit.Type;
 
 export const OrchestratorMcpThreadListItem = Schema.Struct({
   threadId: ThreadId,
@@ -398,6 +409,8 @@ export const OrchestratorMcpThreadListItem = Schema.Struct({
   blockedOnThreadWait: Schema.optional(Schema.Boolean),
   /** Absent from linked environments that predate it. */
   pendingBackgroundTasks: Schema.optional(Schema.Array(OrchestratorMcpThreadBackgroundTask)),
+  /** Missing on older servers; null when no usage limit stopped the thread. */
+  usageLimit: Schema.optional(Schema.NullOr(OrchestratorMcpThreadUsageLimit)),
   parentThreadId: Schema.NullOr(ThreadId),
   relationshipToParent: Schema.NullOr(Schema.Literals(["fork", "subagent"])),
   itemCount: NonNegativeInt,
@@ -482,6 +495,8 @@ export const OrchestratorMcpThreadDetail = Schema.Struct({
   blockedOnThreadWait: Schema.optional(Schema.Boolean),
   /** Absent from linked environments that predate it. */
   pendingBackgroundTasks: Schema.optional(Schema.Array(OrchestratorMcpThreadBackgroundTask)),
+  /** Missing on older servers; null when no usage limit stopped the thread. */
+  usageLimit: Schema.optional(Schema.NullOr(OrchestratorMcpThreadUsageLimit)),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
 });
