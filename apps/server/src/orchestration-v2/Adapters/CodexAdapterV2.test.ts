@@ -702,6 +702,79 @@ function withReplayRequestId(
     : entry;
 }
 
+describe("CodexAdapterV2 app-server termination", () => {
+  it.effect("fails the session's event stream when the app-server process terminates", () =>
+    Effect.gen(function* () {
+      const transcript = makeCodexReplayTranscript({
+        scenario: "app-server-terminated",
+        entries: [],
+      });
+      const terminated = yield* Deferred.make<CodexError.CodexAppServerError>();
+      const adapter = yield* CodexAdapterV2.makeCodexAdapterV2({
+        instanceId: CodexAdapterV2.CODEX_DEFAULT_INSTANCE_ID,
+        settings: DEFAULT_CODEX_SETTINGS,
+        environment: {},
+        clientFactory: {
+          open: (openInput) =>
+            Layer.build(CodexReplay.layerReplay(transcript)).pipe(
+              Effect.flatMap((context) =>
+                Effect.service(CodexClient.CodexAppServerClient).pipe(Effect.provide(context)),
+              ),
+              Effect.map(
+                (client) =>
+                  ({
+                    ...client,
+                    terminated: Deferred.await(terminated),
+                  }) satisfies CodexClient.CodexAppServerClient["Service"],
+              ),
+              Effect.mapError(
+                (cause) =>
+                  new ProviderAdapter.ProviderAdapterOpenSessionError({
+                    driver: CodexAdapterV2.CODEX_DRIVER_KIND,
+                    providerSessionId: openInput.providerSessionId,
+                    cause,
+                  }),
+              ),
+            ),
+        },
+        crypto: yield* Crypto.Crypto,
+        fileSystem: yield* FileSystem.FileSystem,
+        idAllocator: yield* IdAllocator.IdAllocatorV2,
+        serverConfig: yield* makeReplayServerConfig(transcript.scenario).pipe(Effect.orDie),
+      });
+      const providerSessionId = ProviderSessionId.make("provider-session-app-server-terminated");
+      const runtime = yield* adapter.openSession({
+        threadId: ThreadId.make("thread-app-server-terminated"),
+        providerSessionId,
+        modelSelection: CODEX_TEST_MODEL_SELECTION,
+        runtimePolicy: CODEX_TEST_RUNTIME_POLICY,
+      });
+      const streamFailure = yield* runtime.events.pipe(
+        Stream.runDrain,
+        Effect.flip,
+        Effect.forkScoped,
+      );
+
+      yield* Deferred.succeed(
+        terminated,
+        new CodexError.CodexAppServerProcessExitedError({ code: 137 }),
+      );
+
+      const failure = yield* Fiber.join(streamFailure);
+      assert.strictEqual(failure._tag, "ProviderAdapterEventStreamError");
+      assert.strictEqual(
+        (failure as ProviderAdapter.ProviderAdapterEventStreamError).providerSessionId,
+        providerSessionId,
+      );
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),
+      ),
+    ),
+  );
+});
+
 describe("CodexAdapterV2 session initialize", () => {
   const openReplaySession = (
     transcript: CodexReplay.CodexAppServerReplayTranscript,
