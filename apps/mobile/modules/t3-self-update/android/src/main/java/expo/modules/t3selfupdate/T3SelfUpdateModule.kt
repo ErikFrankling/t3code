@@ -19,6 +19,10 @@ class T3SelfUpdateModule : Module() {
       SelfUpdater.check(context, installEvenIfForeground = installNow)
     }
 
+    // The app left the screen: install a downloaded APK once Android has
+    // lowered its importance (a JS timer would not fire in a frozen process).
+    Function("checkAfterBackgrounding") { SelfUpdater.checkAfterBackgrounding(context) }
+
     Function("status") {
       val prefs = SelfUpdater.prefs(context)
       mapOf(
