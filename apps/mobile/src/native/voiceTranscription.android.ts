@@ -30,6 +30,10 @@ const POLL_INTERVAL_MS = 800;
 // The final recogniser waits out GPU contention and restarts on the PC.
 const FINAL_TIMEOUT_MS = 30 * 60_000;
 
+const DIRECT_CONNECTION_NEEDED = "Dictation needs a direct connection to your computer.";
+
+type Endpoint = { readonly baseUrl: string; readonly headers: Record<string, string> };
+
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const done = (state: DictationState) =>
   state.status !== "recording" && state.status !== "finalizing";
@@ -52,10 +56,22 @@ class DictationStream {
   following = false;
 
   constructor(
-    private readonly baseUrl: string,
-    private readonly headers: Record<string, string>,
+    /** Looked up on every request: recording starts offline and uploads once back. */
+    private readonly endpoint: () => Endpoint,
     readonly target: VoiceDictationTarget,
   ) {}
+
+  private request(path: string, body: string | Uint8Array<ArrayBuffer>) {
+    const { baseUrl, headers } = this.endpoint();
+    return fetch(new URL(path, baseUrl).toString(), {
+      method: "POST",
+      headers: {
+        ...headers,
+        "Content-Type": typeof body === "string" ? "application/json" : "application/octet-stream",
+      },
+      body,
+    });
+  }
 
   begin(uri: string | null, ownerKey: string | null): void {
     if (!uri || this.uri) return;
@@ -88,16 +104,13 @@ class DictationStream {
       handle.close();
     }
     if (!final && audio.byteLength === 0) return null;
-    const url = new URL("/api/dictation/audio", this.baseUrl);
-    url.searchParams.set("id", this.id);
-    url.searchParams.set("project", this.target.project);
-    url.searchParams.set("offset", String(this.offset));
-    url.searchParams.set("final", final ? "1" : "0");
-    const response = await fetch(url.toString(), {
-      method: "POST",
-      headers: { ...this.headers, "Content-Type": "application/octet-stream" },
-      body: audio,
+    const query = new URLSearchParams({
+      id: this.id,
+      project: this.target.project,
+      offset: String(this.offset),
+      final: final ? "1" : "0",
     });
+    const response = await this.request(`/api/dictation/audio?${query}`, audio);
     if (response.status === 409) {
       // The server holds a different amount than we think; resend from there.
       const { expected } = (await response.json()) as { expected: number };
@@ -112,11 +125,10 @@ class DictationStream {
   }
 
   private async status(): Promise<DictationState> {
-    const response = await fetch(new URL("/api/dictation", this.baseUrl).toString(), {
-      method: "POST",
-      headers: { ...this.headers, "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "status", id: this.id }),
-    });
+    const response = await this.request(
+      "/api/dictation",
+      JSON.stringify({ action: "status", id: this.id }),
+    );
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
     return decodeDictationState(await response.json());
   }
@@ -209,13 +221,7 @@ class DictationStream {
   cancel(): void {
     this.stopped = true;
     void this.inflight
-      .then(() =>
-        fetch(new URL("/api/dictation", this.baseUrl).toString(), {
-          method: "POST",
-          headers: { ...this.headers, "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "cancel", id: this.id }),
-        }),
-      )
+      .then(() => this.request("/api/dictation", JSON.stringify({ action: "cancel", id: this.id })))
       .catch(() => {});
   }
 }
@@ -244,18 +250,21 @@ export function getLocalVoiceTranscriber(
     prepare: async ({ signal }) => {
       throwIfVoiceTranscriptionAborted(signal);
       const resolved = resolveConnection?.() ?? null;
-      const authorization = resolved?.connection.httpAuthorization ?? null;
-      if (!resolved || authorization?._tag === "Dpop") {
-        throw new VoiceTranscriptionError(
-          "unavailable",
-          "Dictation needs a direct connection to your computer.",
-        );
+      // Offline there is no connection yet: record anyway. The upload waits
+      // (the recording is kept on the phone) and goes out once it is back.
+      if (!resolved || resolved.connection()?.httpAuthorization?._tag === "Dpop") {
+        throw new VoiceTranscriptionError("unavailable", DIRECT_CONNECTION_NEEDED);
       }
-      const stream = new DictationStream(
-        resolved.connection.httpBaseUrl,
-        authorization ? { Authorization: `Bearer ${authorization.token}` } : {},
-        resolved.target,
-      );
+      const stream = new DictationStream(() => {
+        const connection = resolved.connection();
+        if (!connection) throw new Error("Not connected to your computer.");
+        const authorization = connection.httpAuthorization;
+        if (authorization?._tag === "Dpop") throw new Error(DIRECT_CONNECTION_NEEDED);
+        const headers: Record<string, string> = authorization
+          ? { Authorization: `Bearer ${authorization.token}` }
+          : {};
+        return { baseUrl: connection.httpBaseUrl, headers };
+      }, resolved.target);
       if (active && !active.following) active.cancel();
       active = stream;
       finishing = false;
