@@ -7732,3 +7732,76 @@ it.layer(layerTest)("approval watchdog", (it) => {
       }),
   );
 });
+
+it.layer(layerUsageLimitFailoverTest)("queued message after an account switch", (it) => {
+  it.effect("starts on the account the thread switched to, even after the old one failed", () =>
+    Effect.gen(function* () {
+      const fx = yield* queueWatchdogFixture("account-switch");
+      const events = yield* EventSink.EventSinkV2;
+      yield* fx.send("running on the first account", "defer_start");
+      yield* fx.send("queued on the first account", "queue_after_active");
+      const [running, queued] = (yield* fx.runs()) as [OrchestrationV2Run, OrchestrationV2Run];
+      assert.equal(queued.providerInstanceId, modelSelection.instanceId);
+      // The user switches the thread to the other account while the turn runs.
+      yield* fx.orchestrator.dispatch({
+        type: "thread.model-selection.set",
+        commandId: CommandId.make("queue-watchdog:switch:account-switch"),
+        threadId: fx.threadId,
+        modelSelection: { ...modelSelection, instanceId: alternateInstanceId },
+      });
+      // The first account's turn then fails.
+      yield* events.write({
+        events: [
+          {
+            id: EventId.make("queue-watchdog:switch-fail:account-switch"),
+            type: "turn-item.updated",
+            threadId: fx.threadId,
+            occurredAt: fx.now,
+            payload: {
+              id: TurnItemId.make("queue-watchdog:switch-fail-item:account-switch"),
+              type: "error",
+              threadId: fx.threadId,
+              runId: running.id,
+              nodeId: running.rootNodeId,
+              providerThreadId: null,
+              providerTurnId: null,
+              nativeItemRef: null,
+              parentItemId: null,
+              ordinal: 2,
+              status: "failed",
+              title: "Provider error",
+              startedAt: fx.now,
+              completedAt: fx.now,
+              updatedAt: fx.now,
+              failure: {
+                class: "provider_error",
+                message: "The provider event stream closed unexpectedly.",
+                code: "stream_closed",
+                retryable: null,
+              },
+            },
+          },
+          {
+            id: EventId.make("queue-watchdog:switch-fail-run:account-switch"),
+            type: "run.updated",
+            threadId: fx.threadId,
+            occurredAt: fx.now,
+            payload: {
+              ...running,
+              status: "failed",
+              startedAt: fx.now,
+              completedAt: fx.now,
+            },
+          },
+        ],
+      });
+      for (let attempt = 0; attempt < 10; attempt += 1) yield* Effect.yieldNow;
+      const started = (yield* fx.runs()).find((run) => run.id === queued.id)!;
+      // Started right away (no failure hold, no watchdog cooldown) on the new account.
+      assert.notEqual(started.status, "queued");
+      assert.equal(started.providerInstanceId, alternateInstanceId);
+      const thread = (yield* fx.orchestrator.getThreadProjection(fx.threadId)).thread;
+      assert.equal(thread.modelSelection.instanceId, alternateInstanceId);
+    }),
+  );
+});
