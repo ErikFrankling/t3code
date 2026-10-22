@@ -76,6 +76,14 @@ function formatServiceStatus(status: BootService.BootServiceStatus, cliVersion: 
     return "T3 Code service\n  Status: not installed\n  Next: Run `t3 service install`.";
   }
   const installedVersion = status.installedVersion ?? cliVersion;
+  if (status.externallyManaged === true && status.current) {
+    return [
+      "T3 Code service",
+      "  Status: installed · managed externally (X-T3-Externally-Managed)",
+      `  Unit: ${status.unitPath}`,
+      `  Logs: ${status.logPath}`,
+    ].join("\n");
+  }
   const problems = (status.problems ?? []).map(
     (problem) => `  [${problem}] ${BootService.formatBootServiceProblem(problem)}`,
   );
