@@ -1,5 +1,5 @@
-import { useEffect, useRef, useSyncExternalStore, type ComponentRef } from "react";
-import { Modal, Pressable, ScrollView, View } from "react-native";
+import { useEffect, useRef, useState, useSyncExternalStore, type ComponentRef } from "react";
+import { Modal, Pressable, ScrollView, StatusBar, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText as Text } from "../../components/ui/AppText";
@@ -29,12 +29,20 @@ export function DictationScreen(props: {
   // Voice mode records its turns through the same composer, on its own screen.
   const open = !inCall && (state.phase === "preparing" || state.phase === "recording");
   // Android gives the modal its own window, which copies the app's status bar
-  // style (light or dark icons) only when it opens. A new window for a new theme
-  // keeps the icons readable when the theme changes while dictating.
+  // style (light or dark icons) only when it opens. When the theme changes while
+  // dictating, the app's style is set first and then a new window opens, so the
+  // icons stay readable; opening it in the same render copied the old style.
   const { themeAppearance } = useAppearancePreferences();
+  const [windowTheme, setWindowTheme] = useState(themeAppearance);
+  useEffect(() => {
+    if (themeAppearance === windowTheme) return;
+    StatusBar.setBarStyle(themeAppearance === "dark" ? "light-content" : "dark-content");
+    const frame = requestAnimationFrame(() => setWindowTheme(themeAppearance));
+    return () => cancelAnimationFrame(frame);
+  }, [themeAppearance, windowTheme]);
   return (
     <Modal
-      key={themeAppearance}
+      key={windowTheme}
       visible={open}
       animationType="slide"
       statusBarTranslucent
