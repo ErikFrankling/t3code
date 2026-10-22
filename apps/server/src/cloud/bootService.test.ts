@@ -56,6 +56,14 @@ const windowsTaskOptions = {
   conhostPath: "C:\\Windows\\System32\\conhost.exe",
 };
 
+it("recognises a unit another tool manages by its marker", () => {
+  const unit =
+    "[Unit]\nX-T3-Externally-Managed=true\n\n[Service]\nEnvironment=T3CODE_HOME=/home/theo/.t3\n";
+  expect(BootService.bootServiceIsExternallyManaged(unit)).toBe(true);
+  expect(BootService.bootServiceIsExternallyManaged(unit.replace("true", "false"))).toBe(false);
+  expect(BootService.bootServiceIsExternallyManaged("[Service]\nExecStart=/x\n")).toBe(false);
+});
+
 it("reads the served T3 home and log back out of a rendered unit, plist, or task", () => {
   const plan = (baseDir: string) => ({
     program: [`${baseDir}/runtime/versions/1.2.3/t3`, "__service-launcher"],
