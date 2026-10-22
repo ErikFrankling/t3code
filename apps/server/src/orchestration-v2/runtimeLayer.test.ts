@@ -8491,3 +8491,138 @@ it.layer(layerUsageLimitFailoverTest)("queue watchdog with a sibling account", (
     }),
   );
 });
+
+it.layer(layerTest)("approval watchdog", (it) => {
+  it.effect.each(["full-access", "approval-required"] as const)(
+    "handles an approval left pending in a %s thread",
+    (runtimeMode) =>
+      Effect.gen(function* () {
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
+        const events = yield* EventSink.EventSinkV2;
+        const projections = yield* ProjectionStore.ProjectionStoreV2;
+        const threadId = ThreadId.make(`approval-watchdog:${runtimeMode}`);
+        const projectId = ProjectId.make(`approval-watchdog:project:${runtimeMode}`);
+        const now = yield* DateTime.now;
+        yield* seedProject({
+          projectId,
+          title: "Approval watchdog project",
+          workspaceRoot: process.cwd(),
+          defaultModelSelection: modelSelection,
+          createdAt: DateTime.formatIso(now),
+        });
+        yield* orchestrator.dispatch({
+          type: "thread.create",
+          commandId: CommandId.make(`approval-watchdog:create:${runtimeMode}`),
+          threadId,
+          projectId,
+          title: "Approval watchdog thread",
+          modelSelection,
+          runtimeMode,
+          interactionMode: "default",
+          branch: null,
+          worktreePath: null,
+          createdBy: "user",
+          creationSource: "web",
+        });
+        const sessionId = ProviderSessionId.make(`session:approval-watchdog:${runtimeMode}`);
+        const requestId = RuntimeRequestId.make(`request:approval-watchdog:${runtimeMode}`);
+        const nodeId = NodeId.make(`node:approval-watchdog:${runtimeMode}`);
+        yield* events.write({
+          events: [
+            {
+              id: EventId.make(`approval-watchdog:session:${runtimeMode}`),
+              type: "provider-session.attached",
+              threadId,
+              occurredAt: now,
+              payload: {
+                id: sessionId,
+                driver,
+                providerInstanceId: modelSelection.instanceId,
+                status: "ready",
+                cwd: process.cwd(),
+                model: modelSelection.model,
+                capabilities: CodexProviderCapabilitiesV2,
+                createdAt: now,
+                updatedAt: now,
+                lastError: null,
+              },
+            },
+            {
+              id: EventId.make(`approval-watchdog:request:${runtimeMode}`),
+              type: "runtime-request.updated",
+              threadId,
+              occurredAt: now,
+              payload: {
+                id: requestId,
+                nodeId,
+                providerTurnId: null,
+                nativeRequestRef: null,
+                kind: "command",
+                status: "pending",
+                responseCapability: { type: "live", providerSessionId: sessionId },
+                createdAt: now,
+                resolvedAt: null,
+              },
+            },
+            {
+              id: EventId.make(`approval-watchdog:node:${runtimeMode}`),
+              type: "node.updated",
+              threadId,
+              occurredAt: now,
+              payload: {
+                id: nodeId,
+                threadId,
+                runId: null,
+                parentNodeId: null,
+                rootNodeId: nodeId,
+                kind: "approval_request",
+                status: "waiting",
+                countsForRun: false,
+                providerThreadId: null,
+                providerTurnId: null,
+                nativeItemRef: null,
+                runtimeRequestId: requestId,
+                checkpointScopeId: null,
+                startedAt: now,
+                completedAt: null,
+              },
+            },
+            {
+              id: EventId.make(`approval-watchdog:item:${runtimeMode}`),
+              type: "turn-item.updated",
+              threadId,
+              occurredAt: now,
+              payload: {
+                id: TurnItemId.make(`approval-watchdog:item:${runtimeMode}`),
+                threadId,
+                runId: null,
+                nodeId,
+                providerThreadId: null,
+                providerTurnId: null,
+                nativeItemRef: null,
+                parentItemId: null,
+                ordinal: 1,
+                status: "waiting",
+                title: null,
+                startedAt: now,
+                completedAt: null,
+                updatedAt: now,
+                type: "approval_request",
+                requestId,
+                requestKind: "command",
+              },
+            },
+          ],
+        });
+        const status = () =>
+          projections
+            .getRuntimeRequest(threadId, requestId)
+            .pipe(Effect.map((request) => request?.status));
+        yield* orchestrator.superviseQueues;
+        assert.equal(yield* status(), "pending");
+        yield* TestClock.adjust("3 minutes");
+        yield* orchestrator.superviseQueues;
+        assert.equal(yield* status(), runtimeMode === "full-access" ? "resolved" : "pending");
+      }),
+  );
+});
