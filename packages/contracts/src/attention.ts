@@ -25,10 +25,12 @@ export type AttentionItemPriority = typeof AttentionItemPriority.Type;
 export const AttentionItemKind = Schema.Literals(["needs_you", "in_flight"]);
 export type AttentionItemKind = typeof AttentionItemKind.Type;
 
-export const CommitmentState = Schema.Literals(["open", "in_progress", "waiting", "done"]).annotate({
-  description:
-    "open: not started. in_progress: a thread is working on it. waiting: blocked on the user. done: finished and proven.",
-});
+export const CommitmentState = Schema.Literals(["open", "in_progress", "waiting", "done"]).annotate(
+  {
+    description:
+      "open: not started. in_progress: a thread is working on it. waiting: blocked on the user. done: finished and proven.",
+  },
+);
 export type CommitmentState = typeof CommitmentState.Type;
 
 export const AttentionItem = Schema.Struct({
