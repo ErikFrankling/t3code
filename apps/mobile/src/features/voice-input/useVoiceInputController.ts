@@ -77,6 +77,10 @@ export function useVoiceInputController(input: {
   }, [session, target]);
   const discardFailed = useCallback(() => session.controller.discardFailed(), [session]);
   const cancelAndDelete = useCallback(() => session.controller.cancelAndDelete(), [session]);
+  const pause = useCallback(() => session.controller.pause(), [session]);
+  const resume = useCallback(() => session.controller.resume(), [session]);
+  // Edit: the words go into the text box instead of being sent.
+  const stopToDraft = useCallback(() => session.controller.stopToDraft(), [session]);
   // A kept recording found at launch belongs to no composer yet: every composer shows it.
   const unowned = global.ownerKey === null && global.state.phase === "error";
   const state = global.ownerKey === input.ownerKey || unowned ? global.state : IDLE_STATE;
@@ -95,6 +99,10 @@ export function useVoiceInputController(input: {
     cancelAndDelete,
     failedRecording: session.controller.failedRecording,
     stop: global.stop,
+    stopToDraft,
+    pause,
+    resume,
+    canPause: session.controller.canPause,
     cancel: global.cancel,
   };
 }
