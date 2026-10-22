@@ -115,10 +115,11 @@ const voiceInputAtom = Atom.make((get) => {
   const resolveDictationConnection = () => {
     const target = session.dictation;
     if (!target) return null;
-    const connection = Option.getOrNull(
-      registry.get(environmentSession.preparedConnectionValueAtom(target.environmentId)),
-    );
-    return connection ? { connection, target } : null;
+    const connection = () =>
+      Option.getOrNull(
+        registry.get(environmentSession.preparedConnectionValueAtom(target.environmentId)),
+      );
+    return { connection, target };
   };
   const session: VoiceInputSession = new VoiceInputSession({
     recorder,
