@@ -1535,27 +1535,13 @@ export default function ChatView(props: ChatViewProps) {
     entry.kind === "message" ? [entry.message] : [],
   );
   const timelineEmpty = timelineEntries.length === 0 && !hasStreamedTimelineRows;
-<<<<<<< HEAD
-  const displayedTimelineKey = activeThreadKey ?? routeThreadKey;
-=======
   const latestReadAloudMessage = (() => {
     const message = timelineMessages.findLast(
       (candidate) => candidate.role === "assistant" && !candidate.streaming && candidate.text,
     );
     return message ? { id: message.id, text: message.text } : null;
   })();
-  const displayedTimeline = resolveThreadSwitchTimeline({
-    loading: timelineEmpty && threadSyncPhase !== null,
-    activeThreadKey,
-    nextEntries: timelineEntries,
-    rememberedForActive: peekRememberedThreadTimeline<typeof timelineEntries>(activeThreadKey),
-  });
-  const displayedTimelineKey = displayedTimeline.displayThreadKey ?? routeThreadKey;
-  const paintOnlyDisplayedTimeline = isPaintOnlyThreadTimeline(
-    displayedTimeline.displayThreadKey,
-    activeThreadKey,
-  );
->>>>>>> e55a4c354d (feat: read aloud on web, desktop and Android with local models)
+  const displayedTimelineKey = activeThreadKey ?? routeThreadKey;
   const displayedThreadRef = parseScopedThreadKey(displayedTimelineKey);
   const {
     worktreeSetup,
