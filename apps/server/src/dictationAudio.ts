@@ -85,6 +85,9 @@ export function adtsFrames(
   let offset = start;
   while (offset + 7 <= data.length) {
     if (data[offset] !== 0xff || (data[offset + 1]! & 0xf0) !== 0xf0) {
+      // A phone that lost power leaves the file's last block allocated but
+      // never written: zeros after the last frame. The audio ends there.
+      if (data.subarray(offset).every((byte) => byte === 0)) break;
       throw new Error("The recording is not AAC in ADTS frames.");
     }
     const length =
