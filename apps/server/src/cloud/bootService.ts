@@ -80,6 +80,15 @@ function quoteSystemdValue(value: string): string {
 /** Windows paths cannot contain `"`; only backslashes before the closing quote need doubling. */
 const quoteWindowsArgument = (value: string) => `"${value.replace(/(\\+)$/, "$1$1")}"`;
 
+/**
+ * A unit that another tool (Nix, Ansible, ...) owns says so with
+ * `X-T3-Externally-Managed=true` in its [Unit] section. systemd ignores the key.
+ * T3 then never rewrites it; it only checks that the unit serves this home.
+ */
+export function bootServiceIsExternallyManaged(contents: string): boolean {
+  return /^X-T3-Externally-Managed=(?:true|yes|1)\s*$/im.test(contents);
+}
+
 export interface BootServicePlan {
   readonly program: ReadonlyArray<string>;
   readonly baseDir: string;
@@ -728,6 +737,8 @@ export interface BootServiceStatus {
   readonly installedBaseDir?: string;
   /** Set when the installed unit serves a different T3 home than this CLI. */
   readonly otherBaseDir?: string;
+  /** The unit is owned by another tool; `current` then only means "serves this home". */
+  readonly externallyManaged?: boolean;
   readonly problems?: ReadonlyArray<BootServiceProblem>;
   readonly unitPath: string;
   readonly logPath: string;
@@ -1535,16 +1546,21 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
           ? [...(yield* readSchtasksProblems(Option.some(unit)))]
           : [];
     if (yield* fs.exists(restartPendingPath)) problems.push("restart-pending");
+    const externallyManaged = bootServiceIsExternallyManaged(unit);
     return {
       supported: true,
       installed: true,
       ...(installedVersion === undefined ? {} : { installedVersion }),
       ...(installedBaseDir === undefined ? {} : { installedBaseDir }),
       ...(otherBaseDir === undefined ? {} : { otherBaseDir }),
+      ...(externallyManaged ? { externallyManaged } : {}),
       problems,
-      current:
-        problems.length === 0 &&
-        normalizeUnit(unit) === normalizeUnit(manager.render(planForUnit(unit))) &&
+      current: externallyManaged
+        ? problems.length === 0 &&
+          installedBaseDir !== undefined &&
+          path.resolve(installedBaseDir) === path.resolve(input.baseDir)
+        : problems.length === 0 &&
+          normalizeUnit(unit) === normalizeUnit(manager.render(planForUnit(unit))) &&
         runtimeEntryExists &&
         Option.isSome(runtimeSentinel) &&
         runtimeSentinel.value.trim() === input.cliVersion &&
