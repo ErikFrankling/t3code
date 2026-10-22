@@ -1626,6 +1626,24 @@ export const ThreadDetailScreen = function ThreadDetailScreen(props: ThreadDetai
                   }}
                 />
                 <View className="w-full self-center" style={{ maxWidth: contentMaxWidth }}>
+                  {/* Zero-height anchor: the dock floats above the composer and every notice
+                    stacked on it, so it never covers one. */}
+                  {!isProviderSubagent && !composerSlotHidden ? (
+                    <View style={{ height: 0, zIndex: 5 }}>
+                      <ReadAloudDock
+                        environmentId={props.environmentId}
+                        latest={latestReadableAssistantMessage(props.selectedThreadFeed)}
+                        onVoiceMode={voiceMode.open}
+                        // The working/agents pill and the scroll-to-end button float
+                        // in the same strip above the composer.
+                        bottomOffset={
+                          showFloatingStatus || showScrollToEndButton
+                            ? FLOATING_WORKING_CONTROL_COVERAGE
+                            : 0
+                        }
+                      />
+                    </View>
+                  ) : null}
                   {props.queuedRunEdit !== null ? (
                     <Animated.View
                       className="shrink-0"
