@@ -2,12 +2,14 @@ import { describe, expect, it } from "vite-plus/test";
 import * as Schema from "effect/Schema";
 
 import { type CommandId, ProjectId } from "./baseSchemas.ts";
+import { INSTALLED_APP_SERVER_SETTINGS } from "./fixtures/serverSettingsAa7275c.ts";
 import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
 import {
   ClientSettingsSchema,
   ClientSettingsPatch,
   ClaudeSettings,
   DEFAULT_SERVER_SETTINGS,
+  idleCompactionMode,
   requiredScopesForProjectMutation,
   resolveIdleCompaction,
   resolveProjectProviderInstanceEnabled,
@@ -146,7 +148,7 @@ describe("ClaudeSettings shared sessions", () => {
 describe("resolveIdleCompaction", () => {
   it("lets a Claude instance override the global default", () => {
     const settings = decodeServerSettings({
-      compactIdleThreads: "off",
+      idleCompactionMode: "off",
       providerInstances: {
         claude_work: { driver: "claudeAgent", config: { idleCompaction: "onReturn" } },
         claude_personal: { driver: "claudeAgent" },
@@ -160,10 +162,65 @@ describe("resolveIdleCompaction", () => {
   });
 
   it("keeps the legacy beta switch's behavior", () => {
-    expect(decodeServerSettings({ compactIdleThreads: true }).compactIdleThreads).toBe(
+    expect(idleCompactionMode(decodeServerSettings({ compactIdleThreads: true }))).toBe(
       "beforeCacheExpires",
     );
-    expect(decodeServerSettings({}).compactIdleThreads).toBe("onReturn");
+    expect(idleCompactionMode(decodeServerSettings({}))).toBe("onReturn");
+    // A server stored a mode string under the old key for a day; it still reads.
+    expect(decodeServerSettings({ compactIdleThreads: "beforeCacheExpires" })).toMatchObject({
+      compactIdleThreads: true,
+    });
+  });
+});
+
+/**
+ * The JSON shape of a value, for comparing what the server sends with what an
+ * installed app expects: records of arbitrary keys are compared by their values.
+ */
+function wireShape(value: unknown): unknown {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return value.length === 0 ? [] : [wireShape(value[0])];
+  if (typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, field]) => [
+        key,
+        wireShape(field),
+      ]),
+    );
+  }
+  return typeof value;
+}
+
+describe("server settings stay readable by installed apps", () => {
+  // The server's settings exactly as the phone app at aa7275c (Erik's installed
+  // build, 2026-10-21) received them. That app decodes every key it knows with
+  // its own types, and one mismatch fails the whole connection: when
+  // `compactIdleThreads` became a string, the installed app could not connect
+  // at all. New keys are fine (old apps ignore them); an existing key must keep
+  // its JSON type. Move this fixture forward only once no installed app is older.
+  const installed = INSTALLED_APP_SERVER_SETTINGS;
+
+  it("sends every key the installed app knows with the same JSON type", () => {
+    const current = Schema.encodeSync(ServerSettings)(DEFAULT_SERVER_SETTINGS) as Record<
+      string,
+      unknown
+    >;
+    for (const [key, value] of Object.entries(installed)) {
+      if (!(key in current)) continue;
+      expect({ key, shape: wireShape(current[key]) }).toEqual({ key, shape: wireShape(value) });
+    }
+  });
+
+  it("keeps compactIdleThreads a boolean whatever the mode", () => {
+    for (const mode of ["onReturn", "beforeCacheExpires", "off"] as const) {
+      const settings = decodeServerSettings({
+        idleCompactionMode: mode,
+        compactIdleThreads: mode === "beforeCacheExpires",
+      });
+      const encoded = Schema.encodeSync(ServerSettings)(settings) as Record<string, unknown>;
+      expect(typeof encoded.compactIdleThreads).toBe("boolean");
+      expect(idleCompactionMode(settings)).toBe(mode);
+    }
   });
 });
 

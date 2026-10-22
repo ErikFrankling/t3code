@@ -652,17 +652,29 @@ export const IDLE_COMPACTION_MODES = [
 export const IdleCompactionMode = Schema.Literals(IDLE_COMPACTION_MODES.map((mode) => mode.value));
 export type IdleCompactionMode = typeof IdleCompactionMode.Type;
 
-// `compactIdleThreads` was a beta on/off switch for compacting before the cache expires.
-const LegacyCompactIdleThreads = Schema.Boolean.pipe(
-  Schema.decodeTo(
-    IdleCompactionMode,
-    SchemaTransformation.transform({
-      decode: (enabled): IdleCompactionMode => (enabled ? "beforeCacheExpires" : "onReturn"),
-      encode: (mode) => mode === "beforeCacheExpires",
-    }),
+// `compactIdleThreads` is the beta on/off switch for compacting before the cache
+// expires. It stays a boolean on the wire: installed apps decode the server's
+// settings with it typed as one, and a mode string there made them fail to
+// connect at all. The mode lives in `idleCompactionMode`; a server that briefly
+// stored a mode string under the old key still reads it.
+const CompactIdleThreadsSetting = Schema.Union([
+  Schema.Boolean,
+  IdleCompactionMode.pipe(
+    Schema.decodeTo(
+      Schema.Boolean,
+      SchemaTransformation.transform({
+        decode: (mode) => mode === "beforeCacheExpires",
+        encode: (enabled): IdleCompactionMode => (enabled ? "beforeCacheExpires" : "onReturn"),
+      }),
+    ),
   ),
-);
-const IdleCompactionModeSetting = Schema.Union([IdleCompactionMode, LegacyCompactIdleThreads]);
+]);
+
+/** The global idle-compaction mode, falling back to the legacy on/off switch. */
+export const idleCompactionMode = (
+  settings: Pick<ServerSettings, "compactIdleThreads" | "idleCompactionMode">,
+): IdleCompactionMode =>
+  settings.idleCompactionMode ?? (settings.compactIdleThreads ? "beforeCacheExpires" : "onReturn");
 
 const INSTANCE_IDLE_COMPACTION_MODES = [
   { value: "default", label: "Use default" },
@@ -1218,9 +1230,10 @@ export const ServerSettings = Schema.Struct({
   sidebarAutoSettleAfterDays: Schema.NullOr(SidebarAutoSettleAfterDays).pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_AUTO_SETTLE_AFTER_DAYS)),
   ),
-  compactIdleThreads: IdleCompactionModeSetting.pipe(
-    Schema.withDecodingDefault(Effect.succeed("onReturn" as const)),
+  compactIdleThreads: CompactIdleThreadsSetting.pipe(
+    Schema.withDecodingDefault(Effect.succeed(false)),
   ),
+  idleCompactionMode: Schema.optionalKey(IdleCompactionMode),
   snoozeLimitedThreads: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   autoResumeLimitedThreads: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   sidebarAutoSettleKeepPullRequests: Schema.Boolean.pipe(
@@ -1397,7 +1410,7 @@ export const resolveProjectProviderInstanceEnabled = (
 const decodeClaudeSettings = Schema.decodeUnknownOption(ClaudeSettings);
 
 export const resolveIdleCompaction = (
-  settings: Pick<ServerSettings, "providerInstances" | "compactIdleThreads">,
+  settings: Pick<ServerSettings, "providerInstances" | "compactIdleThreads" | "idleCompactionMode">,
   instanceId: ProviderInstanceId,
 ): IdleCompactionMode => {
   const instance = Object.hasOwn(settings.providerInstances, instanceId)
@@ -1407,7 +1420,7 @@ export const resolveIdleCompaction = (
     Option.map((config) => config.idleCompaction),
     Option.getOrElse(() => "default" as const),
   );
-  return override === "default" ? settings.compactIdleThreads : override;
+  return override === "default" ? idleCompactionMode(settings) : override;
 };
 
 export const ServerSettingsOperation = Schema.Literals([
@@ -1551,7 +1564,8 @@ export const ServerSettingsPatch = Schema.Struct({
   deviceHosts: Schema.optionalKey(SshDeviceHostConfigs),
   easDeviceHosts: Schema.optionalKey(EasDeviceHostConfigs),
   sidebarAutoSettleAfterDays: Schema.optionalKey(Schema.NullOr(SidebarAutoSettleAfterDays)),
-  compactIdleThreads: Schema.optionalKey(IdleCompactionMode),
+  compactIdleThreads: Schema.optionalKey(Schema.Boolean),
+  idleCompactionMode: Schema.optionalKey(IdleCompactionMode),
   sidebarAutoSettleKeepPullRequests: Schema.optionalKey(Schema.Boolean),
   sidebarAutoSettleOnMerge: Schema.optionalKey(Schema.Boolean),
   autoResumeLimitedThreads: Schema.optionalKey(Schema.Boolean),
