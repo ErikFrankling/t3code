@@ -2473,6 +2473,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     return inserted;
   };
   const insertComposerTextAtEndStable = useStableCallback(insertComposerTextAtEnd);
+  const insertDictationStable = useStableCallback((text: string) =>
+    insertComposerTextAtEnd(text, { ensureLeadingBoundary: true }),
+  );
 
   const addComposerFolders = (folders: File[]) => {
     const target = folderDropTarget({
@@ -3460,8 +3463,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     environmentId={environmentId}
                     target={composerDraftTargetKey}
                     project={gitCwd}
+                    threadId={activeThreadId}
                     onBusyChange={setDictationBusy}
                     onSend={onDictationSend}
+                    onInsert={insertDictationStable}
                   />
                   <ComposerFooterPrimaryActions
                     compact={isComposerPrimaryActionsCompact}

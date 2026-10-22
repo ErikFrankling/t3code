@@ -43,6 +43,21 @@ export const layerDictationRoute = Layer.unwrap(
           headers: { "X-STT-Owner": session.subject },
         });
         const raw = yield* response.text;
+        const known = body.id ? deliveries.get(session.subject, body.id) : undefined;
+        if (response.status === 404 && body.action === "status" && body.id && known) {
+          // The speech service forgot the recording, but its message is ours:
+          // clients keep their copy of the audio until they see it sent.
+          return HttpServerResponse.jsonUnsafe({
+            id: body.id,
+            status: "error",
+            draft: known.draft,
+            final: "",
+            error: raw,
+            bytes: 0,
+            delivery: known.status,
+            ...(known.error ? { deliveryError: known.error } : {}),
+          } satisfies DictationState);
+        }
         if (response.status !== 200) {
           yield* Effect.logWarning("dictation.speech_request_failed", {
             recordingId: body.id,
