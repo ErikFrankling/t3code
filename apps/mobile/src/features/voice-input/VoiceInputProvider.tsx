@@ -153,10 +153,11 @@ function useVoiceInputRuntime() {
     const resolveDictationConnection = () => {
       const target = sessionRef.current?.dictation;
       if (!target) return null;
-      const connection = Option.getOrNull(
-        registry.get(environmentSession.preparedConnectionValueAtom(target.environmentId)),
-      );
-      return connection ? { connection, target } : null;
+      const connection = () =>
+        Option.getOrNull(
+          registry.get(environmentSession.preparedConnectionValueAtom(target.environmentId)),
+        );
+      return { connection, target };
     };
     sessionRef.current = new VoiceInputSession({
       recorder,
