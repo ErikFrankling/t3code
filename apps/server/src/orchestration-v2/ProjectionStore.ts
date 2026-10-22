@@ -164,6 +164,7 @@ export type ProjectionStoreV2Error = typeof ProjectionStoreV2Error.Type;
 
 export type ProjectionRecoveryKind =
   | "queued-runs"
+  | "pending-requests"
   | "runtime"
   | "subagent-results"
   | "delegated-completions";
@@ -3951,6 +3952,11 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                     WHERE active.thread_id = orchestration_v2_projection_runs.thread_id
                       AND active.status IN ('preparing', 'starting', 'running', 'waiting')
                   )
+              `;
+            case "pending-requests":
+              return sql`
+                SELECT thread_id FROM orchestration_v2_projection_runtime_requests
+                WHERE status = 'pending'
               `;
             case "delegated-completions":
               return sql`
