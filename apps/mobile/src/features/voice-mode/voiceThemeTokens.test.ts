@@ -69,3 +69,36 @@ describe("voice and read-aloud surfaces follow the app theme", () => {
     expect(themeProblems(`className="text-2xl border-2 bg-screen text-foreground"`)).toEqual([]);
   });
 });
+
+describe("full-screen surfaces in their own window", () => {
+  // A Modal is a separate Android window: the status bar style set in App.tsx
+  // does not reach it, and on the light theme its icons were white on white.
+  it("the dictation screen sets the status bar from the theme", () => {
+    const source = NodeFs.readFileSync(
+      NodePath.join(src, "features/voice-input/DictationScreen.tsx"),
+      "utf8",
+    );
+    expect(source).toMatch(
+      /<StatusBar barStyle=\{themeAppearance === "dark" \? "light-content" : "dark-content"\} \/>/,
+    );
+  });
+});
+
+describe("the Voice and Read latest dock", () => {
+  // It floats above its anchor; anchored below the notices, it covered them.
+  it("is anchored above every notice over the composer", () => {
+    const source = NodeFs.readFileSync(
+      NodePath.join(src, "features/threads/ThreadDetailScreen.tsx"),
+      "utf8",
+    );
+    const dock = source.indexOf("<ReadAloudDock");
+    expect(dock).toBeGreaterThan(0);
+    for (const notice of [
+      "<ComposerErrorNotice",
+      "<ComposerFeedback",
+      "<ComposerQueuedEditBanner",
+    ]) {
+      expect(source.indexOf(notice)).toBeGreaterThan(dock);
+    }
+  });
+});
