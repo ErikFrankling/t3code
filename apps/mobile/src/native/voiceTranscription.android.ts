@@ -15,6 +15,7 @@ import {
   updateDictationPreview,
 } from "../features/voice-input/dictationPreview";
 import { uuidv4 } from "../lib/uuid";
+import { dropUndeliveredDictation, undeliveredReason } from "../state/acknowledged-thread-messages";
 import type { ResolveDictationConnection, VoiceDictationTarget } from "./voiceTranscription";
 
 export type {
@@ -28,7 +29,6 @@ const UPLOAD_INTERVAL_MS = 1_000;
 const POLL_INTERVAL_MS = 800;
 // The final recogniser waits out GPU contention and restarts on the PC.
 const FINAL_TIMEOUT_MS = 30 * 60_000;
-const SENT_LINGER_MS = 4_000;
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const done = (state: DictationState) =>
@@ -174,20 +174,36 @@ class DictationStream {
       // The composer refused the message; keep the words in the draft instead.
       return DictationStream.text(await this.poll(state, signal));
     }
-    // The server owns the message now. Keep showing the refinement for as long
-    // as the composer is open; leaving loses nothing.
+    // The server owns the message now: the panel closes (the chat shows the
+    // message, live text first, until its transcript is final) and the outcome
+    // is followed in the background.
     this.following = true;
-    updateDictationPreview({ phase: "sent" });
-    void this.poll(state)
-      .catch(() => {})
-      .then(() => wait(SENT_LINGER_MS))
-      .finally(() => {
-        if (active === this) {
-          active = null;
-          setDictationPreview(null);
-        }
-      });
+    setDictationPreview(null);
+    void this.settle(state);
     return null;
+  }
+
+  /**
+   * Follows a sent dictation until the server posted it. One it will never
+   * post (no speech was recognized, or it gave up) would otherwise leave a
+   * "Transcribing…" row in the chat for good: that row goes, and the chat says
+   * why. The recording stays on the server either way.
+   */
+  private async settle(state: DictationState): Promise<void> {
+    const deadline = Date.now() + FINAL_TIMEOUT_MS;
+    try {
+      while (Date.now() < deadline) {
+        if (state.delivery === "sent") return;
+        if (state.delivery === "empty" || state.delivery === "abandoned") {
+          dropUndeliveredDictation(this.id, undeliveredReason(state));
+          return;
+        }
+        await wait(POLL_INTERVAL_MS);
+        state = await this.status().catch(() => state);
+      }
+    } finally {
+      if (active === this) active = null;
+    }
   }
 
   cancel(): void {
