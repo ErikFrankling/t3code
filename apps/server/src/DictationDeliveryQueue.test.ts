@@ -131,7 +131,7 @@ describe("durable dictation delivery", () => {
     expect(sent[0]?.text).toBe("Existing text\nRecovered final");
     expect(q.get(input.owner, input.id)?.usedDraft).toBe(false);
   });
-  it("abandons a long-rejected delivery on restart instead of sending it late", async () => {
+  it("keeps retrying a long-rejected delivery after a restart until it lands", async () => {
     const key = NodeCrypto.createHash("sha256")
       .update(JSON.stringify([input.owner, input.id]))
       .digest("hex");
@@ -145,17 +145,23 @@ describe("durable dictation delivery", () => {
         error: "Command previously rejected",
       }),
     );
-    const sent: Turn[] = [];
+    const attempts: Turn[] = [];
     const q = queue(
-      async () => state("complete", "Done"),
+      async () => {
+        throw new Error("Must not transcribe again");
+      },
       async (c) => {
-        sent.push(c);
+        attempts.push(c);
+        if (attempts.length < 20) throw new Error("Chat rejected the command");
       },
     );
     await q.start();
     await q.drain();
-    expect(sent).toHaveLength(0);
-    expect(q.get(input.owner, input.id)?.status).toBe("abandoned");
+    expect(attempts).toHaveLength(20);
+    expect(new Set(attempts.map((c) => c.commandId)).size).toBe(1);
+    const job = q.get(input.owner, input.id);
+    expect(job?.status).toBe("sent");
+    expect(job?.error).toBeUndefined();
   });
   it("delivers refined text to the captured chat without browser callbacks", async () => {
     const sent: Turn[] = [];

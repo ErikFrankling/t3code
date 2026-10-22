@@ -2,27 +2,34 @@
 
 This fork's web composer has a microphone button next to **Attach files**, for a
 locally hosted speech service. Open T3 over HTTPS or localhost, allow microphone
-access, and press the button. Pauses do not stop recording. The live draft is
+access, and press the button. Silence does not stop recording. The live draft is
 provisional; the final recognizer receives the original audio and project context.
 
-Recording starts as soon as the microphone is granted. Audio is kept in the
-browser and uploaded behind the microphone, so a slow, restarting or busy speech
-service delays the live draft but never the recording; uploads are retried until
-they land. A new recording can start while an earlier one is still being
-transcribed.
+Recording starts as soon as the microphone is granted. **Voice input is never
+lost.** Every second of audio is saved on the device (IndexedDB) before it is
+uploaded, and a separate loop uploads the saved audio in order, retrying for as
+long as the page is open and again on the next visit. A slow, restarting or
+unreachable speech service delays the live draft, never the recording; the view
+then says "Saved on this device; uploads when the speech service is back". A
+reload, a closed tab, an error or leaving the chat never ends or discards a
+recording: it comes back paused, with all of its audio.
 
-Dictation opens a larger workspace with a read-only live draft and refined text.
-**Stop sends the message automatically**, once the full-quality transcript
-exists. The server waits for it for as long as it takes: the speech service
-retries through GPU contention and restarts by itself. The live draft is sent
-instead only when the recording no longer exists or the recogniser heard no
-speech. Existing typed text and attachments travel with the dictated message.
+Dictation opens full screen: the refined text, followed by the newer live draft
+in a muted colour. **Pause** (Space) stops the microphone and keeps the
+recording open; **Resume** continues the same recording, also after a reload.
+**Send** (Enter) sends the message once the full-quality transcript exists.
+**Edit** waits for that transcript and puts it into the message box instead.
+**Delete** asks for confirmation first. Minimize (Esc) keeps recording; the
+microphone button shows a recording in red and paused recordings in amber, and
+reopens the view. The audio leaves the device only after the message was sent
+or the transcript went into the message box.
 
-You can switch chats after stopping. Delivery belongs to the original chat and
-continues independently of the browser. Closing the recording workspace stops
-and sends too; it does not discard your recording. Do not close the browser
-while audio is still uploading; a refused upload keeps the audio available for
-retry and WAV download.
+After Send the server waits for the transcript for as long as it takes: the
+speech service retries through GPU contention and restarts by itself. The live
+draft is sent instead only when the recording no longer exists or the
+recogniser heard no speech. Existing typed text and attachments travel with the
+dictated message. You can switch chats after sending; delivery belongs to the
+original chat and continues independently of the browser.
 
 Enter sends typed messages on desktop and mobile; Shift+Enter adds a newline.
 
@@ -113,15 +120,27 @@ preview with VibeVoice Q8 final recognition and bounded repository vocabulary
 extraction. The speech service is packaged separately by the host's NixOS
 configuration.
 
-Stop prepares the same orchestration request a typed send makes, with
+On the web, `apps/web/src/components/chat/dictationRecorder.ts` owns recordings
+for the whole page, so they outlive the composer, and a Web Lock per recording
+keeps two tabs from driving the same one. A paused recording needs nothing from
+the speech service: it marks a recording inactive after 120 s without audio but
+keeps accepting appends, also across its own restarts. When it no longer knows
+the recording (404) or has closed it (409 and a status other than `recording`),
+the client starts a continuation: a new server recording id that receives all
+of the device's audio again from sequence 0. A 409 for a still-open recording
+is resolved by matching the server's byte count against the stored chunk sizes.
+
+Send prepares the same orchestration request a typed send makes, with
 `[dictation:<id>]` where the transcript goes, and hands it to the
 `dictation.deliver` websocket method instead of sending it. The server
 checkpoints it privately under `userdata/dictation-deliveries`, replaces the
 marker once the final transcript exists, and dispatches it through the normal
 message intake. It resumes pending deliveries after a restart and reuses the
 recording ID as the command ID, so a delivery is never repeated. A delivery the
-chat kept rejecting is abandoned after 24 hours instead of arriving late.
-Structured `dictation.*` events carry the recording ID and thread ID without
+chat keeps rejecting is retried, with backoff, until it lands; it is never
+dropped. Clients keep their copy of the audio until `status` reports the
+delivery `sent`, which the server answers even when the speech service has
+forgotten the recording. Structured `dictation.*` events carry the recording ID and thread ID without
 logging transcript text.
 
 `T3CODE_UNSAFE_NO_AUTH=1` retains this deployment's explicit trusted-network mode;
