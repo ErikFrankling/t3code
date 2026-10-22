@@ -49,16 +49,26 @@ export function AndroidHomeFabLayout(props: ComponentProps<typeof SharedAndroidH
     Math.max(floating.height, floating.fabOffset + fabSize);
   const context = floatingTabsEnabled && workspace ? { ...workspace, bottomClearance } : workspace;
   const scrollState = useRef({ anchor: 0, expanded: true });
-  const fabRef = useRef<ViewInstance>(null);
+  const containerRef = useRef<ViewInstance>(null);
+  const [containerBottom, setContainerBottom] = useState<number | null>(null);
   const showsFab =
     !props.disabled &&
     (!props.sidebar || floatingTabsEnabled) &&
     state.hasConnections &&
     layoutWidth !== null;
+  const fabPosition = floatingTabsEnabled
+    ? {
+        right: FLOATING_TABS.edge,
+        bottom: insets.bottom + FLOATING_TABS.bottom + floating.fabOffset,
+      }
+    : androidHomeFabPosition(insets.bottom, props.sidebar);
+  // Where the button starts in the window, so the dictation pill stays above it.
+  const fabTop =
+    showsFab && containerBottom !== null ? containerBottom - fabPosition.bottom - fabSize : null;
   useEffect(() => {
-    if (!showsFab) setFloatingButtonTop(null);
+    setFloatingButtonTop(fabTop);
     return () => setFloatingButtonTop(null);
-  }, [showsFab]);
+  }, [fabTop]);
   const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
     const next = updateFabScroll(
@@ -73,32 +83,30 @@ export function AndroidHomeFabLayout(props: ComponentProps<typeof SharedAndroidH
   // Remount only the FAB when its font or pane changes to clear the cached expanded width.
   // Floating navigation shares this row; Material split views put New thread in the rail.
   return (
-    <View className="flex-1" onLayout={(event) => setLayoutWidth(event.nativeEvent.layout.width)}>
+    <View
+      ref={containerRef}
+      className="flex-1"
+      onLayout={(event) => {
+        setLayoutWidth(event.nativeEvent.layout.width);
+        // Measured here, not on the button: the native button has no size of its
+        // own inside a wrapper and vanishes.
+        containerRef.current?.measureInWindow((_x, y, _width, height) =>
+          setContainerBottom(y + height),
+        );
+      }}
+    >
       <WorkspaceTabsContext value={context}>
         <FabScrollContext value={onScroll}>{props.children}</FabScrollContext>
       </WorkspaceTabsContext>
       {showsFab ? (
-        // The wrapper reports where the button is, so the dictation pill stays above it.
-        <View
-          ref={fabRef}
+        <NewThreadButton
+          key={`${appearance.baseFontSize}:${fontScale}:${layoutWidth}`}
+          extended
+          expanded={floatingTabsEnabled ? false : expanded}
+          onPress={props.onStartNewTask}
           className="absolute"
-          style={
-            floatingTabsEnabled
-              ? {
-                  right: FLOATING_TABS.edge,
-                  bottom: insets.bottom + FLOATING_TABS.bottom + floating.fabOffset,
-                }
-              : androidHomeFabPosition(insets.bottom, props.sidebar)
-          }
-          onLayout={() => fabRef.current?.measureInWindow((_x, y) => setFloatingButtonTop(y))}
-        >
-          <NewThreadButton
-            key={`${appearance.baseFontSize}:${fontScale}:${layoutWidth}`}
-            extended
-            expanded={floatingTabsEnabled ? false : expanded}
-            onPress={props.onStartNewTask}
-          />
-        </View>
+          style={fabPosition}
+        />
       ) : null}
     </View>
   );
