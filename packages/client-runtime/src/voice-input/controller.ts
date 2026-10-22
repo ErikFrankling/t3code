@@ -8,6 +8,8 @@ export type VoiceInputState = {
   readonly phase: VoiceInputPhase;
   readonly error: string | null;
   readonly errorAction: "retry" | "settings" | null;
+  /** A recording on hold: the microphone is off, and Resume continues the same recording. */
+  readonly paused?: boolean;
 };
 
 export function voiceInputBlocksSubmission(state: VoiceInputState): boolean {
@@ -37,6 +39,9 @@ export interface VoiceRecorder {
   // half an hour; a native cap used to stop and send mid-sentence at 5 min).
   record(): void;
   stop(): Promise<void>;
+  /** Holds the recording; `resume` continues the same file. Without them there is no pause. */
+  pause?(): void;
+  resume?(): void;
 }
 
 export type VoiceInputControllerDependencies = {
@@ -305,6 +310,31 @@ export class VoiceInputController {
   stop(): Promise<void> {
     if (this.state.phase !== "recording") return Promise.resolve();
     return this.finishRecording(false, null);
+  }
+
+  /** Stops and puts the words into the draft to edit, where Stop would send them. */
+  stopToDraft(): Promise<void> {
+    if (this.state.phase !== "recording") return Promise.resolve();
+    return this.finishRecording(false, null, "draft");
+  }
+
+  get canPause(): boolean {
+    const recorder = this.dependencies.recorder;
+    return typeof recorder.pause === "function" && typeof recorder.resume === "function";
+  }
+
+  /** Holds the recording: the microphone stops, nothing is sent or lost. */
+  pause(): void {
+    if (this.state.phase !== "recording" || this.state.paused || !this.canPause) return;
+    this.dependencies.recorder.pause?.();
+    this.setState({ ...this.state, paused: true });
+  }
+
+  /** Continues a paused recording in the same file. */
+  resume(): void {
+    if (this.state.phase !== "recording" || !this.state.paused) return;
+    this.dependencies.recorder.resume?.();
+    this.setState({ ...this.state, paused: false });
   }
 
   cancel(): void {

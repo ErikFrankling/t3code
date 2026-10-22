@@ -114,6 +114,7 @@ import {
   ComposerDictationToolbar,
 } from "../voice-input/ComposerDictationControl";
 import { DictationLivePreview } from "../voice-input/DictationLivePreview";
+import { DictationScreen } from "../voice-input/DictationScreen";
 import { useVoiceInputController } from "../voice-input/useVoiceInputController";
 import { registerVoiceModeComposer } from "../voice-mode/voiceMode";
 import { resolveVoiceComposerPresentation } from "../voice-input/voiceInputPresentation";
@@ -896,6 +897,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
         ) : null}
 
         <DictationLivePreview ownerKey={composerDraftKey} />
+        <DictationScreen ownerKey={composerDraftKey} voiceInput={voiceInput} />
         <ComposerSurface
           animateLayout={false}
           style={{

@@ -25,6 +25,8 @@ class TestRecorder implements VoiceRecorder {
   readonly prepareToRecordAsync = vi.fn(async () => undefined);
   readonly record = vi.fn();
   readonly stop = vi.fn(async () => undefined);
+  readonly pause = vi.fn();
+  readonly resume = vi.fn();
 }
 
 function preparedTranscription(
@@ -527,6 +529,66 @@ describe("VoiceInputController", () => {
 
     expect(harness.recorder.record).not.toHaveBeenCalled();
     expect(harness.controller.currentState.error).toContain("background");
+  });
+
+  describe("pause and resume", () => {
+    it("holds the recording and continues the same one", async () => {
+      const harness = createHarness();
+      await harness.controller.start();
+      harness.controller.pause();
+
+      expect(harness.recorder.pause).toHaveBeenCalledTimes(1);
+      expect(harness.controller.currentState).toMatchObject({ phase: "recording", paused: true });
+      // A second pause does nothing; nothing was stopped or deleted.
+      harness.controller.pause();
+      expect(harness.recorder.pause).toHaveBeenCalledTimes(1);
+      expect(harness.recorder.stop).not.toHaveBeenCalled();
+      expect(harness.deleted).toEqual([]);
+
+      harness.controller.resume();
+      expect(harness.recorder.resume).toHaveBeenCalledTimes(1);
+      expect(harness.controller.currentState).toMatchObject({ phase: "recording", paused: false });
+      expect(harness.recorder.record).toHaveBeenCalledTimes(1);
+    });
+
+    it("sends what was said when stopped while paused", async () => {
+      const harness = createHarness();
+      await harness.controller.start();
+      harness.controller.pause();
+      await harness.controller.stop();
+
+      expect(harness.recorder.stop).toHaveBeenCalled();
+      expect(harness.commits).toEqual([
+        { text: "hello new text", selection: { start: 14, end: 14 } },
+      ]);
+      expect(harness.controller.currentState.phase).toBe("idle");
+    });
+
+    it("Edit puts the words into the draft instead of sending them", async () => {
+      const deliver = vi.fn(async () => null);
+      const harness = createHarness({
+        getTranscriber: () => ({
+          prepare: async () => ({ ...preparedTranscription(async () => "to edit"), deliver }),
+        }),
+      });
+      await harness.controller.start();
+      await harness.controller.stopToDraft();
+
+      expect(deliver).not.toHaveBeenCalled();
+      expect(harness.commits).toEqual([
+        { text: "hello to edit", selection: { start: 13, end: 13 } },
+      ]);
+    });
+
+    it("has no pause without a recorder that can hold", async () => {
+      const recorder = Object.assign(new TestRecorder(), { pause: undefined, resume: undefined });
+      const harness = createHarness({ recorder });
+      await harness.controller.start();
+      harness.controller.pause();
+
+      expect(harness.controller.canPause).toBe(false);
+      expect(harness.controller.currentState.paused).toBeUndefined();
+    });
   });
 
   describe("a failed transcription is tried again by itself", () => {
