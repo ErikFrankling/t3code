@@ -1,5 +1,5 @@
 import { useEffect, useRef, useSyncExternalStore, type ComponentRef } from "react";
-import { Modal, Pressable, ScrollView, StatusBar, View } from "react-native";
+import { Modal, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText as Text } from "../../components/ui/AppText";
@@ -28,8 +28,13 @@ export function DictationScreen(props: {
   const inCall = useSyncExternalStore(voiceCall.subscribe, () => voiceCall.active);
   // Voice mode records its turns through the same composer, on its own screen.
   const open = !inCall && (state.phase === "preparing" || state.phase === "recording");
+  // Android gives the modal its own window, which copies the app's status bar
+  // style (light or dark icons) only when it opens. A new window for a new theme
+  // keeps the icons readable when the theme changes while dictating.
+  const { themeAppearance } = useAppearancePreferences();
   return (
     <Modal
+      key={themeAppearance}
       visible={open}
       animationType="slide"
       statusBarTranslucent
@@ -53,7 +58,6 @@ function DictationView(props: {
   readonly voiceInput: VoiceInput;
 }) {
   const insets = useSafeAreaInsets();
-  const { themeAppearance } = useAppearancePreferences();
   const voice = props.voiceInput;
   const preview = useDictationPreview(props.ownerKey);
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
@@ -71,9 +75,6 @@ function DictationView(props: {
       className="flex-1 bg-screen"
       style={{ paddingTop: insets.top + 8, paddingBottom: insets.bottom + 16 }}
     >
-      {/* The modal is its own window: without this its status bar icons keep
-        the system default and vanish on the light theme. */}
-      <StatusBar barStyle={themeAppearance === "dark" ? "light-content" : "dark-content"} />
       <View className="flex-row items-center gap-3 px-4">
         <RoundButton
           label="Cancel dictation"
