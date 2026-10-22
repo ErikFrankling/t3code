@@ -189,6 +189,7 @@ export type ProjectionStoreV2Error = typeof ProjectionStoreV2Error.Type;
 
 export type ProjectionRecoveryKind =
   | "queued-runs"
+  | "pending-requests"
   | "runtime"
   | "restart-continuations"
   | "subagent-results"
@@ -5239,6 +5240,11 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                   AND CASE WHEN json_valid(item.payload_json)
                     THEN json_extract(item.payload_json, '$.inputIntent') IN ('steer', 'promoted_queued_to_steer')
                     ELSE 0 END
+              `;
+            case "pending-requests":
+              return sql`
+                SELECT thread_id FROM orchestration_v2_projection_runtime_requests
+                WHERE status = 'pending'
               `;
             case "delegated-completions":
               return sql`
