@@ -2341,7 +2341,73 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
   const QUEUE_WATCHDOG_IDLE_MS = 30_000;
   // A provider that keeps failing would consume one waiting message per retry.
   const QUEUE_WATCHDOG_FAILURE_RETRY_MS = 5 * 60_000;
+  // Older than this, a waiting message or an unanswered approval is stuck.
+  const QUEUE_WATCHDOG_STUCK_MS = 2 * 60_000;
+  // Claude forwards some requests to T3 even under bypass (writes outside the
+  // working directory, ask rules); full access means nobody is there to answer.
+  const FULL_ACCESS_APPROVAL_GRACE_MS = 30_000;
+  /**
+   * An approval left pending in a full-access thread blocks an unattended
+   * turn for hours; the watchdog accepts it, as full access promises.
+   * Elsewhere it is logged once it has waited long enough to look forgotten.
+   */
+  const superviseApprovals = Effect.gen(function* () {
+    const threadIds = yield* projectionStore.getRecoveryThreadIds("pending-requests");
+    const nowMs = DateTime.toEpochMillis(yield* DateTime.now);
+    for (const threadId of threadIds) {
+      yield* Effect.gen(function* () {
+        const { thread, runtimeRequests } = yield* projectionStore.getThreadRecords(threadId, [
+          "runtimeRequests",
+        ]);
+        for (const request of runtimeRequests) {
+          if (request.status !== "pending") continue;
+          const ageMs = nowMs - DateTime.toEpochMillis(request.createdAt);
+          const approval =
+            request.kind === "command" ||
+            request.kind === "file-read" ||
+            request.kind === "file-change";
+          const fullAccess = thread.runtimeMode === "full-access";
+          if (
+            ageMs <
+            (fullAccess && approval ? FULL_ACCESS_APPROVAL_GRACE_MS : QUEUE_WATCHDOG_STUCK_MS)
+          )
+            continue;
+          if (fullAccess && approval) {
+            yield* Effect.logWarning("orchestration-v2.queue-watchdog.approved-stuck-request", {
+              threadId,
+              requestId: request.id,
+              kind: request.kind,
+              ageMs,
+            });
+            yield* dispatchWithReceipt({
+              type: "runtime-request.respond",
+              commandId: CommandId.make(`command:system:watchdog-approve:${request.id}`),
+              threadId,
+              requestId: request.id,
+              decision: "accept",
+            });
+          } else {
+            yield* Effect.logWarning("orchestration-v2.queue-watchdog.stuck-request", {
+              threadId,
+              requestId: request.id,
+              kind: request.kind,
+              runtimeMode: thread.runtimeMode,
+              ageMs,
+            });
+          }
+        }
+      }).pipe(
+        Effect.catch((cause) =>
+          Effect.logWarning("Queue watchdog could not check pending requests", {
+            threadId,
+            cause,
+          }),
+        ),
+      );
+    }
+  });
   const superviseQueues = Effect.gen(function* () {
+    yield* superviseApprovals;
     const threadIds = yield* projectionStore.getRecoveryThreadIds("queued-runs");
     let started = 0;
     for (const threadId of threadIds) {
@@ -2379,7 +2445,24 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
                 })),
               );
             }
-            if (!(yield* projectionStore.canStartQueuedRun(threadId))) return false;
+            if (!(yield* projectionStore.canStartQueuedRun(threadId))) {
+              const oldest = queued.reduce((min, run) =>
+                DateTime.toEpochMillis(run.requestedAt) < DateTime.toEpochMillis(min.requestedAt)
+                  ? run
+                  : min,
+              );
+              const waitingMs = nowMs - DateTime.toEpochMillis(oldest.requestedAt);
+              if (waitingMs >= QUEUE_WATCHDOG_STUCK_MS) {
+                yield* Effect.logWarning("orchestration-v2.queue-watchdog.stuck-queue", {
+                  threadId,
+                  runId: oldest.id,
+                  waitingMs,
+                  holdReason:
+                    oldest.queueHeld === true ? (oldest.queueHoldReason ?? "legacy") : null,
+                });
+              }
+              return false;
+            }
             yield* Effect.logInfo("orchestration-v2.queue-watchdog.start", {
               threadId,
               idleMs,
