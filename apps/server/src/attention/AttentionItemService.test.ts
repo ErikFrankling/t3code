@@ -196,10 +196,10 @@ it.effect("needs-you and in-flight ids do not cross over", () =>
       yield* Effect.flip(service.upsertCommitment({ id: needs.item.id, title: "Ship it" }));
       yield* Effect.flip(service.upsert({ id: commitment.item.id, title: "Sign in" }));
       yield* Effect.flip(service.resolveCommitment({ id: needs.item.id, state: "in_progress" }));
-      assert.deepStrictEqual(
-        (yield* service.list()).items.map((item) => item.kind).toSorted(),
-        ["in_flight", "needs_you"],
-      );
+      assert.deepStrictEqual((yield* service.list()).items.map((item) => item.kind).toSorted(), [
+        "in_flight",
+        "needs_you",
+      ]);
     }),
   ),
 );
