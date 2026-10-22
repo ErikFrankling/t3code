@@ -31,9 +31,12 @@ import { useGlobalVoiceInput } from "./VoiceInputProvider";
 import { resolveVoiceComposerPresentation } from "./voiceInputPresentation";
 
 const PILL_HEIGHT = 36;
-// An error is a sentence ("A recording was kept and not sent yet."): two lines.
+// An error is a sentence ("No speech was detected."): give it two lines.
 const ERROR_PILL_HEIGHT = 52;
 const COLLAPSED_WIDTH = 64;
+// Material's 16dp margin, as the New thread button: a pill flush with the edge
+// looked cut off.
+const EDGE_MARGIN = 16;
 const EXPANDED_MAX_WIDTH = 280;
 const IOS_BOTTOM_CHROME_CLEARANCE = 64;
 const MORPH_TIMING = {
@@ -47,9 +50,12 @@ export function GlobalVoiceInputControl(props: { readonly children: ReactNode })
   const voice = useGlobalVoiceInput();
   const [expanded, setExpanded] = useState(false);
   const presentation = resolveVoiceComposerPresentation(voice.state, voice.elapsedSeconds);
-  const visible =
-    presentation.statusLabel !== null &&
-    !(voice.ownerKey && voice.focusedOwners.has(voice.ownerKey));
+  // Hidden where a composer already shows it: the owning draft's, or, for a
+  // recording kept without one (the app was killed), any open composer.
+  const shownInComposer = voice.ownerKey
+    ? voice.focusedOwners.has(voice.ownerKey)
+    : voice.focusedOwners.size > 0;
+  const visible = presentation.statusLabel !== null && !shownInComposer;
   // A pill that reappears starts collapsed.
   if (!visible && expanded) setExpanded(false);
   const pill = visible ? (
@@ -127,10 +133,10 @@ function EdgeDictationPill(props: {
     >
       <Animated.View
         entering={ENTERING}
-        className="absolute rounded-l-full border border-r-0 border-border bg-card shadow-md shadow-black/10"
-        style={[{ bottom, right: insets.right, height }, pillStyle]}
+        className="absolute rounded-full border border-border bg-card shadow-md shadow-black/10"
+        style={[{ bottom, right: insets.right + EDGE_MARGIN, height }, pillStyle]}
       >
-        <View className="flex-1 overflow-hidden rounded-l-full">
+        <View className="flex-1 overflow-hidden rounded-full">
           <Animated.View
             accessibilityElementsHidden={expanded}
             importantForAccessibility={expanded ? "no-hide-descendants" : "auto"}
