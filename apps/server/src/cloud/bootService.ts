@@ -69,6 +69,15 @@ export function bootServiceBaseDirOf(contents: string): string | undefined {
   return plist === undefined ? undefined : unescapeXmlText(plist);
 }
 
+/**
+ * A unit that another tool (Nix, Ansible, ...) owns says so with
+ * `X-T3-Externally-Managed=true` in its [Unit] section. systemd ignores the key.
+ * T3 then never rewrites it; it only checks that the unit serves this home.
+ */
+export function bootServiceIsExternallyManaged(contents: string): boolean {
+  return /^X-T3-Externally-Managed=(?:true|yes|1)\s*$/im.test(contents);
+}
+
 /** The executable an installed unit or plist starts: the launcher's runtime. */
 export function bootServiceProgramOf(contents: string): string | undefined {
   const systemd = /^ExecStart=("(?:\\.|[^"\\])*"|\S+)/m.exec(contents)?.[1];
@@ -477,6 +486,8 @@ export interface BootServiceStatus {
   readonly current: boolean;
   readonly installedVersion?: string;
   readonly installedBaseDir?: string;
+  /** The unit is owned by another tool; `current` then only means "serves this home". */
+  readonly externallyManaged?: boolean;
   readonly problems?: ReadonlyArray<BootServiceProblem>;
   readonly unitPath: string;
   readonly logPath: string;
@@ -985,14 +996,19 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
     const problems: BootServiceProblem[] =
       detectedManager.kind === "systemd" ? [...(yield* readSystemdProblems(true))] : [];
     if (yield* fs.exists(restartPendingPath)) problems.push("restart-pending");
+    const externallyManaged = bootServiceIsExternallyManaged(unit);
     return {
       supported: true,
       installed: true,
       ...(installedVersion === undefined ? {} : { installedVersion }),
       ...(installedBaseDir === undefined ? {} : { installedBaseDir }),
+      ...(externallyManaged ? { externallyManaged } : {}),
       problems,
-      current:
-        problems.length === 0 &&
+      current: externallyManaged
+        ? problems.length === 0 &&
+          installedBaseDir !== undefined &&
+          path.resolve(installedBaseDir) === path.resolve(input.baseDir)
+        : problems.length === 0 &&
         normalizeUnit(unit) === normalizeUnit(detectedManager.render(plan)) &&
         runtimeEntryExists &&
         Option.isSome(runtimeSentinel) &&
