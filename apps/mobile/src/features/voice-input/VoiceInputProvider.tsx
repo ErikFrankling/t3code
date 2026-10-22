@@ -186,9 +186,8 @@ const voiceInputAtom = Atom.make((get) => {
     if (!newest) return;
     controller.adoptKeptRecording(
       newest.uri,
-      kept.length > 1
-        ? `${kept.length} recordings were kept and not sent yet.`
-        : "A recording was kept and not sent yet.",
+      // Short enough for two lines beside Retry, Save and the send button.
+      kept.length > 1 ? `${kept.length} recordings saved, not sent.` : "Recording saved, not sent.",
     );
   };
   offerKeptRecording();
