@@ -110,7 +110,12 @@ function parseUnblocks(json: string): ReadonlyArray<ThreadId> {
   return Option.getOrElse(decodeUnblocks(json), () => []);
 }
 
-const COMMITMENT_STATES: ReadonlyArray<CommitmentState> = ["open", "in_progress", "waiting", "done"];
+const COMMITMENT_STATES: ReadonlyArray<CommitmentState> = [
+  "open",
+  "in_progress",
+  "waiting",
+  "done",
+];
 
 function rowToItem(row: AttentionItemRow): AttentionItem {
   const priority: AttentionItemPriority =
@@ -170,7 +175,9 @@ export const layer = Layer.effect(
     const addColumn = (name: string, definition: string) =>
       columns.some((column) => column.name === name)
         ? Effect.void
-        : sql.unsafe(`ALTER TABLE attention_items ADD COLUMN ${name} ${definition}`).pipe(Effect.orDie);
+        : sql
+            .unsafe(`ALTER TABLE attention_items ADD COLUMN ${name} ${definition}`)
+            .pipe(Effect.orDie);
     yield* addColumn("kind", "TEXT NOT NULL DEFAULT 'needs_you'");
     yield* addColumn("state", "TEXT");
     yield* addColumn("owner_thread_id", "TEXT");
