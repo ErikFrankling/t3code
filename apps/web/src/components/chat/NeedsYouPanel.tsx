@@ -227,7 +227,13 @@ function ProofView({ environmentId, proof }: { environmentId: EnvironmentId; pro
 }
 
 /** A commitment the personal agent owns. Only the agent closes it, with proof. */
-function InFlightRow({ environmentId, item }: { environmentId: EnvironmentId; item: AttentionItem }) {
+function InFlightRow({
+  environmentId,
+  item,
+}: {
+  environmentId: EnvironmentId;
+  item: AttentionItem;
+}) {
   return (
     <li className="flex flex-col gap-1 rounded-lg px-1.5 py-2">
       <div className="flex flex-wrap items-center gap-1">
