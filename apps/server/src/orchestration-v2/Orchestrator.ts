@@ -1017,6 +1017,34 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
    * thread's own limited run) moves to a sibling that continues the same
    * native session. Null when no account can take it before the reset.
    */
+  /**
+   * A message queued before the thread moved to another account of the same
+   * provider (a switch or a failover) follows the thread there: it continues
+   * the same native session, and starting it on the old account would undo
+   * the switch or hit the limit the thread left behind.
+   */
+  const followThreadAccount = Effect.fn("Orchestrator.followThreadAccount")(function* (
+    projection: Pick<OrchestrationV2ThreadProjection, "thread">,
+    selection: ModelSelection,
+  ) {
+    const threadInstanceId = projection.thread.modelSelection.instanceId;
+    if (selection.instanceId === threadInstanceId) return selection;
+    const getMetadata = providerAdapters.getMetadata;
+    if (getMetadata === undefined) return selection;
+    const queued = yield* Effect.option(getMetadata(selection.instanceId));
+    const current = yield* Effect.option(getMetadata(threadInstanceId));
+    if (
+      Option.isNone(queued) ||
+      Option.isNone(current) ||
+      !current.value.enabled ||
+      queued.value.driver !== current.value.driver ||
+      queued.value.continuationKey !== current.value.continuationKey
+    ) {
+      return selection;
+    }
+    return { ...selection, instanceId: threadInstanceId };
+  });
+
   const routeQueuedRunAroundLimits = Effect.fn("Orchestrator.routeQueuedRunAroundLimits")(
     function* (
       projection: Pick<OrchestrationV2ThreadProjection, "runs" | "turnItems" | "providerSessions">,
@@ -1628,7 +1656,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       );
       const modelSelection = yield* routeQueuedRunAroundLimits(
         projection,
-        queuedRunModelSelection(projection, storedQueuedRun),
+        yield* followThreadAccount(
+          projection,
+          queuedRunModelSelection(projection, storedQueuedRun),
+        ),
       );
       // A limited provider with no sibling to continue on would fail and
       // consume every waiting message, so the queue waits for its reset.
