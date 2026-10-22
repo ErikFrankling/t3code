@@ -154,6 +154,26 @@ describe.skipIf(!hasFfmpeg)("submitRecording", () => {
     expect(held.get(id)).toMatchObject({ status: "complete", bytes: (frames.length - 3) * 2048 });
   });
 
+  it("transcribes a recording whose last block the phone never wrote (zeros after the audio)", async () => {
+    const directory = NodePath.join(root, "power-loss-zeros");
+    const id = newId();
+    // As found on the emulator after a power cut: whole frames, then zeros
+    // up to the file system's 4 KiB block.
+    const padded = new Uint8Array(Math.ceil((aac.byteLength + 1) / 4096) * 4096);
+    padded.set(aac);
+    await submitRecording({
+      directory,
+      owner: "erik",
+      id,
+      project: "",
+      audio: padded,
+      offset: 0,
+      final: true,
+    });
+
+    expect(held.get(id)).toMatchObject({ status: "complete", bytes: expectedBytes() });
+  });
+
   it("keeps the audio on disk as received, before passing it on", async () => {
     const directory = NodePath.join(root, "b");
     const id = newId();
