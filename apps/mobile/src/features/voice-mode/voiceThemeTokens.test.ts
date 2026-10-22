@@ -71,16 +71,14 @@ describe("voice and read-aloud surfaces follow the app theme", () => {
 });
 
 describe("full-screen surfaces in their own window", () => {
-  // A Modal is a separate Android window: the status bar style set in App.tsx
-  // does not reach it, and on the light theme its icons were white on white.
-  it("the dictation screen sets the status bar from the theme", () => {
+  // A Modal is a separate Android window that copies the app's status bar style
+  // only when it opens: after a theme change its icons were white on white.
+  it("the dictation screen opens a new window when the theme changes", () => {
     const source = NodeFs.readFileSync(
       NodePath.join(src, "features/voice-input/DictationScreen.tsx"),
       "utf8",
     );
-    expect(source).toMatch(
-      /<StatusBar barStyle=\{themeAppearance === "dark" \? "light-content" : "dark-content"\} \/>/,
-    );
+    expect(source).toMatch(/<Modal\s+key=\{themeAppearance\}/);
   });
 });
 
