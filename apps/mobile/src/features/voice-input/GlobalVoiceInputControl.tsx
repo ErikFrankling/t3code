@@ -1,6 +1,13 @@
 import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { Linking, Platform, Pressable, useWindowDimensions, View } from "react-native";
+import {
+  Linking,
+  Platform,
+  Pressable,
+  useWindowDimensions,
+  View,
+  type ViewInstance,
+} from "react-native";
 import Animated, {
   Easing,
   Extrapolation,
@@ -19,10 +26,13 @@ import { SymbolView } from "../../components/ui/AppSymbol";
 import { useAndroidControlSizing } from "../../components/ui/useAndroidControlSizing";
 import { cn } from "../../lib/cn";
 import { CompactVoiceWaveform, DictationElapsedTime } from "./ComposerDictationControl";
+import { pillBottomAbove, useFloatingButtonTop } from "./floatingClearance";
 import { useGlobalVoiceInput } from "./VoiceInputProvider";
 import { resolveVoiceComposerPresentation } from "./voiceInputPresentation";
 
 const PILL_HEIGHT = 36;
+// An error is a sentence ("A recording was kept and not sent yet."): two lines.
+const ERROR_PILL_HEIGHT = 52;
 const COLLAPSED_WIDTH = 64;
 const EXPANDED_MAX_WIDTH = 280;
 const IOS_BOTTOM_CHROME_CLEARANCE = 64;
@@ -63,6 +73,9 @@ function EdgeDictationPill(props: { readonly collapseRef: RefObject<(() => void)
   const { width } = useWindowDimensions();
   const { fabSize } = useAndroidControlSizing();
   const [expanded, setExpanded] = useState(false);
+  const buttonTop = useFloatingButtonTop();
+  const containerRef = useRef<ViewInstance>(null);
+  const [containerBottom, setContainerBottom] = useState<number | null>(null);
   const progress = useSharedValue(0);
   useEffect(() => {
     progress.value = withTiming(expanded ? 1 : 0, MORPH_TIMING);
@@ -87,23 +100,39 @@ function EdgeDictationPill(props: { readonly collapseRef: RefObject<(() => void)
     opacity: interpolate(progress.value, [0.3, 1], [0, 1], Extrapolation.CLAMP),
   }));
 
-  const bottom =
+  const fixedBottom =
     Platform.OS === "android"
       ? Math.max(insets.bottom, 16) + 16 + fabSize + 12
       : Math.max(insets.bottom, 12) + IOS_BOTTOM_CHROME_CLEARANCE;
+  // On Android the New thread button floats above the tab bar, higher than the
+  // fixed offset assumes; stay above where it actually is.
+  const bottom =
+    containerBottom === null
+      ? fixedBottom
+      : pillBottomAbove(buttonTop, containerBottom, fixedBottom);
 
   const presentation = resolveVoiceComposerPresentation(voice.state, voice.elapsedSeconds);
   const phase = voice.state.phase;
   const isError = phase === "error";
   const openSettings = isError && voice.state.errorAction === "settings";
   const label = voice.label ?? "Draft";
+  const height = isError && expanded ? ERROR_PILL_HEIGHT : PILL_HEIGHT;
 
   return (
-    <View pointerEvents="box-none" className="absolute inset-0">
+    <View
+      ref={containerRef}
+      pointerEvents="box-none"
+      className="absolute inset-0"
+      onLayout={() =>
+        containerRef.current?.measureInWindow((_x, y, _width, measured) =>
+          setContainerBottom(y + measured),
+        )
+      }
+    >
       <Animated.View
         entering={ENTERING}
         className="absolute rounded-l-full border border-r-0 border-border bg-card shadow-md shadow-black/10"
-        style={[{ bottom, right: insets.right, height: PILL_HEIGHT }, pillStyle]}
+        style={[{ bottom, right: insets.right, height }, pillStyle]}
       >
         <View className="flex-1 overflow-hidden rounded-l-full">
           <Animated.View
@@ -174,7 +203,7 @@ function EdgeDictationPill(props: { readonly collapseRef: RefObject<(() => void)
                   "text-xs",
                   isError ? "text-danger-foreground" : "font-t3-medium text-foreground",
                 )}
-                numberOfLines={1}
+                numberOfLines={isError ? 2 : 1}
               >
                 {isError ? presentation.statusLabel : label}
               </Text>

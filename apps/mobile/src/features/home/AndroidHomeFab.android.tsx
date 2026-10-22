@@ -1,9 +1,10 @@
-import { useCallback, useRef, useState, type ComponentProps } from "react";
+import { useCallback, useEffect, useRef, useState, type ComponentProps } from "react";
 import {
   useWindowDimensions,
   View,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  type ViewInstance,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { NewThreadButton } from "../../components/NewThreadButton";
@@ -15,6 +16,7 @@ import { useWorkspaceState } from "../../state/workspace";
 import { FabScrollContext } from "./FabScrollContext";
 import { updateFabScroll } from "./fab-scroll";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
+import { setFloatingButtonTop } from "../voice-input/floatingClearance";
 
 export function AndroidHomeFabLayout(props: ComponentProps<typeof SharedAndroidHomeFabLayout>) {
   const insets = useSafeAreaInsets();
@@ -24,6 +26,13 @@ export function AndroidHomeFabLayout(props: ComponentProps<typeof SharedAndroidH
   const { state } = useWorkspaceState();
   const [expanded, setExpanded] = useState(true);
   const scrollState = useRef({ anchor: 0, expanded: true });
+  const fabRef = useRef<ViewInstance>(null);
+  const showsFab =
+    !props.disabled && !props.sidebar && state.hasConnections && layoutWidth !== null;
+  useEffect(() => {
+    if (!showsFab) setFloatingButtonTop(null);
+    return () => setFloatingButtonTop(null);
+  }, [showsFab]);
   const onScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
     const next = updateFabScroll(
@@ -41,15 +50,21 @@ export function AndroidHomeFabLayout(props: ComponentProps<typeof SharedAndroidH
   return (
     <View className="flex-1" onLayout={(event) => setLayoutWidth(event.nativeEvent.layout.width)}>
       <FabScrollContext value={onScroll}>{props.children}</FabScrollContext>
-      {!props.disabled && !props.sidebar && state.hasConnections && layoutWidth !== null ? (
-        <NewThreadButton
-          key={`${appearance.baseFontSize}:${fontScale}:${layoutWidth}`}
-          extended
-          expanded={expanded}
-          onPress={props.onStartNewTask}
+      {showsFab ? (
+        // The wrapper reports where the button is, so the dictation pill stays above it.
+        <View
+          ref={fabRef}
           className="absolute"
           style={androidHomeFabPosition(insets.bottom, props.sidebar)}
-        />
+          onLayout={() => fabRef.current?.measureInWindow((_x, y) => setFloatingButtonTop(y))}
+        >
+          <NewThreadButton
+            key={`${appearance.baseFontSize}:${fontScale}:${layoutWidth}`}
+            extended
+            expanded={expanded}
+            onPress={props.onStartNewTask}
+          />
+        </View>
       ) : null}
     </View>
   );
