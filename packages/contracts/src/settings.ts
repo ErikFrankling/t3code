@@ -652,29 +652,12 @@ export const IDLE_COMPACTION_MODES = [
 export const IdleCompactionMode = Schema.Literals(IDLE_COMPACTION_MODES.map((mode) => mode.value));
 export type IdleCompactionMode = typeof IdleCompactionMode.Type;
 
-// `compactIdleThreads` is the beta on/off switch for compacting before the cache
-// expires. It stays a boolean on the wire: installed apps decode the server's
-// settings with it typed as one, and a mode string there made them fail to
-// connect at all. The mode lives in `idleCompactionMode`; a server that briefly
-// stored a mode string under the old key still reads it.
-const CompactIdleThreadsSetting = Schema.Union([
-  Schema.Boolean,
-  IdleCompactionMode.pipe(
-    Schema.decodeTo(
-      Schema.Boolean,
-      SchemaTransformation.transform({
-        decode: (mode) => mode === "beforeCacheExpires",
-        encode: (enabled): IdleCompactionMode => (enabled ? "beforeCacheExpires" : "onReturn"),
-      }),
-    ),
-  ),
-]);
-
-/** The global idle-compaction mode, falling back to the legacy on/off switch. */
-export const idleCompactionMode = (
-  settings: Pick<ServerSettings, "compactIdleThreads" | "idleCompactionMode">,
-): IdleCompactionMode =>
-  settings.idleCompactionMode ?? (settings.compactIdleThreads ? "beforeCacheExpires" : "onReturn");
+// `compactIdleThreads` was a beta on/off switch for compacting before the cache
+// expires. Shipped clients decode it as a boolean and drop the whole server config
+// otherwise, so it stays a boolean on the wire and the mode lives in
+// `idleCompaction`. Servers before that split sent the mode here, so a string is
+// still read.
+const LegacyCompactIdleThreads = Schema.Union([Schema.Boolean, IdleCompactionMode]);
 
 const INSTANCE_IDLE_COMPACTION_MODES = [
   { value: "default", label: "Use default" },
@@ -1230,10 +1213,10 @@ export const ServerSettings = Schema.Struct({
   sidebarAutoSettleAfterDays: Schema.NullOr(SidebarAutoSettleAfterDays).pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_AUTO_SETTLE_AFTER_DAYS)),
   ),
-  compactIdleThreads: CompactIdleThreadsSetting.pipe(
+  compactIdleThreads: LegacyCompactIdleThreads.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
-  idleCompactionMode: Schema.optionalKey(IdleCompactionMode),
+  idleCompaction: Schema.optionalKey(IdleCompactionMode),
   snoozeLimitedThreads: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   autoResumeLimitedThreads: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   sidebarAutoSettleKeepPullRequests: Schema.Boolean.pipe(
@@ -1409,8 +1392,41 @@ export const resolveProjectProviderInstanceEnabled = (
 
 const decodeClaudeSettings = Schema.decodeUnknownOption(ClaudeSettings);
 
+type IdleCompactionSettings = Pick<ServerSettings, "compactIdleThreads" | "idleCompaction">;
+
+/** The environment-wide idle compaction mode, from whichever field the settings carry. */
+export const globalIdleCompaction = (settings: IdleCompactionSettings): IdleCompactionMode =>
+  settings.idleCompaction ??
+  (typeof settings.compactIdleThreads === "string"
+    ? settings.compactIdleThreads
+    : settings.compactIdleThreads
+      ? "beforeCacheExpires"
+      : "onReturn");
+
+/** Sets the mode, and the legacy switch shipped clients still read alongside it. */
+export const withIdleCompaction = <S extends IdleCompactionSettings>(
+  settings: S,
+  mode: IdleCompactionMode,
+): S => ({ ...settings, idleCompaction: mode, compactIdleThreads: mode === "beforeCacheExpires" });
+
+/** Whether a server reads modes, rather than only the boolean switch from before them. */
+export const readsIdleCompactionModes = (settings: IdleCompactionSettings) =>
+  settings.idleCompaction !== undefined || typeof settings.compactIdleThreads === "string";
+
+/**
+ * The patch that sets `mode` in the form the server's settings show it reads:
+ * the mode for a server that has `idleCompaction` or kept the mode in the legacy
+ * field, the boolean switch for a server from before modes.
+ */
+export const idleCompactionPatch = (settings: IdleCompactionSettings, mode: IdleCompactionMode) =>
+  settings.idleCompaction !== undefined
+    ? { idleCompaction: mode }
+    : readsIdleCompactionModes(settings)
+      ? { compactIdleThreads: mode }
+      : { compactIdleThreads: mode === "beforeCacheExpires" };
+
 export const resolveIdleCompaction = (
-  settings: Pick<ServerSettings, "providerInstances" | "compactIdleThreads" | "idleCompactionMode">,
+  settings: Pick<ServerSettings, "providerInstances" | "compactIdleThreads" | "idleCompaction">,
   instanceId: ProviderInstanceId,
 ): IdleCompactionMode => {
   const instance = Object.hasOwn(settings.providerInstances, instanceId)
@@ -1420,7 +1436,7 @@ export const resolveIdleCompaction = (
     Option.map((config) => config.idleCompaction),
     Option.getOrElse(() => "default" as const),
   );
-  return override === "default" ? idleCompactionMode(settings) : override;
+  return override === "default" ? globalIdleCompaction(settings) : override;
 };
 
 export const ServerSettingsOperation = Schema.Literals([
@@ -1564,8 +1580,8 @@ export const ServerSettingsPatch = Schema.Struct({
   deviceHosts: Schema.optionalKey(SshDeviceHostConfigs),
   easDeviceHosts: Schema.optionalKey(EasDeviceHostConfigs),
   sidebarAutoSettleAfterDays: Schema.optionalKey(Schema.NullOr(SidebarAutoSettleAfterDays)),
-  compactIdleThreads: Schema.optionalKey(Schema.Boolean),
-  idleCompactionMode: Schema.optionalKey(IdleCompactionMode),
+  compactIdleThreads: Schema.optionalKey(LegacyCompactIdleThreads),
+  idleCompaction: Schema.optionalKey(IdleCompactionMode),
   sidebarAutoSettleKeepPullRequests: Schema.optionalKey(Schema.Boolean),
   sidebarAutoSettleOnMerge: Schema.optionalKey(Schema.Boolean),
   autoResumeLimitedThreads: Schema.optionalKey(Schema.Boolean),

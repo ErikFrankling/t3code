@@ -9,13 +9,15 @@ import {
   ClientSettingsPatch,
   ClaudeSettings,
   DEFAULT_SERVER_SETTINGS,
-  idleCompactionMode,
+  globalIdleCompaction,
+  idleCompactionPatch,
   requiredScopesForProjectMutation,
   resolveIdleCompaction,
   resolveProjectProviderInstanceEnabled,
   resolveProviderInstanceEnabled,
   ServerSettings,
   ServerSettingsPatch,
+  withIdleCompaction,
 } from "./settings.ts";
 
 const decodeClientSettings = Schema.decodeUnknownSync(ClientSettingsSchema);
@@ -148,7 +150,7 @@ describe("ClaudeSettings shared sessions", () => {
 describe("resolveIdleCompaction", () => {
   it("lets a Claude instance override the global default", () => {
     const settings = decodeServerSettings({
-      idleCompactionMode: "off",
+      idleCompaction: "off",
       providerInstances: {
         claude_work: { driver: "claudeAgent", config: { idleCompaction: "onReturn" } },
         claude_personal: { driver: "claudeAgent" },
@@ -161,66 +163,38 @@ describe("resolveIdleCompaction", () => {
     expect(resolveIdleCompaction(settings, ProviderInstanceId.make("claudeAgent"))).toBe("off");
   });
 
-  it("keeps the legacy beta switch's behavior", () => {
-    expect(idleCompactionMode(decodeServerSettings({ compactIdleThreads: true }))).toBe(
+  it("reads the mode from the legacy switch, in either form servers saved it", () => {
+    expect(globalIdleCompaction(decodeServerSettings({ compactIdleThreads: true }))).toBe(
       "beforeCacheExpires",
     );
-    expect(idleCompactionMode(decodeServerSettings({}))).toBe("onReturn");
-    // A server stored a mode string under the old key for a day; it still reads.
-    expect(decodeServerSettings({ compactIdleThreads: "beforeCacheExpires" })).toMatchObject({
+    expect(globalIdleCompaction(decodeServerSettings({ compactIdleThreads: "off" }))).toBe("off");
+    expect(globalIdleCompaction(decodeServerSettings({}))).toBe("onReturn");
+  });
+
+  it("keeps the legacy switch a boolean, as shipped clients decode it", () => {
+    const encode = Schema.encodeSync(Schema.toCodecJson(ServerSettings));
+    for (const mode of ["onReturn", "beforeCacheExpires", "off"] as const) {
+      const encoded = encode(withIdleCompaction(DEFAULT_SERVER_SETTINGS, mode)) as {
+        readonly compactIdleThreads: unknown;
+        readonly idleCompaction: unknown;
+      };
+      expect(encoded.compactIdleThreads).toBe(mode === "beforeCacheExpires");
+      expect(encoded.idleCompaction).toBe(mode);
+    }
+  });
+
+  it("patches the field the server reads", () => {
+    expect(
+      idleCompactionPatch({ compactIdleThreads: false, idleCompaction: "onReturn" }, "off"),
+    ).toEqual({
+      idleCompaction: "off",
+    });
+    expect(idleCompactionPatch({ compactIdleThreads: "onReturn" }, "off")).toEqual({
+      compactIdleThreads: "off",
+    });
+    expect(idleCompactionPatch({ compactIdleThreads: false }, "beforeCacheExpires")).toEqual({
       compactIdleThreads: true,
     });
-  });
-});
-
-/**
- * The JSON shape of a value, for comparing what the server sends with what an
- * installed app expects: records of arbitrary keys are compared by their values.
- */
-function wireShape(value: unknown): unknown {
-  if (value === null) return "null";
-  if (Array.isArray(value)) return value.length === 0 ? [] : [wireShape(value[0])];
-  if (typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([key, field]) => [
-        key,
-        wireShape(field),
-      ]),
-    );
-  }
-  return typeof value;
-}
-
-describe("server settings stay readable by installed apps", () => {
-  // The server's settings exactly as the phone app at aa7275c (Erik's installed
-  // build, 2026-10-21) received them. That app decodes every key it knows with
-  // its own types, and one mismatch fails the whole connection: when
-  // `compactIdleThreads` became a string, the installed app could not connect
-  // at all. New keys are fine (old apps ignore them); an existing key must keep
-  // its JSON type. Move this fixture forward only once no installed app is older.
-  const installed = INSTALLED_APP_SERVER_SETTINGS;
-
-  it("sends every key the installed app knows with the same JSON type", () => {
-    const current = Schema.encodeSync(ServerSettings)(DEFAULT_SERVER_SETTINGS) as Record<
-      string,
-      unknown
-    >;
-    for (const [key, value] of Object.entries(installed)) {
-      if (!(key in current)) continue;
-      expect({ key, shape: wireShape(current[key]) }).toEqual({ key, shape: wireShape(value) });
-    }
-  });
-
-  it("keeps compactIdleThreads a boolean whatever the mode", () => {
-    for (const mode of ["onReturn", "beforeCacheExpires", "off"] as const) {
-      const settings = decodeServerSettings({
-        idleCompactionMode: mode,
-        compactIdleThreads: mode === "beforeCacheExpires",
-      });
-      const encoded = Schema.encodeSync(ServerSettings)(settings) as Record<string, unknown>;
-      expect(typeof encoded.compactIdleThreads).toBe("boolean");
-      expect(idleCompactionMode(settings)).toBe(mode);
-    }
   });
 });
 
@@ -403,5 +377,53 @@ describe("server model preferences", () => {
     const input = { favorites: [], providerModelPreferences: {} };
     expect(encodeServerSettings(decodeServerSettings(input))).toMatchObject(input);
     expect(decodeServerSettingsPatch(input)).toEqual(input);
+  });
+});
+
+/**
+ * The JSON shape of a value, for comparing what the server sends with what an
+ * installed app expects: records of arbitrary keys are compared by their values.
+ */
+function wireShape(value: unknown): unknown {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return value.length === 0 ? [] : [wireShape(value[0])];
+  if (typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, field]) => [
+        key,
+        wireShape(field),
+      ]),
+    );
+  }
+  return typeof value;
+}
+
+describe("server settings stay readable by installed apps", () => {
+  // The server's settings exactly as the phone app at aa7275c (Erik's installed
+  // build, 2026-10-21) received them. That app decodes every key it knows with
+  // its own types, and one mismatch fails the whole connection: when
+  // `compactIdleThreads` became a string, the installed app could not connect
+  // at all. New keys are fine (old apps ignore them); an existing key must keep
+  // its JSON type. Move this fixture forward only once no installed app is older.
+  const installed = INSTALLED_APP_SERVER_SETTINGS;
+
+  it("sends every key the installed app knows with the same JSON type", () => {
+    const current = Schema.encodeSync(ServerSettings)(DEFAULT_SERVER_SETTINGS) as Record<
+      string,
+      unknown
+    >;
+    for (const [key, value] of Object.entries(installed)) {
+      if (!(key in current)) continue;
+      expect({ key, shape: wireShape(current[key]) }).toEqual({ key, shape: wireShape(value) });
+    }
+  });
+
+  it("keeps compactIdleThreads a boolean whatever the mode", () => {
+    for (const mode of ["onReturn", "beforeCacheExpires", "off"] as const) {
+      const settings = withIdleCompaction(DEFAULT_SERVER_SETTINGS, mode);
+      const encoded = Schema.encodeSync(ServerSettings)(settings) as Record<string, unknown>;
+      expect(typeof encoded.compactIdleThreads).toBe("boolean");
+      expect(globalIdleCompaction(settings)).toBe(mode);
+    }
   });
 });
