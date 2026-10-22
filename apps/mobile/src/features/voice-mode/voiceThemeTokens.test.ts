@@ -78,7 +78,8 @@ describe("full-screen surfaces in their own window", () => {
       NodePath.join(src, "features/voice-input/DictationScreen.tsx"),
       "utf8",
     );
-    expect(source).toMatch(/<Modal\s+key=\{themeAppearance\}/);
+    expect(source).toMatch(/<Modal\s+key=\{windowTheme\}/);
+    expect(source).toMatch(/StatusBar\.setBarStyle\(/);
   });
 });
 
