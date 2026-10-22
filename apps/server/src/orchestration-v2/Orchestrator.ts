@@ -2346,6 +2346,16 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
   // Claude forwards some requests to T3 even under bypass (writes outside the
   // working directory, ask rules); full access means nobody is there to answer.
   const FULL_ACCESS_APPROVAL_GRACE_MS = 30_000;
+  // The sweep runs every few seconds; a stuck item is reported once, then
+  // again only after this long, so the log stays readable.
+  const QUEUE_WATCHDOG_REPORT_EVERY_MS = 30 * 60_000;
+  const stuckReportedAt = new Map<string, number>();
+  const shouldReportStuck = (key: string, nowMs: number) => {
+    const last = stuckReportedAt.get(key);
+    if (last !== undefined && nowMs - last < QUEUE_WATCHDOG_REPORT_EVERY_MS) return false;
+    stuckReportedAt.set(key, nowMs);
+    return true;
+  };
   /**
    * An approval left pending in a full-access thread blocks an unattended
    * turn for hours; the watchdog accepts it, as full access promises.
@@ -2386,7 +2396,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               requestId: request.id,
               decision: "accept",
             });
-          } else {
+          } else if (shouldReportStuck(`request:${request.id}`, nowMs)) {
             yield* Effect.logWarning("orchestration-v2.queue-watchdog.stuck-request", {
               threadId,
               requestId: request.id,
@@ -2452,7 +2462,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
                   : min,
               );
               const waitingMs = nowMs - DateTime.toEpochMillis(oldest.requestedAt);
-              if (waitingMs >= QUEUE_WATCHDOG_STUCK_MS) {
+              if (
+                waitingMs >= QUEUE_WATCHDOG_STUCK_MS &&
+                shouldReportStuck(`queue:${oldest.id}`, nowMs)
+              ) {
                 yield* Effect.logWarning("orchestration-v2.queue-watchdog.stuck-queue", {
                   threadId,
                   runId: oldest.id,
