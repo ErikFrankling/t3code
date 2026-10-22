@@ -69,6 +69,7 @@ export type VoiceInputControllerDependencies = {
 };
 
 // Waits between automatic retries of a failed recording; the last repeats.
+const AUTO_RETRY_NOTICE = "Saved, retrying by itself.";
 const AUTO_RETRY_MS = [5_000, 15_000, 30_000, 60_000, 120_000] as const;
 
 type TranscriptCommitResult =
@@ -568,8 +569,9 @@ export class VoiceInputController {
     if (this.autoRetries === 0) this.retryOwner = this.dependencies.readDraft()?.ownerKey ?? null;
     const delay = AUTO_RETRY_MS[Math.min(this.autoRetries, AUTO_RETRY_MS.length - 1)]!;
     this.autoRetries++;
+    // Short: it shares the composer row with Retry, Save and the send button.
     if (this.state.phase === "error" && this.state.error) {
-      this.setState({ ...this.state, error: `${this.state.error} Trying again by itself.` });
+      this.setState({ ...this.state, error: AUTO_RETRY_NOTICE });
     }
     this.cancelAutoRetry = setTimer(() => {
       this.cancelAutoRetry = null;
