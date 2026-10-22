@@ -16,8 +16,12 @@ export type VoiceDictationTarget = {
   readonly send?: (recording: DictatedMessage) => Promise<boolean>;
 };
 
+/**
+ * The composer dictating now. Its connection is read when needed, so a recording
+ * started offline uploads once the phone is back online.
+ */
 export type ResolveDictationConnection = () => {
-  readonly connection: PreparedConnection;
+  readonly connection: () => PreparedConnection | null;
   readonly target: VoiceDictationTarget;
 } | null;
 
