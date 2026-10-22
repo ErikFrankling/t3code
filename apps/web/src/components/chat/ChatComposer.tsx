@@ -2744,6 +2744,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     return inserted;
   };
   const insertComposerTextAtEndStable = useStableCallback(insertComposerTextAtEnd);
+  const insertDictationStable = useStableCallback((text: string) =>
+    insertComposerTextAtEnd(text, { ensureLeadingBoundary: true }),
+  );
 
   const insertComposerFolders = async (
     folders: File[],
@@ -3817,8 +3820,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     environmentId={environmentId}
                     target={composerDraftTargetKey}
                     project={gitCwd}
+                    threadId={activeThreadId}
                     onBusyChange={setDictationBusy}
                     onSend={onDictationSend}
+                    onInsert={insertDictationStable}
                   />
                   <ComposerFooterPrimaryActions
                     // Stop state belongs to one thread; the composer stays mounted across threads.
