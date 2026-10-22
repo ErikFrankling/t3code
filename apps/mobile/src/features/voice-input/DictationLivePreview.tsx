@@ -1,5 +1,5 @@
 import { useRef, type ComponentRef } from "react";
-import { ScrollView, View } from "react-native";
+import { ScrollView, useWindowDimensions, View } from "react-native";
 
 import { AppText as Text } from "../../components/ui/AppText";
 import { useDictationPreview } from "./dictationPreview";
@@ -7,7 +7,8 @@ import { useDictationPreview } from "./dictationPreview";
 const STATUS = {
   listening: "Listening",
   refining: "Finishing the transcript",
-  sent: "Sent. It goes to the chat when the transcript is final; you can leave.",
+  // Not shown any more: sending closes the panel (the chat shows the message).
+  sent: "Sent",
 } as const;
 
 function PreviewField(props: {
@@ -16,16 +17,19 @@ function PreviewField(props: {
   readonly placeholder: string;
 }) {
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  // Large enough to read at a glance while talking; each field takes up to
+  // about a quarter of the screen and scrolls to the newest words.
+  const { height } = useWindowDimensions();
   return (
     <View className="flex-1">
-      <Text className="mb-1 font-t3-medium text-xs text-foreground-secondary">{props.label}</Text>
+      <Text className="mb-1 font-t3-medium text-sm text-foreground-secondary">{props.label}</Text>
       <ScrollView
         ref={scrollRef}
-        style={{ maxHeight: 120 }}
+        style={{ maxHeight: Math.round(height * 0.28) }}
         onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
       >
         <Text
-          className={props.text ? "text-sm text-foreground" : "text-sm text-foreground-secondary"}
+          className={props.text ? "text-xl text-foreground" : "text-xl text-foreground-secondary"}
         >
           {props.text || props.placeholder}
         </Text>
@@ -53,7 +57,7 @@ export function DictationLivePreview(props: { readonly ownerKey: string | null }
           }
         />
       </View>
-      <Text className="text-xs text-foreground-secondary">{STATUS[preview.phase]}</Text>
+      <Text className="text-sm text-foreground-secondary">{STATUS[preview.phase]}</Text>
     </View>
   );
 }
