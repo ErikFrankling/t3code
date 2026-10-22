@@ -134,6 +134,26 @@ describe.skipIf(!hasFfmpeg)("submitRecording", () => {
     expect(held.get(id)).toMatchObject({ status: "complete", bytes: expectedBytes() });
   });
 
+  it("transcribes a recording cut off mid-frame (the phone lost power) up to its last whole frame", async () => {
+    const directory = NodePath.join(root, "power-loss");
+    const id = newId();
+    const { frames } = adtsFrames(aac);
+    // The file ends 100 bytes into a frame, as the phone left it when it died.
+    const cut = aac.subarray(0, frames[frames.length - 3]! + 100);
+    await submitRecording({
+      directory,
+      owner: "erik",
+      id,
+      project: "",
+      audio: cut,
+      offset: 0,
+      final: true,
+    });
+
+    expect(adtsFrames(cut).frames).toHaveLength(frames.length - 3);
+    expect(held.get(id)).toMatchObject({ status: "complete", bytes: (frames.length - 3) * 2048 });
+  });
+
   it("keeps the audio on disk as received, before passing it on", async () => {
     const directory = NodePath.join(root, "b");
     const id = newId();
