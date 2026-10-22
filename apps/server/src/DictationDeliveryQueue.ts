@@ -106,22 +106,9 @@ export class DictationDeliveryQueue {
           throw new Error("Invalid delivery checkpoint");
         }
         this.jobs.set(this.key(job.owner, job.id), job);
-        // A message the chat kept rejecting must not appear out of the blue
-        // days later, after a restart happens to clear the cause. The
-        // transcript stays in the checkpoint.
-        if (
-          job.status === "ready" &&
-          job.error &&
-          Date.now() - Date.parse(job.queuedAt) > 24 * 3600_000
-        ) {
-          job.status = "abandoned";
-          await this.save(job);
-          this.deps.log("dictation.abandoned", {
-            recordingId: job.id,
-            threadId: dictationTurnThreadId(job.turn),
-            error: job.error,
-          });
-        }
+        // Voice input is never given up on: a delivery keeps retrying until it
+        // lands, however long that takes. Checkpoints marked "abandoned" by
+        // older versions stay as they are, with their transcript.
         this.launch(job);
       } catch (error) {
         this.deps.log("dictation.checkpoint_failed", { file: name, error: String(error) });
