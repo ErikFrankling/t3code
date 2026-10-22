@@ -1575,7 +1575,6 @@ export default function ChatView(props: ChatViewProps) {
     entry.kind === "message" ? [entry.message] : [],
   );
   const timelineEmpty = timelineEntries.length === 0 && !hasStreamedTimelineRows;
-  const displayedTimelineKey = activeThreadKey ?? routeThreadKey;
   const latestReadAloudMessage = (() => {
     const message = timelineMessages.findLast(
       (candidate) => candidate.role === "assistant" && !candidate.streaming && candidate.text,
