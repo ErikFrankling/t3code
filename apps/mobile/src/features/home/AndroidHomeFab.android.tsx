@@ -17,6 +17,7 @@ import { FabScrollContext } from "./FabScrollContext";
 import { updateFabScroll } from "./fab-scroll";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import { setFloatingButtonTop } from "../voice-input/floatingClearance";
+import { useAndroidControlSizing } from "../../components/ui/useAndroidControlSizing";
 
 export function AndroidHomeFabLayout(props: ComponentProps<typeof SharedAndroidHomeFabLayout>) {
   const insets = useSafeAreaInsets();
@@ -26,13 +27,19 @@ export function AndroidHomeFabLayout(props: ComponentProps<typeof SharedAndroidH
   const { state } = useWorkspaceState();
   const [expanded, setExpanded] = useState(true);
   const scrollState = useRef({ anchor: 0, expanded: true });
-  const fabRef = useRef<ViewInstance>(null);
+  const { fabSize } = useAndroidControlSizing();
+  const containerRef = useRef<ViewInstance>(null);
+  const [containerBottom, setContainerBottom] = useState<number | null>(null);
   const showsFab =
     !props.disabled && !props.sidebar && state.hasConnections && layoutWidth !== null;
+  const fabPosition = androidHomeFabPosition(insets.bottom, props.sidebar);
+  // Where the button starts in the window, so the dictation pill stays above it.
+  const fabTop =
+    showsFab && containerBottom !== null ? containerBottom - fabPosition.bottom - fabSize : null;
   useEffect(() => {
-    if (!showsFab) setFloatingButtonTop(null);
+    setFloatingButtonTop(fabTop);
     return () => setFloatingButtonTop(null);
-  }, [showsFab]);
+  }, [fabTop]);
   const onScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
     const next = updateFabScroll(
@@ -48,23 +55,28 @@ export function AndroidHomeFabLayout(props: ComponentProps<typeof SharedAndroidH
   // The split-view sidebar has no FAB: the navigation rail carries New thread. On phones it
   // keeps Material's 16dp corner margin; the bottom bar already consumes the gesture inset.
   return (
-    <View className="flex-1" onLayout={(event) => setLayoutWidth(event.nativeEvent.layout.width)}>
+    <View
+      ref={containerRef}
+      className="flex-1"
+      onLayout={(event) => {
+        setLayoutWidth(event.nativeEvent.layout.width);
+        // Measured here, not on the button: the native button has no size of its
+        // own inside a wrapper and vanishes.
+        containerRef.current?.measureInWindow((_x, y, _width, height) =>
+          setContainerBottom(y + height),
+        );
+      }}
+    >
       <FabScrollContext value={onScroll}>{props.children}</FabScrollContext>
       {showsFab ? (
-        // The wrapper reports where the button is, so the dictation pill stays above it.
-        <View
-          ref={fabRef}
+        <NewThreadButton
+          key={`${appearance.baseFontSize}:${fontScale}:${layoutWidth}`}
+          extended
+          expanded={expanded}
+          onPress={props.onStartNewTask}
           className="absolute"
-          style={androidHomeFabPosition(insets.bottom, props.sidebar)}
-          onLayout={() => fabRef.current?.measureInWindow((_x, y) => setFloatingButtonTop(y))}
-        >
-          <NewThreadButton
-            key={`${appearance.baseFontSize}:${fontScale}:${layoutWidth}`}
-            extended
-            expanded={expanded}
-            onPress={props.onStartNewTask}
-          />
-        </View>
+          style={fabPosition}
+        />
       ) : null}
     </View>
   );
