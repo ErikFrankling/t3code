@@ -13,6 +13,8 @@ export interface NativeVoiceRecorder<TStatus, TRecorderState> {
   prepareToRecordAsync(): Promise<void>;
   record(): void;
   stop(): Promise<void>;
+  /** expo-audio's recorder holds with pause() and continues the same file with record(). */
+  pause?(): void;
   getStatus(): TRecorderState;
   addListener(
     eventName: "recordingStatusUpdate",
@@ -72,6 +74,13 @@ export function createLazyVoiceRecorder<TStatus, TRecorderState>(input: {
     },
     stop() {
       return recorder ? track(recorder.stop()) : Promise.resolve();
+    },
+    pause() {
+      recorder?.pause?.();
+    },
+    resume() {
+      // Recording again continues the same file (AAC frames append).
+      if (recorder?.pause) recorder.record();
     },
     getStatus() {
       return recorder ? recorder.getStatus() : null;
