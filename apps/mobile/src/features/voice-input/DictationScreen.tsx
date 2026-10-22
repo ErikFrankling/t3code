@@ -1,11 +1,12 @@
 import { useEffect, useRef, useSyncExternalStore, type ComponentRef } from "react";
-import { Modal, Pressable, ScrollView, View } from "react-native";
+import { Modal, Pressable, ScrollView, StatusBar, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText as Text } from "../../components/ui/AppText";
 import { SymbolView, type AppSymbolName } from "../../components/ui/AppSymbol";
 import * as Dialog from "../../components/ui/Dialog";
 import { voiceCall } from "../../native/voiceCall";
+import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import { DictationElapsedTime } from "./ComposerDictationControl";
 import { useDictationPreview } from "./dictationPreview";
 import type { useVoiceInputController } from "./useVoiceInputController";
@@ -52,6 +53,7 @@ function DictationView(props: {
   readonly voiceInput: VoiceInput;
 }) {
   const insets = useSafeAreaInsets();
+  const { themeAppearance } = useAppearancePreferences();
   const voice = props.voiceInput;
   const preview = useDictationPreview(props.ownerKey);
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
@@ -69,6 +71,9 @@ function DictationView(props: {
       className="flex-1 bg-screen"
       style={{ paddingTop: insets.top + 8, paddingBottom: insets.bottom + 16 }}
     >
+      {/* The modal is its own window: without this its status bar icons keep
+        the system default and vanish on the light theme. */}
+      <StatusBar barStyle={themeAppearance === "dark" ? "light-content" : "dark-content"} />
       <View className="flex-row items-center gap-3 px-4">
         <RoundButton
           label="Cancel dictation"
