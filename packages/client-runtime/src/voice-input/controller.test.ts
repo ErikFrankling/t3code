@@ -1007,7 +1007,7 @@ describe("VoiceInputController", () => {
       await harness.controller.stop();
 
       expect(harness.controller.failedRecording).toBe("file:///voice.m4a");
-      expect(harness.controller.currentState.error).toContain("Trying again by itself.");
+      expect(harness.controller.currentState.error).toBe("Saved, retrying by itself.");
       expect(harness.deleted).toEqual([]);
       await clock.fire();
       await clock.fire();
