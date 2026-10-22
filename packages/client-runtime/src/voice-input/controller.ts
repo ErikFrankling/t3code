@@ -842,8 +842,9 @@ export class VoiceInputController {
     if (this.autoRetries === 0) this.retryOwner = this.dependencies.readDraft()?.ownerKey ?? null;
     const delay = AUTO_RETRY_MS[Math.min(this.autoRetries, AUTO_RETRY_MS.length - 1)]!;
     this.autoRetries++;
+    // Short: it shares the composer row with Retry, Save and the send button.
     if (this.state.phase === "error" && this.state.error) {
-      this.setState({ ...this.state, error: `${this.state.error} ${this.text(msg("Trying again by itself."))}` });
+      this.setState({ ...this.state, error: this.text(msg("Saved, retrying by itself.")) });
     }
     this.cancelAutoRetry = setTimer(() => {
       this.cancelAutoRetry = null;
