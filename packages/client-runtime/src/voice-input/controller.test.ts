@@ -111,6 +111,21 @@ describe("resolveTranscriptCommit", () => {
 describe("VoiceInputController", () => {
   beforeEach(() => resetVoiceInputGlobalsForTests());
 
+  it("a recording thrown away is deleted before dictation is idle again", async () => {
+    const deletedWhenIdle: number[] = [];
+    let harness: ReturnType<typeof createHarness>;
+    harness = createHarness({
+      onStateChange: (state) => {
+        if (state.phase === "idle") deletedWhenIdle.push(harness.deleted.length);
+      },
+    });
+    await harness.controller.start();
+    harness.controller.cancelAndDelete();
+    await vi.waitFor(() => expect(harness.controller.currentState.phase).toBe("idle"));
+    expect(harness.deleted.length).toBeGreaterThan(0);
+    expect(deletedWhenIdle.at(-1)).toBe(harness.deleted.length);
+  });
+
   it("checks support and permission before recording", async () => {
     const unsupported = createHarness({ getTranscriber: () => null });
     await unsupported.controller.start();
