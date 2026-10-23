@@ -115,6 +115,7 @@ voiceCall.onEvent((event) => {
 });
 
 export const voiceMode = {
+  isOpen: () => state.open,
   open: () => set({ open: true }),
   close: () => {
     setLoop(false);

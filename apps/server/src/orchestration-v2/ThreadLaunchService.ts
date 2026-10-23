@@ -25,6 +25,7 @@ import {
   TaskFolderError,
   TextGenerationError,
   ThreadId,
+  type InputSource,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
@@ -94,6 +95,7 @@ export interface ThreadLaunchInitialMessage {
   readonly messageId?: MessageId;
   readonly scheduledTaskId?: ScheduledTaskId;
   readonly senderThreadId?: ThreadId;
+  readonly inputSource?: InputSource;
   readonly text: string;
   readonly attachments: ReadonlyArray<ChatAttachment>;
   readonly context?: import("@t3tools/contracts").OrchestrationMessageContext | undefined;
@@ -1550,6 +1552,9 @@ const make = Effect.gen(function* () {
                 ...(input.initialMessage.senderThreadId === undefined
                   ? {}
                   : { senderThreadId: input.initialMessage.senderThreadId }),
+                ...(input.initialMessage.inputSource === undefined
+                  ? {}
+                  : { inputSource: input.initialMessage.inputSource }),
                 attachments: input.initialMessage.attachments,
                 ...(input.initialMessage.context ? { context: input.initialMessage.context } : {}),
                 ...(input.initialMessage.outputSchema === undefined
