@@ -34,6 +34,7 @@ import {
 } from "./httpResponseErrorGuard.ts";
 import * as DictationDelivery from "./DictationDelivery.ts";
 import { layerDictationAudioRoute, layerDictationRoute } from "./dictationHttp.ts";
+import { layerActivityLogRoute } from "./activityLogHttp.ts";
 import { layerReadAloudRoute } from "./readAloudHttp.ts";
 import { layerPushDeviceRoute, layerPushSendRoute } from "./erikPushHttp.ts";
 import { fixPath } from "./os-jank.ts";
@@ -733,6 +734,7 @@ const layerMakeRoutes = Layer.mergeAll(
     layerDictationRoute,
     layerDictationAudioRoute,
     layerReadAloudRoute,
+    layerActivityLogRoute,
     layerPushDeviceRoute,
     layerPushSendRoute,
     DeviceHubProxy.layer,
