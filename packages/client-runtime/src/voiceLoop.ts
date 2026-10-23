@@ -1,4 +1,4 @@
-import type { ReadAloudPlayer } from "./readAloud.ts";
+import type { ReadAloudPlayer, ReadAloudTake } from "./readAloud.ts";
 
 /**
  * Voice mode's conversation loop, shared by web, desktop and the phone: read
@@ -42,6 +42,9 @@ export class VoiceLoop {
   #thread: VoiceLoopThread = { reply: null, working: false };
   /** The reply that was already there when this turn started; it is not read again. */
   #heard: string | null = null;
+  /** The reply read last and, once it had all arrived, its audio: kept until the next reply. */
+  #lastReply: VoiceLoopReply | null = null;
+  #take: ReadAloudTake | null = null;
   #run = 0;
 
   constructor(deps: VoiceLoopDependencies) {
@@ -72,8 +75,10 @@ export class VoiceLoop {
     const playing = this.#deps.player.getSnapshot();
     if (playing.key && playing.key !== CUE_KEY && isSpeaking(playing.phase)) {
       this.#heard = playing.key;
+      if (this.#thread.reply?.key === playing.key) this.#remember(this.#thread.reply);
       this.#set({ phase: "reading" });
       void this.#played(playing.key).then(() => {
+        this.#keep();
         if (run === this.#run) void this.#listen(run);
       });
       return;
@@ -105,9 +110,38 @@ export class VoiceLoop {
     if (phase === "listening") void this.#send(this.#run);
     else if (phase === "reading" || phase === "waiting") {
       const run = ++this.#run;
-      if (phase === "reading") this.#deps.player.stop();
+      if (phase === "reading") {
+        this.#keep();
+        this.#deps.player.stop();
+      }
       void this.#listen(run);
     }
+  }
+
+  /**
+   * Plays the last reply again from the top (a volume-up press), from its audio
+   * kept on the device until the next reply arrives; then it is your turn. While
+   * you talk it does nothing, so a press never costs what you said.
+   */
+  replay() {
+    const phase = this.#state.phase;
+    if (phase !== "reading" && phase !== "waiting" && phase !== "cue") return;
+    const reply = this.#lastReply;
+    if (!reply) return;
+    if (phase === "reading") this.#keep();
+    const run = ++this.#run;
+    this.#set({ phase: "reading" });
+    if (this.#take?.key === reply.key) this.#deps.player.replay(this.#take);
+    else this.#deps.player.start(reply.key, reply.text, "summary");
+    void this.#played(reply.key).then(() => {
+      if (run !== this.#run || this.#state.phase !== "reading") return;
+      this.#keep();
+      if (phase === "waiting") {
+        // Still waiting for the answer to what you sent: read it once it is there.
+        this.#set({ phase: "waiting" });
+        this.#readReply(run);
+      } else void this.#listen(run);
+    });
   }
 
   /** The dictation was sent some other way (the composer's own button). */
@@ -152,11 +186,26 @@ export class VoiceLoop {
     const { reply, working } = this.#thread;
     if (working || !reply || reply.key === this.#heard) return;
     this.#heard = reply.key;
+    this.#remember(reply);
     this.#set({ phase: "reading" });
     this.#deps.player.start(reply.key, reply.text, "summary");
     void this.#played(reply.key).then(() => {
+      this.#keep();
       if (run === this.#run && this.#state.phase === "reading") void this.#listen(run);
     });
+  }
+
+  /** A new reply replaces the kept one. */
+  #remember(reply: VoiceLoopReply) {
+    if (this.#lastReply?.key === reply.key) return;
+    this.#lastReply = reply;
+    this.#take = null;
+  }
+
+  /** Keeps the last reply's audio once the player has all of it. */
+  #keep() {
+    const take = this.#deps.player.take();
+    if (take && take.key === this.#lastReply?.key) this.#take = take;
   }
 
   #fail(error: unknown) {
