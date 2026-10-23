@@ -114,3 +114,18 @@ export function updateLinkedRoute(
   }
   return state;
 }
+
+/**
+ * `threads/<environment>/<thread>/dictate` (a tapped "answer by voice"
+ * notification) opens the thread with `intent=dictate`, which starts
+ * dictation in its composer. The native notification code only passes plain
+ * paths, so the intent travels as a path segment.
+ */
+export function rewriteDictateLink(path: string): string {
+  const [pathname = "", search] = path.split("?", 2);
+  const match = /^(\/*threads\/[^/]+\/[^/]+)\/dictate\/?$/.exec(pathname);
+  if (!match) return path;
+  const query = new URLSearchParams(search);
+  query.set("intent", "dictate");
+  return `${match[1]}?${query.toString()}`;
+}
