@@ -1,5 +1,10 @@
 import { findRevealRef } from "./markdownFindContext";
-import { type MessageId, type ServerProviderSkill, ThreadId } from "@t3tools/contracts";
+import {
+  describeInputSource,
+  type MessageId,
+  type ServerProviderSkill,
+  ThreadId,
+} from "@t3tools/contracts";
 import { resolveUserMessagePresentation } from "@t3tools/client-runtime/user-message";
 import { Link } from "@tanstack/react-router";
 import { useQuietThreadShell } from "../../state/entities";
@@ -587,6 +592,11 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
               <InlineButton onClick={() => ctx.onOpenThread(senderThreadId)} tone="muted">
                 Open thread
               </InlineButton>
+            ) : null}
+            {row.message.inputSource ? (
+              <span className="text-muted-foreground text-xs">
+                {describeInputSource(row.message.inputSource)}
+              </span>
             ) : null}
             <Tooltip>
               <TooltipTrigger render={<p className="text-muted-foreground text-xs tabular-nums" />}>

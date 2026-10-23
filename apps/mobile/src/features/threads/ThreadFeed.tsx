@@ -39,6 +39,7 @@ import type { WorkflowOpening } from "@t3tools/client-runtime/state/subagentRunt
 import {
   AuthFilesystemReadScope,
   idleCompactionOf,
+  describeInputSource,
   type OrchestrationMessageContext,
   ThreadId,
   type ChatAttachment,
@@ -1412,7 +1413,11 @@ function renderFeedEntry(
     const presentation = resolveUserMessagePresentation(message);
     const renderedText = renderAssistantCitationsAsText(presentation.text);
     const styles = isUser ? markdownStyles.user : markdownStyles.assistant;
-    const timestampLabel = formatMessageTime(isUser ? message.createdAt : message.updatedAt);
+    const timeLabel = formatMessageTime(isUser ? message.createdAt : message.updatedAt);
+    const timestampLabel =
+      isUser && message.inputSource
+        ? `${timeLabel} · ${describeInputSource(message.inputSource)}`
+        : timeLabel;
     const attachments = message.attachments ?? [];
     const hasReviewCommentContext = presentation.text.includes("<review_comment");
     // A bubble that sizes itself from its content cannot lay out a block whose
