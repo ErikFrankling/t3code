@@ -341,6 +341,17 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     reportState: (state) => ipcRenderer.invoke(IpcChannels.SPEAK_REPLY_STATE_CHANNEL, state),
     openInMain: (url) => ipcRenderer.invoke(IpcChannels.SPEAK_REPLY_OPEN_IN_MAIN_CHANNEL, url),
   },
+  dictation: {
+    reportRecording: (recording) =>
+      ipcRenderer.invoke(IpcChannels.DICTATION_REPORT_CHANNEL, recording),
+    onSendRequest: (listener) => {
+      const wrappedListener = () => listener();
+      ipcRenderer.on(IpcChannels.DICTATION_SEND_CHANNEL, wrappedListener);
+      return () => {
+        ipcRenderer.removeListener(IpcChannels.DICTATION_SEND_CHANNEL, wrappedListener);
+      };
+    },
+  },
   preview: {
     setForwardedShortcuts: (shortcuts) =>
       ipcRenderer.invoke(IpcChannels.PREVIEW_SET_FORWARDED_SHORTCUTS_CHANNEL, shortcuts),
