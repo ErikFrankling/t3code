@@ -3414,6 +3414,11 @@ export default function ChatView(props: ChatViewProps) {
                       />
                     </>
                   )}
+                  {/* The small dictation card goes here, in the flow and closest
+                    to the message box: the composer overlay grows with it, so the
+                    timeline's bottom inset keeps the last message visible above it. */}
+                  <div data-dictation-slot="true" />
+
                   {isDraftHeroState ? (
                     <div className="absolute inset-x-0 bottom-full">
                       <div
