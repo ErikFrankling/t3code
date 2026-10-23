@@ -107,6 +107,7 @@ voiceLoop.subscribe(() => {
 });
 
 export const voiceMode = {
+  isOpen: () => state.open,
   open: () => set({ open: true }),
   close: () => {
     voiceMode.setLoop(false);
