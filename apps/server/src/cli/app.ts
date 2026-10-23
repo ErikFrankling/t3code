@@ -11,6 +11,8 @@ import {
   type DesktopAppControlRequest,
   type DesktopSpeakReplyRequest,
   DesktopSpeakReplyStatus,
+  DesktopDictationStatus,
+  type DesktopDictationRequest,
   SPEAK_REPLY_MAX_TEXT_LENGTH,
   type DesktopAppActivationPlatform,
   type DesktopAppActivationRequest,
@@ -39,6 +41,7 @@ const MAX_RESPONSE_BYTES = 64 * 1024;
 const isDesktopAppControlResponse = Schema.is(DesktopAppControlResponse);
 const isDesktopAppActivationErrorCode = Schema.is(DesktopAppActivationErrorCode);
 const encodeSpeakReplyStatus = Schema.encodeSync(Schema.fromJsonString(DesktopSpeakReplyStatus));
+const encodeDictationStatus = Schema.encodeSync(Schema.fromJsonString(DesktopDictationStatus));
 
 export class DesktopAppSshUnsupportedError extends Schema.TaggedError<DesktopAppSshUnsupportedError>()(
   "DesktopAppSshUnsupportedError",
@@ -448,6 +451,76 @@ const speakReplyCommand = Command.make("speak-reply", {
   Command.withHandler(runSpeakReplyCommand),
 );
 
+export class DesktopDictationUsageError extends Schema.TaggedError<DesktopDictationUsageError>()(
+  "DesktopDictationUsageError",
+  {},
+) {
+  override get message(): string {
+    return "Use exactly one of --send or --status.";
+  }
+}
+
+export class DesktopDictationFailedError extends Schema.TaggedError<DesktopDictationFailedError>()(
+  "DesktopDictationFailedError",
+  { code: Schema.String, detail: Schema.String },
+) {
+  override get message(): string {
+    return this.code === "no-recording"
+      ? this.detail
+      : `T3 Code could not do that (${this.code}): ${this.detail}`;
+  }
+}
+
+const runDictationCommand = Effect.fn("cli.app.dictation")(function* (flags: {
+  readonly baseDir: Option.Option<string>;
+  readonly send: boolean;
+  readonly status: boolean;
+}) {
+  if (flags.send === flags.status) return yield* new DesktopDictationUsageError({});
+  const target = yield* resolveControlTarget(flags.baseDir);
+  const request: DesktopDictationRequest = {
+    version: DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION,
+    requestId: target.requestId,
+    type: "dictation",
+    action: flags.send ? "send" : "status",
+  };
+  const response = yield* sendControlRequest(target, request, "dictation");
+  if (!response.ok) {
+    return yield* new DesktopDictationFailedError({
+      code: response.code,
+      detail: response.message,
+    });
+  }
+  if (!("dictation" in response)) {
+    return yield* new DesktopDictationFailedError({
+      code: "invalid-response",
+      detail: "The desktop app answered with something else.",
+    });
+  }
+  yield* Console.log(
+    request.action === "status" ? encodeDictationStatus(response.dictation) : "Sent the dictation.",
+  );
+});
+
+const dictationCommand = Command.make("dictation", {
+  baseDir: baseDirFlag,
+  send: Flag.Boolean("send").pipe(
+    Flag.withDescription(
+      "Send the recording dictation (the most recently started one). Fails when none records.",
+    ),
+    Flag.withDefault(false),
+  ),
+  status: Flag.Boolean("status").pipe(
+    Flag.withDescription('Print whether a dictation is recording as JSON: {"recording"}.'),
+    Flag.withDefault(false),
+  ),
+}).pipe(
+  Command.withDescription(
+    "Send the dictation recording in the running desktop app, without focusing it.",
+  ),
+  Command.withHandler(runDictationCommand),
+);
+
 export const appCommand = Command.make("app", {
   baseDir: baseDirFlag,
   workspaceRoot: Argument.String("path").pipe(
@@ -457,5 +530,5 @@ export const appCommand = Command.make("app", {
 }).pipe(
   Command.withDescription("Open a project in the running T3 Code desktop app."),
   Command.withHandler(runAppCommand),
-  Command.withSubcommands([speakReplyCommand]),
+  Command.withSubcommands([speakReplyCommand, dictationCommand]),
 );
