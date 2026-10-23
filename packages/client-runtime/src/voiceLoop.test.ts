@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import type { ReadAloudPlayer, ReadAloudSnapshot, ReadAloudTake } from "./readAloud.ts";
-import { VOICE_LOOP_CUE, VoiceLoop } from "./voiceLoop.ts";
+import { VOICE_LOOP_CUE, VoiceLoop, type VoiceLoopSpan } from "./voiceLoop.ts";
 
 /**
  * Stands in for the read-aloud player: each start() plays until finish(). A
@@ -237,5 +237,27 @@ describe("VoiceLoop replay (volume up)", () => {
     loop.replay();
     expect(replayed).toEqual([]);
     expect(started.at(-1)).toEqual({ key: "r2", text: "Next answer.", mode: "summary" });
+  });
+});
+
+describe("VoiceLoop span", () => {
+  it("reports how long the loop was on and which thread it talked to", () => {
+    const fake = fakePlayer();
+    let clock = 5_000;
+    const spans: VoiceLoopSpan[] = [];
+    const loop = new VoiceLoop({
+      player: fake.player,
+      listen: () => undefined,
+      send: () => undefined,
+      now: () => clock,
+      onSpan: (span) => spans.push(span),
+    });
+    loop.update({ threadId: "thread-1", reply: null, working: false });
+    loop.start();
+    clock += 90_000;
+    expect(spans).toEqual([]);
+    loop.stop();
+    loop.stop();
+    expect(spans).toEqual([{ threadId: "thread-1", startedAt: 5_000, endedAt: 95_000 }]);
   });
 });
