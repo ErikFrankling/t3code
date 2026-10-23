@@ -31,7 +31,14 @@ import {
 } from "@t3tools/shared/usageLimits";
 import { StackActions, useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { ReactNode } from "react";
-import { useEffect, useEffectEvent, useRef, useState, type RefObject } from "react";
+import {
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type RefObject,
+} from "react";
 import { Keyboard, Platform, View, type ViewStyle } from "react-native";
 import { composerImageGallery } from "../../lib/composerImageGallery";
 import { filePreviewGallery } from "../../lib/filePreviewGallery";
@@ -113,7 +120,10 @@ import {
   ComposerDictationToolbar,
 } from "../voice-input/ComposerDictationControl";
 import { DictationLivePreview } from "../voice-input/DictationLivePreview";
+import { DictationCard } from "../voice-input/DictationCard";
 import { DictationScreen } from "../voice-input/DictationScreen";
+import { useDictationFullScreen } from "../voice-input/useDictationFullScreen";
+import { voiceCall } from "../../native/voiceCall";
 import { useVoiceInputController } from "../voice-input/useVoiceInputController";
 import { registerVoiceModeComposer, useVoiceMode } from "../voice-mode/voiceMode";
 import { subscribeLinkedDictation, takeLinkedDictation } from "../voice-input/linkedDictation";
@@ -582,6 +592,14 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     onChangeDraftMessage: (text) => setComposerDraftText(composerDraftKey, text),
     onChangeSelection: composerMenu.onSelectionChange,
   });
+  // Dictating shows a card over the chat; full screen when chosen. Voice mode
+  // records its turns through this composer on its own screen, so neither shows.
+  const [dictationFullScreen, setDictationFullScreen] = useDictationFullScreen();
+  const inVoiceCall = useSyncExternalStore(voiceCall.subscribe, () => voiceCall.active);
+  const dictationCardOpen =
+    !dictationFullScreen &&
+    !inVoiceCall &&
+    (voiceInput.state.phase === "preparing" || voiceInput.state.phase === "recording");
   const isSubmissionLocked =
     props.interactionLocked === true || queuedEdit?.saving === true || voiceInput.blocksSubmission;
   const { start: startVoiceInput, stop: stopVoiceInput } = voiceInput;
@@ -902,8 +920,21 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
           />
         ) : null}
 
-        <DictationLivePreview ownerKey={composerDraftKey} />
-        <DictationScreen ownerKey={composerDraftKey} voiceInput={voiceInput} />
+        {dictationCardOpen ? (
+          <DictationCard
+            ownerKey={composerDraftKey}
+            voiceInput={voiceInput}
+            onFullScreen={() => setDictationFullScreen(true)}
+          />
+        ) : (
+          <DictationLivePreview ownerKey={composerDraftKey} />
+        )}
+        <DictationScreen
+          ownerKey={composerDraftKey}
+          voiceInput={voiceInput}
+          fullScreen={dictationFullScreen}
+          onSmall={() => setDictationFullScreen(false)}
+        />
         <ComposerSurface
           animateLayout={false}
           style={{

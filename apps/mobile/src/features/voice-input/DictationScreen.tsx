@@ -4,30 +4,35 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText as Text } from "../../components/ui/AppText";
 import { SymbolView, type AppSymbolName } from "../../components/ui/AppSymbol";
-import * as Dialog from "../../components/ui/Dialog";
 import { voiceCall } from "../../native/voiceCall";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import { DictationElapsedTime } from "./ComposerDictationControl";
 import { useDictationPreview } from "./dictationPreview";
+import { confirmCancelDictation, splitTranscript } from "./dictationText";
 import type { useVoiceInputController } from "./useVoiceInputController";
 
 type VoiceInput = ReturnType<typeof useVoiceInputController>;
 
 /**
- * Dictating fills the screen: what you say, large, as it is transcribed, and
- * the controls for the recording. Pause holds it (nothing is sent or lost) and
- * Resume continues the same recording. Edit puts the words into the text box
- * instead of sending them. Send sends, and the screen closes; the chat shows
- * the message while its transcript is finished. Cancel asks before deleting.
+ * Dictation on the whole screen, when chosen with the card's expand button
+ * (`DictationCard` is the default): what you say, large, as it is transcribed,
+ * and the controls for the recording. Pause holds it (nothing is sent or lost)
+ * and Resume continues the same recording. Edit puts the words into the text
+ * box instead of sending them. Send sends, and the screen closes; the chat
+ * shows the message while its transcript is finished. Cancel asks before
+ * deleting; Back and "Make it small" go back to the card.
  */
 export function DictationScreen(props: {
   readonly ownerKey: string | null;
   readonly voiceInput: VoiceInput;
+  readonly fullScreen: boolean;
+  readonly onSmall: () => void;
 }) {
   const { state } = props.voiceInput;
   const inCall = useSyncExternalStore(voiceCall.subscribe, () => voiceCall.active);
   // Voice mode records its turns through the same composer, on its own screen.
-  const open = !inCall && (state.phase === "preparing" || state.phase === "recording");
+  const open =
+    props.fullScreen && !inCall && (state.phase === "preparing" || state.phase === "recording");
   // Android gives the modal its own window, which copies the app's status bar
   // style (light or dark icons) only when it opens. When the theme changes while
   // dictating, the app's style is set first and then a new window opens, so the
@@ -47,23 +52,24 @@ export function DictationScreen(props: {
       animationType="slide"
       statusBarTranslucent
       navigationBarTranslucent
-      onRequestClose={() => confirmCancel(props.voiceInput)}
+      // Back makes it small again; the recording goes on.
+      onRequestClose={props.onSmall}
     >
-      {open ? <DictationView {...props} /> : null}
+      {open ? (
+        <DictationView
+          ownerKey={props.ownerKey}
+          voiceInput={props.voiceInput}
+          onSmall={props.onSmall}
+        />
+      ) : null}
     </Modal>
   );
-}
-
-function confirmCancel(voiceInput: VoiceInput) {
-  Dialog.alert("Discard this recording?", "What you said so far will be deleted.", [
-    { text: "Keep recording", style: "cancel" },
-    { text: "Discard", style: "destructive", onPress: voiceInput.cancelAndDelete },
-  ]);
 }
 
 function DictationView(props: {
   readonly ownerKey: string | null;
   readonly voiceInput: VoiceInput;
+  readonly onSmall: () => void;
 }) {
   const insets = useSafeAreaInsets();
   const voice = props.voiceInput;
@@ -71,12 +77,11 @@ function DictationView(props: {
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
   const recording = voice.state.phase === "recording";
   const paused = voice.state.paused === true;
-  const live = preview?.draft ?? "";
-  const refined = preview?.final ?? "";
+  const { refined, tail } = splitTranscript(preview?.final ?? "", preview?.draft ?? "");
 
   useEffect(() => {
     scrollRef.current?.scrollToEnd({ animated: true });
-  }, [live, refined]);
+  }, [refined, tail]);
 
   return (
     <View
@@ -87,24 +92,33 @@ function DictationView(props: {
         <RoundButton
           label="Cancel dictation"
           icon={{ ios: "xmark", android: "close" }}
-          onPress={() => confirmCancel(voice)}
+          onPress={() => confirmCancelDictation(voice)}
         />
         <Text className="flex-1 text-lg text-foreground-secondary">
           {!recording ? "Starting…" : paused ? "Paused" : "Listening"}
         </Text>
         <DictationElapsedTime seconds={voice.elapsedSeconds} className="text-lg text-foreground" />
+        <RoundButton
+          label="Make it small"
+          icon="arrow.down.right.and.arrow.up.left"
+          onPress={props.onSmall}
+        />
       </View>
 
       <ScrollView ref={scrollRef} className="mt-6 flex-1 px-6">
+        {/* The finished words, then what is still being worked out, lighter. */}
         <Text className="text-3xl leading-10 text-foreground">
-          {live || (paused ? "Paused. Resume to keep talking." : "Listening…")}
+          {refined}
+          {refined && tail ? " " : ""}
+          {tail ? (
+            <Text className="text-3xl leading-10 text-foreground-secondary">{tail}</Text>
+          ) : null}
+          {!refined && !tail ? (
+            <Text className="text-3xl leading-10 text-foreground-secondary">
+              {paused ? "Paused. Resume to keep talking." : "Listening…"}
+            </Text>
+          ) : null}
         </Text>
-        {refined ? (
-          <View className="mt-6 gap-1">
-            <Text className="text-sm text-foreground-secondary">Refined</Text>
-            <Text className="text-2xl leading-9 text-foreground-secondary">{refined}</Text>
-          </View>
-        ) : null}
       </ScrollView>
 
       <View className="mt-4 flex-row items-center justify-center gap-4 px-6">
