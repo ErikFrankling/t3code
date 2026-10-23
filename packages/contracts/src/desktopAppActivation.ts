@@ -94,6 +94,7 @@ export type DesktopSpeakReplyRequest = typeof DesktopSpeakReplyRequest.Type;
 export const DesktopSpeakReplyPhase = Schema.Literals([
   "starting",
   "recording",
+  "paused",
   "silent",
   "sending",
   "error",
