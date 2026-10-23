@@ -124,6 +124,7 @@ export function usePersonalAgent() {
 
   return {
     connected,
+    environmentId,
     openPersonalAgent,
     isPersonalAgentOpen: routeThreadId === PERSONAL_AGENT_THREAD_ID,
   };
