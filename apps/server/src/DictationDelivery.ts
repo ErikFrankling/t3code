@@ -83,6 +83,9 @@ const deliverTurn = Effect.fn("DictationDelivery.deliverTurn")(function* (turn: 
             ...(input.initialMessage.context === undefined
               ? {}
               : { context: input.initialMessage.context }),
+            ...(input.initialMessage.inputSource === undefined
+              ? {}
+              : { inputSource: input.initialMessage.inputSource }),
           },
         }),
     createdBy: "user",

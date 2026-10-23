@@ -2067,6 +2067,9 @@ export const layerWsRpc = (
                             ...(input.initialMessage.context === undefined
                               ? {}
                               : { context: input.initialMessage.context }),
+                            ...(input.initialMessage.inputSource === undefined
+                              ? {}
+                              : { inputSource: input.initialMessage.inputSource }),
                           },
                         }),
                     createdBy: "user",
