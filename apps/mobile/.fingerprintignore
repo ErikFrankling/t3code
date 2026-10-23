@@ -26,3 +26,10 @@ web-build/
 # Gradle runs the Kotlin daemon with a session file here while it builds,
 # so the build-time fingerprint would differ from one resolved beforehand.
 **/expo-updates-gradle-plugin/.kotlin/
+
+# react-native-enriched-markdown downloads native sources in its postinstall,
+# so their content depends on the machine that installed them; the package
+# version (its tarball name, hashed with the lockfile) already pins them.
+**/react-native-enriched-markdown/cpp/highlight/vendor/
+**/react-native-enriched-markdown/ios/vendor/
+**/react-native-enriched-markdown/node_modules/
