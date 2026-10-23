@@ -297,6 +297,9 @@ export const layerExecutor: Layer.Layer<
                         ...(message.senderThreadId === undefined
                           ? {}
                           : { senderThreadId: message.senderThreadId }),
+                        ...(message.inputSource === undefined
+                          ? {}
+                          : { inputSource: message.inputSource }),
                       })
                       .pipe(
                         // The turn that just completed leaves no further retry
