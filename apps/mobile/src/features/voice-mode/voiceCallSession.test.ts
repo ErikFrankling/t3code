@@ -96,7 +96,10 @@ vi.mock("expo/fetch", () => ({
   fetch: async (url: string, init: { body: string }) => {
     if (url.includes("/api/voice-presence")) {
       const { waitMs } = JSON.parse(init.body) as { waitMs: number };
-      if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, 2));
+      // A long poll: held until there is something to say.
+      for (let i = 0; waitMs > 0 && presenceQueue.length === 0 && i < 1500; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 1));
+      }
       const utterances = waitMs > 0 ? presenceQueue.splice(0) : [];
       return { ok: true, json: async () => ({ utterances }) };
     }
