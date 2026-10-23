@@ -4,17 +4,14 @@ import { parseThreadKey, threadKey } from "@t3tools/client-runtime/state/entitie
 import { visibilityParentKey } from "@t3tools/client-runtime/state/threads";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import * as Option from "effect/Option";
+import { isThreadWorking } from "@t3tools/client-runtime/state/thread-inbox";
 import { PERSONAL_AGENT_THREAD_ID } from "@t3tools/contracts";
 import { Navigate, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import ChatView from "./ChatView";
-<<<<<<< HEAD
 import { BackgroundThreadContext, HiddenThreadContext } from "./chat/backgroundThread";
-=======
-import { BackgroundThreadContext } from "./chat/backgroundThread";
-import { NeedsYouPanel } from "./chat/NeedsYouPanel";
->>>>>>> e84006edd7 (feat: a Needs you list beside the personal agent, on web and Android)
+import { PersonalAgentHome } from "./personalAgent/PersonalAgentHome";
 import { SidebarInset } from "./ui/sidebar";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { useSidebarPendingFileDropStore } from "../sidebarPendingFileDropStore";
@@ -161,19 +158,9 @@ export function ThreadRouteView({
     }
   }, [background, bootstrapComplete, environmentHasAnyThreads, navigate, renderState, target]);
 
-  // The personal agent's chat gets the Needs you list beside it.
+  // The personal agent is not another thread: its chat sits inside its home.
   const serverConfigs = useServerConfigs();
-  const needsYouEnvironmentId =
-    target.kind === "server" &&
-    target.threadRef.threadId === PERSONAL_AGENT_THREAD_ID &&
-    serverConfigs.get(target.threadRef.environmentId)?.environment.capabilities.attentionItems ===
-      true
-      ? target.threadRef.environmentId
-      : null;
-
-  // The personal agent's chat gets the Needs you list beside it.
-  const serverConfigs = useServerConfigs();
-  const needsYouEnvironmentId =
+  const personalAgentEnvironmentId =
     target.kind === "server" &&
     target.threadRef.threadId === PERSONAL_AGENT_THREAD_ID &&
     serverConfigs.get(target.threadRef.environmentId)?.environment.capabilities.attentionItems ===
@@ -257,18 +244,17 @@ export function ThreadRouteView({
       inert={background}
     >
       <BackgroundThreadContext value={background}>
-<<<<<<< HEAD
-        <HiddenThreadContext value={background}>{view}</HiddenThreadContext>
-=======
-        {view !== null && needsYouEnvironmentId !== null ? (
-          <div className="flex h-full min-h-0">
-            <div className="flex min-w-0 flex-1 flex-col">{view}</div>
-            <NeedsYouPanel environmentId={needsYouEnvironmentId} />
-          </div>
+        <HiddenThreadContext value={background}>
+        {view !== null && personalAgentEnvironmentId !== null ? (
+          <PersonalAgentHome
+            environmentId={personalAgentEnvironmentId}
+            working={serverThreadShell !== null && isThreadWorking(serverThreadShell)}
+            chat={view}
+          />
         ) : (
           view
         )}
->>>>>>> e84006edd7 (feat: a Needs you list beside the personal agent, on web and Android)
+        </HiddenThreadContext>
       </BackgroundThreadContext>
       {background ? null : redirect}
     </SidebarInset>
