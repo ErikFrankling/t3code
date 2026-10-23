@@ -50,6 +50,8 @@ const TONE_CLASS: Record<TodoChipTone, { readonly box: string; readonly text: st
   done: { box: "bg-subtle", text: "text-foreground-muted" },
 };
 
+const NEEDS_YOU_CAP = 5;
+
 const SECTION_TITLE: Record<TodoSection, string> = {
   needs_you: "Needs you",
   moving: "Moving",
@@ -243,6 +245,7 @@ export function AttentionSheet({ route }: StaticScreenProps<AttentionTarget>) {
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(new Set());
   const [showFolded, setShowFolded] = useState(false);
   const [tab, setTab] = useState<"todo" | "spoken">("todo");
+  const [showAllNeedsYou, setShowAllNeedsYou] = useState(false);
   const spoken = data?.spoken ?? [];
   const newestSpoken = spoken[0] ? (spoken[0].queuedAt ?? spoken[0].statusAt) : "";
   // What was new when the home opened stays marked while it is open.
@@ -283,12 +286,15 @@ export function AttentionSheet({ route }: StaticScreenProps<AttentionTarget>) {
   const section = (key: TodoSection) => {
     const rows = bySection.get(key) ?? [];
     if (rows.length === 0) return null;
+    // A long Needs you list would push everything else out of reach.
+    const capped = key === "needs_you" && !showAllNeedsYou && rows.length > NEEDS_YOU_CAP;
+    const visible = capped ? rows.slice(0, NEEDS_YOU_CAP) : rows;
     return (
       <View key={key}>
         <SectionTitle attention={key === "needs_you"}>
           {`${SECTION_TITLE[key]} · ${rows.length}`}
         </SectionTitle>
-        {rows.map((item) => (
+        {visible.map((item) => (
           <TodoRow
             key={item.id}
             environmentId={environmentId}
@@ -300,6 +306,17 @@ export function AttentionSheet({ route }: StaticScreenProps<AttentionTarget>) {
             onOpenThread={openThread}
           />
         ))}
+        {key === "needs_you" && rows.length > NEEDS_YOU_CAP ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setShowAllNeedsYou((current) => !current)}
+            className="py-3"
+          >
+            <Text className="text-sm font-t3-medium text-warning-foreground">
+              {capped ? `Show ${rows.length - NEEDS_YOU_CAP} more` : "Show fewer"}
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
     );
   };
