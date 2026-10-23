@@ -251,6 +251,7 @@ import {
 } from "./ui/combobox";
 import { SidebarContent, SidebarGroup, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
+import { SidebarPersonalAgentButton } from "./sidebar/SidebarPersonalAgentButton";
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
 import { TooltipProvider } from "./ui/tooltip";
 import { composerDraftHasUserContent, DraftId, useComposerDraftStore } from "../composerDraftStore";
@@ -407,6 +408,12 @@ function routeThreadOnly(
   if (routeThreadKey === null) return EMPTY_THREADS;
   const routeThread = threads.find((thread) => threadShellKey(thread) === routeThreadKey);
   return routeThread === undefined ? EMPTY_THREADS : [routeThread];
+}
+
+// The personal agent has its own button above the list, so it is never a row.
+function useListedThreadShells() {
+  const threads = useQuietThreadShells();
+  return threads.filter((thread) => thread.id !== PERSONAL_AGENT_THREAD_ID);
 }
 
 // Separate hooks cache maps independently of later Sidebar hooks and preserve dnd-kit inputs.
@@ -1103,7 +1110,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             ),
           ),
         );
-  const threads = useQuietThreadShells();
+  const threads = useListedThreadShells();
   const routeRowThreadKey =
     routeThreadRef === null
       ? null
@@ -2977,6 +2984,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         className="min-h-full"
         fixedHeader={
           <SidebarGroup className="z-[1]">
+            <SidebarPersonalAgentButton />
             <SidebarThreadHeader
               hasProjects={projectGroups.length > 0}
               projectScope={
@@ -3648,9 +3656,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           ) : null}
         </SidebarGroup>
       </SidebarContent>
-      <SidebarChromeFooter
-        personalAgentListed={pinnedThreads.some((thread) => thread.id === PERSONAL_AGENT_THREAD_ID)}
-      />
+      <SidebarChromeFooter />
     </>
   );
 }
