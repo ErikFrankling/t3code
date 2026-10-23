@@ -24,7 +24,7 @@ import { subscribeComposerDraftModelReconciliation } from "./state/use-composer-
 import { environmentThreadShells } from "./state/threads";
 import { environmentShell } from "./state/shell";
 import { OverlayPortalHost } from "./components/ui/OverlayPortal";
-import { shouldHandleAppLink, restoreDraftLinkState } from "./lib/appLinking";
+import { rewriteDictateLink, shouldHandleAppLink, restoreDraftLinkState } from "./lib/appLinking";
 import { useMobileNavigationTheme } from "./lib/useMobileNavigationTheme";
 import { useUiRuntimeMemoryWarningGc } from "./lib/useUiRuntimeMemoryWarningGc";
 import { SubscriptionUsageCoordinator } from "./widgets/SubscriptionUsageCoordinator";
@@ -45,7 +45,7 @@ const appLinking = {
   config: { initialRouteName: "Home" },
   filter: shouldHandleAppLink,
   getStateFromPath: (path: string, options: Parameters<typeof getStateFromPath>[1]) =>
-    restoreDraftLinkState(getStateFromPath(path, options), path),
+    restoreDraftLinkState(getStateFromPath(rewriteDictateLink(path), options), path),
 };
 
 const Navigation = createStaticNavigation(RootStack);
