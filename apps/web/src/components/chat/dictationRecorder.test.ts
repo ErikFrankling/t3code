@@ -321,4 +321,44 @@ describe("durable dictation", () => {
     main.close();
     mainLocks.release();
   });
+
+  it("never grows a paused recording, whatever microphone still feeds it", async () => {
+    const storage = memoryDictationStorage();
+    const gateway = fakeGateway();
+    const { recorder, entry, close } = page(storage, gateway);
+    const id = await recorder.create(recording);
+    await recorder.append(id, chunk(1));
+    recorder.pause(id, "Paused: nothing was said for 3 minutes.");
+    // 2026-10-23: a microphone nobody closed kept appending for four hours.
+    await recorder.append(id, chunk(2));
+    await recorder.append(id, chunk(3));
+    expect(entry(id)?.record.sizes).toHaveLength(1);
+    expect(entry(id)?.record.notice).toBe("Paused: nothing was said for 3 minutes.");
+    recorder.resume(id);
+    expect(entry(id)?.record.notice).toBe("");
+    await recorder.append(id, chunk(4));
+    await until(() => entry(id)?.upload === "uploaded");
+    expect(gateway.heard(id)).toEqual([1, 4]);
+    close();
+  });
+
+  it("tells the chat when a sent recording comes back with no speech", async () => {
+    const storage = memoryDictationStorage();
+    const gateway = fakeGateway();
+    const { recorder, entry, close } = page(storage, gateway);
+    const returned: string[] = [];
+    const stop = recorder.onReturned((serverId) => returned.push(serverId));
+    const id = await recorder.create(recording);
+    await recorder.append(id, chunk(1));
+    await recorder.send(id, async (serverId, _draft, uploaded) => {
+      await uploaded;
+      gateway.deliveries.set(serverId, "empty");
+    });
+    await until(() => entry(id)?.record.state === "paused");
+    // The chat drops its "Processing recording…" bubble; the card shows the recording again.
+    expect(returned).toEqual([id]);
+    expect(entry(id)?.record.notice).toContain("heard no speech");
+    stop();
+    close();
+  });
 });
