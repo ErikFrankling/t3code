@@ -2,7 +2,12 @@
 import type { ReadAloudRequest, ReadAloudState } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { ReadAloudPlayer, readAloudSpeed, type ReadAloudAudio } from "./readAloud.ts";
+import {
+  ReadAloudPlayer,
+  readAloudSpeed,
+  type ReadAloudAudio,
+  type ReadAloudPlayed,
+} from "./readAloud.ts";
 
 /** A job whose sentences and clips arrive over successive polls, like the server's. */
 function fakeServer(steps: { text: string; audio?: string; span?: number; ready?: boolean }[][]) {
@@ -276,5 +281,77 @@ describe("ReadAloudPlayer take and replay", () => {
     await until(() => player.getSnapshot().phase === "done");
     expect(sound.played.map((entry) => entry.clip)).toEqual(["a1", "a2", "a1", "a2"]);
     expect(server.requests).toHaveLength(requests);
+  });
+});
+
+describe("ReadAloudPlayer listening time", () => {
+  it("reports each message's playing time, leaving pauses out", async () => {
+    const server = fakeServer([[{ text: "One.", audio: "a1" }]]);
+    const sound = fakeAudio();
+    let clock = 1_000_000;
+    const played: ReadAloudPlayed[] = [];
+    const player = new ReadAloudPlayer({
+      request: server.request,
+      audio: sound.audio,
+      pollMs: 0,
+      now: () => clock,
+      onPlayed: (entry) => played.push(entry),
+    });
+    player.start("message-1", "Text");
+    await until(() => player.getSnapshot().phase === "playing");
+    clock += 10_000;
+    player.togglePause();
+    clock += 30_000;
+    player.togglePause();
+    clock += 5_000;
+    player.stop();
+    expect(played).toEqual([
+      { key: "message-1", startedAt: 1_000_000, endedAt: 1_045_000, seconds: 15 },
+    ]);
+  });
+
+  it("does not report a tap that played less than a second", async () => {
+    const server = fakeServer([[{ text: "One.", audio: "a1" }]]);
+    const sound = fakeAudio();
+    let clock = 0;
+    const played: ReadAloudPlayed[] = [];
+    const player = new ReadAloudPlayer({
+      request: server.request,
+      audio: sound.audio,
+      pollMs: 0,
+      now: () => clock,
+      onPlayed: (entry) => played.push(entry),
+    });
+    player.start("message-1", "Text");
+    await until(() => player.getSnapshot().phase === "playing");
+    clock += 400;
+    player.stop();
+    expect(played).toEqual([]);
+  });
+
+  it("closes one message's listening when another replaces it", async () => {
+    const server = fakeServer([[{ text: "One.", audio: "a1" }]]);
+    const sound = fakeAudio();
+    let clock = 0;
+    const played: ReadAloudPlayed[] = [];
+    const player = new ReadAloudPlayer({
+      request: server.request,
+      audio: sound.audio,
+      pollMs: 0,
+      now: () => clock,
+      onPlayed: (entry) => played.push(entry),
+    });
+    player.start("message-1", "Text");
+    await until(() => player.getSnapshot().phase === "playing");
+    clock += 4_000;
+    player.start("message-2", "Other");
+    await until(() => player.getSnapshot().key === "message-2" && sound.played.length === 2);
+    clock += 6_000;
+    await sound.endClip();
+    await until(() => player.getSnapshot().phase === "done");
+    expect(played.map((entry) => [entry.key, entry.seconds])).toEqual([
+      ["message-1", 4],
+      ["message-2", 6],
+    ]);
   });
 });
