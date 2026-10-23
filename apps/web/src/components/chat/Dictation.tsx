@@ -58,18 +58,34 @@ async function call(environmentId: string, body: DictationRequest): Promise<Dict
 }
 
 let shared: DictationRecorder | null = null;
+const RECORDINGS_CHANNEL = "t3-dictation-recordings";
 /** One recorder per page: recordings outlive the composer that started them. */
-function recorder() {
+export function dictationRecorder() {
   if (!shared) {
-    shared = new DictationRecorder({
+    const engine = new DictationRecorder({
       storage:
         typeof indexedDB === "undefined" ? memoryDictationStorage() : indexedDbDictationStorage(),
       request: call,
       newId: randomUUID,
     });
-    void shared.load();
+    shared = engine;
+    void engine.load();
+    // The speak-reply window records into this device's storage too.
+    if (typeof BroadcastChannel !== "undefined")
+      new BroadcastChannel(RECORDINGS_CHANNEL).addEventListener("message", () => {
+        void engine.rescan();
+      });
   }
   return shared;
+}
+const recorder = dictationRecorder;
+
+/** Tells the app's other windows that this one made a recording. */
+export function announceDictationRecording() {
+  if (typeof BroadcastChannel === "undefined") return;
+  const channel = new BroadcastChannel(RECORDINGS_CHANNEL);
+  channel.postMessage("created");
+  channel.close();
 }
 
 const OPEN_STATES = new Set(["recording", "paused", "edited"]);
