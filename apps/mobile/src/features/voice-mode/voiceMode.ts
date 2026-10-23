@@ -64,6 +64,11 @@ export function spokenSourceOf(key: string): string | undefined {
   return spokenSources.get(key);
 }
 
+function heard() {
+  const preview = getDictationPreview();
+  return Boolean(preview?.draft.trim() || preview?.final.trim());
+}
+
 const done: { id: string; status: "played" | "skipped" }[] = [];
 
 export const voiceSession = new VoiceSession({
@@ -82,10 +87,7 @@ export const voiceSession = new VoiceSession({
   send: () => composer()?.stop(),
   // Nothing was said: nothing to keep (cancel() would keep it as "saved, not sent").
   discard: () => controller?.cancelAndDelete(),
-  heard: () => {
-    const preview = getDictationPreview();
-    return Boolean(preview?.draft.trim() || preview?.final.trim());
-  },
+  heard,
   onDone: (key, status) => {
     if (spokenSources.has(key)) {
       done.push({ id: key, status });
@@ -193,9 +195,11 @@ function stop() {
   if (!state.on) return;
   set({ on: false });
   polling++;
-  // Talking when it was stopped: what was said is sent rather than lost; the
-  // call stays up until the upload is done.
-  const recording = voiceSession.getSnapshot().phase === "listening";
+  // Talking when it was stopped: what was said is sent rather than lost (a
+  // turn with nothing in it is dropped); the call stays up until the upload is done.
+  const listening = voiceSession.getSnapshot().phase === "listening";
+  const recording = listening && heard();
+  if (listening && !recording) controller?.cancelAndDelete();
   voiceSession.stop();
   void beat(0).catch(() => undefined);
   void Promise.resolve(recording ? composer()?.stop() : undefined)
