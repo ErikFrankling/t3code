@@ -340,6 +340,14 @@ const bootstrap = Effect.fn("desktop.bootstrap")(function* (backendStarted: bool
     yield* DesktopCliShim.install;
     if (!(yield* Ref.get(state.quitting))) {
       yield* desktopWindow.createMainIfBackendReady;
+      // The control socket (`t3 app`, `t3 app speak-reply`) talks to this app, not to a backend,
+      // so it starts for a client-only desktop too.
+      yield* appActivation.start.pipe(
+        Effect.tap(() => logBootstrapInfo("desktop app control socket ready")),
+        Effect.catch((error) =>
+          logStartupError("desktop app control socket unavailable", { error }),
+        ),
+      );
     }
     // `t3 <dir>` still reaches the renderer, which opens it on this machine's connected service.
     yield* startAppActivation;
