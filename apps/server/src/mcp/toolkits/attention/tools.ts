@@ -23,10 +23,10 @@ const dependencies = [
 ];
 
 const NEEDS_YOU =
-  "The Needs you list, shown beside the personal agent in T3 Code, holds only what the user alone can do: sign in somewhere, make a decision, answer a question. It is not a to-do list for agents.";
+  "T3 Code shows the personal agent's to-do list as one list: one markdown file per item in ~/.t3/personal/todo/ (format in todo/README.md; finished items in todo/done/). Items blocked on the user (status blocked, blocked_on erik or decision) are marked Needs you and sorted to the top. These tools write those files; the personal agent may also edit them directly. Use them only for what the user alone can do: sign in somewhere, make a decision, answer a question.";
 
 const AttentionItemUpsertTool = Tool.make("attention_item_upsert", {
-  description: `${NEEDS_YOU} Add an item, or update the item with the same id. File one when your work is blocked on the user, list the threads that resume once it is done in unblocks, and keep working on anything that is not blocked. When the user ticks it, the personal agent is woken to check it and resume those threads. Updating an item keeps its done state.`,
+  description: `${NEEDS_YOU} Add an item that needs the user (todo/<id>.md with status blocked, blocked_on erik), or update the item with the same id. File one when your work is blocked on the user, put the exact step in detail and the threads that resume in unblocks, and keep working on anything that is not blocked. When the user ticks it, erik_ticked is recorded in the file and the personal agent is woken to verify it.`,
   parameters: AttentionItemUpsertInput,
   success: AttentionItemResult,
   failure: OrchestratorMcpFailure,
@@ -56,7 +56,7 @@ const AttentionItemResolveResult = Schema.Struct({
 });
 
 const AttentionItemResolveTool = Tool.make("attention_item_resolve", {
-  description: `${NEEDS_YOU} Mark an item done, reopen it, or dismiss it. Resolve items as soon as they stop needing the user, so the list stays current.`,
+  description: `${NEEDS_YOU} done moves the file to todo/done/; reopen puts it back as needing the user; dismiss moves it to done/ marked dismissed. Resolve items as soon as they stop needing the user, so the list stays current.`,
   parameters: AttentionItemResolveInput,
   success: AttentionItemResolveResult,
   failure: OrchestratorMcpFailure,
@@ -70,7 +70,7 @@ const AttentionItemResolveTool = Tool.make("attention_item_resolve", {
   .annotate(Tool.OpenWorld, false);
 
 const AttentionItemListTool = Tool.make("attention_item_list", {
-  description: `${NEEDS_YOU} List the items: open ones first by priority and age, then ones ticked in the last week.`,
+  description: `${NEEDS_YOU} List the to-do items that need the user now.`,
   success: AttentionItemListResult,
   failure: OrchestratorMcpFailure,
   failureMode: "return",
@@ -83,7 +83,7 @@ const AttentionItemListTool = Tool.make("attention_item_list", {
   .annotate(Tool.OpenWorld, false);
 
 const IN_FLIGHT =
-  "The In flight list, beside Needs you in T3 Code, is the personal agent's ledger of what the user asked for and the agent owns until it is truly done. The user does not tick these; only the agent closes an item, and only with proof it looked at itself.";
+  "These commitment tools write the same to-do files as attention_item_* (~/.t3/personal/todo/*.md): there is one list. open maps to status actionable, in_progress to in_flight, waiting to blocked (blocked_on erik). The user does not tick these; only the agent closes an item, and only with proof it looked at itself.";
 
 const CommitmentUpsertTool = Tool.make("commitment_upsert", {
   description: `${IN_FLIGHT} Add a commitment, or update the one with the same id: title, the user's words in detail, the owner thread, state (open, in_progress, waiting), the proof that will close it, the date asked, and repeated when the user had to ask again. Record every request in the turn it is made. Close it with commitment_resolve.`,
@@ -127,7 +127,7 @@ const CommitmentResolveTool = Tool.make("commitment_resolve", {
   .annotate(Tool.OpenWorld, false);
 
 const CommitmentListTool = Tool.make("commitment_list", {
-  description: `${IN_FLIGHT} List the commitments: open ones first (repeated requests lead), then ones closed in the last week.`,
+  description: `${IN_FLIGHT} List the whole to-do list: open items (repeated ones first), then items finished in the last week.`,
   success: AttentionItemListResult,
   failure: OrchestratorMcpFailure,
   failureMode: "return",
