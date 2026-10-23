@@ -136,6 +136,7 @@ import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
 import * as Workflows from "./workflows/Workflows.ts";
 import * as WorkflowRuntime from "./workflows/WorkflowRuntime.ts";
 import * as AttentionItems from "./attention/AttentionItemService.ts";
+import * as PersonalAgentHome from "./attention/PersonalAgentHome.ts";
 import * as SecretRequests from "./secrets/SecretRequests.ts";
 import * as FeedbackStore from "./feedback/FeedbackStore.ts";
 import * as GuestShareService from "./guest/GuestShareService.ts";
@@ -893,6 +894,7 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Workflows.layerDisabled,
   Layer.mock(WorkflowRuntime.WorkflowDefinitions)({}),
   Layer.mock(AttentionItems.AttentionItemService)({}),
+  Layer.mock(PersonalAgentHome.PersonalAgentHome)({}),
   Layer.mock(SecretRequests.SecretRequests)({}),
   Layer.mock(FeedbackStore.FeedbackStore)({}),
   Layer.mock(SecretResolver.SecretResolver)({}),

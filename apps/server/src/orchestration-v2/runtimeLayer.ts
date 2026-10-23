@@ -69,6 +69,7 @@ import * as ThreadForkService from "./ThreadForkService.ts";
 import * as TurnItemPositionStore from "./TurnItemPositionStore.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import * as AttentionItemService from "../attention/AttentionItemService.ts";
+import * as PersonalAgentHome from "../attention/PersonalAgentHome.ts";
 import * as SecretRequests from "../secrets/SecretRequests.ts";
 import * as FeedbackStore from "../feedback/FeedbackStore.ts";
 import * as WorkspaceFolders from "../workspace/WorkspaceFolders.ts";
@@ -363,6 +364,9 @@ const layerScratchThreadPromotionProvided = ScratchThreadPromotion.layer.pipe(
 const layerAttentionItemsProvided = AttentionItemService.layer.pipe(
   Layer.provide(layerThreadManagementProvided),
 );
+const layerPersonalAgentHomeProvided = PersonalAgentHome.layer.pipe(
+  Layer.provide(layerAttentionItemsProvided),
+);
 const layerProviderContinuationWorkerProvided = ProviderContinuationService.layer.pipe(
   Layer.provide(
     Layer.mergeAll(
@@ -463,6 +467,7 @@ export const layerProduction = Layer.mergeAll(
   layerWorkflowsProvided,
   layerScratchThreadPromotionProvided,
   layerAttentionItemsProvided,
+  layerPersonalAgentHomeProvided,
   layerSecretRequestsProvided,
   layerFeedbackStoreProvided,
   GuestShareService.layer.pipe(
