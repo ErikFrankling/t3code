@@ -24,7 +24,10 @@ const PushSendRequest = Schema.Struct({
   title: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(200)),
   message: Schema.String.check(Schema.isMaxLength(4000)),
   class: Schema.Literals(["urgent", "high", "normal", "low", "code"]),
-  path: Schema.optional(Schema.String.check(Schema.isPattern(/^\/threads\/[^/?#]+\/[^/?#]+$/))),
+  // `/dictate` on the end opens the thread with dictation recording (Android app).
+  path: Schema.optional(
+    Schema.String.check(Schema.isPattern(/^\/threads\/[^/?#]+\/[^/?#]+(?:\/dictate)?$/)),
+  ),
   url: Schema.optional(Schema.String.check(Schema.isPattern(/^https?:\/\//))),
   code: Schema.optional(Schema.String.check(Schema.isMaxLength(64))),
   id: Schema.optional(Schema.String.check(Schema.isMaxLength(100))),

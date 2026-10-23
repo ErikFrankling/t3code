@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { findLinkedRoute, restoreDraftLinkState, shouldHandleAppLink } from "./appLinking";
+import {
+  findLinkedRoute,
+  restoreDraftLinkState,
+  rewriteDictateLink,
+  shouldHandleAppLink,
+} from "./appLinking";
 
 describe("shouldHandleAppLink", () => {
   it.each(["t3code://", "t3code:///", "t3code-dev://", "t3code-preview://"])(
@@ -112,5 +117,22 @@ describe("nested link routes", () => {
       autoConnect: "1",
     });
     expect(findLinkedRoute(settingsLink, ["ConnectionsNew"])).toBeUndefined();
+  });
+});
+
+describe("rewriteDictateLink", () => {
+  it("turns the dictate segment into the intent param", () => {
+    expect(rewriteDictateLink("threads/env-1/thread-1/dictate")).toBe(
+      "threads/env-1/thread-1?intent=dictate",
+    );
+    expect(rewriteDictateLink("/threads/env-1/thread-1/dictate/")).toBe(
+      "/threads/env-1/thread-1?intent=dictate",
+    );
+  });
+
+  it("leaves other links alone", () => {
+    expect(rewriteDictateLink("threads/env-1/thread-1")).toBe("threads/env-1/thread-1");
+    expect(rewriteDictateLink("threads/env-1/dictate")).toBe("threads/env-1/dictate");
+    expect(rewriteDictateLink("new/draft?prompt=x")).toBe("new/draft?prompt=x");
   });
 });
