@@ -8,7 +8,7 @@ import { describe, expect, it } from "vite-plus/test";
  * a theme token, so dark mode is dark everywhere. A fixed colour (`text-white`,
  * `bg-red-600`, `#fff`) or a class naming no token fails here.
  */
-const SURFACES = ["VoiceMode.tsx", "ReadAloud.tsx"];
+const SURFACES = ["VoiceMode.tsx", "ReadAloud.tsx", "../speakReply/SpeakReplyWindow.tsx"];
 
 const tokens = new Set(
   [
