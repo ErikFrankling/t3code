@@ -17,6 +17,8 @@
 #   T3CODE_FCM_SERVICE_ACCOUNT_JSON   optional: release ping to installed apps
 #   FORCE_APK=true                    build an APK even if a JS update would do
 #   ACCEPT_DROPPED_COMMITS=true       see scripts/erik-updates-guard.sh
+#   ALLOW_BEHIND_TIP=true             publish even if erik/main moved on meanwhile (no
+#                                     newer run will; set by t3-android-release)
 #   GRADLE_ARGS                       extra Gradle arguments (worker limits)
 #   EXTRA_TEST_ABI                    also build an unpublished APK for this ABI
 #                                     (e.g. x86_64, for an emulator check)
@@ -80,7 +82,10 @@ else
 fi
 echo "kind=$kind"
 
-guard_again() { # erik/main may have moved while this built
+guard_again() { # erik/main or the index may have moved while this built
+  # Publish on top of the live index, never the copy fetched at the start:
+  # an older build must not replace a release published meanwhile.
+  scripts/erik-updates-release.sh fetch "$CHANNEL" "$work/index.json"
   [ "$(scripts/erik-updates-guard.sh "$work/index.json")" = publish=true ]
 }
 
