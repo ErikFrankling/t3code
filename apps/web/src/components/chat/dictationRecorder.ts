@@ -108,6 +108,7 @@ export class DictationRecorder {
   readonly #listeners = new Set<() => void>();
   readonly #editors = new Map<string, (text: string) => boolean>();
   readonly #watched = new Map<string, number>();
+  readonly #claiming = new Set<string>();
   #snapshot: readonly DictationEntry[] = [];
   #loaded: Promise<void> | null = null;
 
@@ -126,9 +127,22 @@ export class DictationRecorder {
 
   /** Adopts every recording left on this device by an earlier page. */
   load(): Promise<void> {
-    this.#loaded ??= this.#deps.storage.listRecords().then((records) => {
+    this.#loaded ??= this.rescan();
+    return this.#loaded;
+  }
+
+  /**
+   * Also adopts recordings another window made after this page loaded (the
+   * speak-reply window). A recording that window still holds is adopted when
+   * it lets go of it.
+   */
+  rescan(): Promise<void> {
+    return this.#deps.storage.listRecords().then((records) => {
       for (const { id } of records) {
+        if (this.#live.has(id) || this.#claiming.has(id)) continue;
+        this.#claiming.add(id);
         this.#lock(id, async () => {
+          this.#claiming.delete(id);
           const record = await this.#deps.storage.getRecord(id);
           if (!record || this.#live.has(id)) return;
           // The tab that held the microphone is gone; the recording stays open.
@@ -136,7 +150,6 @@ export class DictationRecorder {
         });
       }
     });
-    return this.#loaded;
   }
 
   /** The composer that takes an edited transcript for this target. */
