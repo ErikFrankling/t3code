@@ -52,7 +52,7 @@ import { subscribeComposerDraftModelReconciliation } from "./state/use-composer-
 import { environmentThreadShells, threadEnvironment } from "./state/threads";
 import { environmentShell, shellCachesReadAtom } from "./state/shell";
 import { OverlayPortalHost } from "./components/ui/OverlayPortal";
-import { shouldHandleAppLink, restoreDraftLinkState } from "./lib/appLinking";
+import { rewriteDictateLink, shouldHandleAppLink, restoreDraftLinkState } from "./lib/appLinking";
 import { hasCloudPublicConfig } from "./features/cloud/publicConfig";
 import { takeScheduledTaskNewLink } from "./features/settings/scheduled-task-editor-state";
 import {
@@ -113,7 +113,7 @@ const linkingConfig = {
 
 function getAppStateFromPath(path: string, options: Parameters<typeof getStateFromPath>[1]) {
   return pipe(
-    getStateFromPath(path, options),
+    getStateFromPath(rewriteDictateLink(path), options),
     (state) => restoreDraftLinkState(state, path),
     (state) => restoreSettingsLinkState(state, settingsLinkPage()),
     takeThreadPromptLink,
