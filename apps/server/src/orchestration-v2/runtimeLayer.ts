@@ -60,6 +60,7 @@ import * as ThreadForkService from "./ThreadForkService.ts";
 import * as TurnItemPositionStore from "./TurnItemPositionStore.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import * as AttentionItemService from "../attention/AttentionItemService.ts";
+import * as PersonalAgentHome from "../attention/PersonalAgentHome.ts";
 import * as SecretRequests from "../secrets/SecretRequests.ts";
 
 export const layerEventInfrastructure = Layer.mergeAll(
@@ -310,6 +311,9 @@ const layerScratchThreadPromotionProvided = ScratchThreadPromotion.layer.pipe(
 const layerAttentionItemsProvided = AttentionItemService.layer.pipe(
   Layer.provide(layerThreadManagementProvided),
 );
+const layerPersonalAgentHomeProvided = PersonalAgentHome.layer.pipe(
+  Layer.provide(layerAttentionItemsProvided),
+);
 const layerProviderContinuationWorkerProvided = ProviderContinuationService.layer.pipe(
   Layer.provide(
     Layer.mergeAll(
@@ -397,6 +401,7 @@ export const layerProduction = Layer.mergeAll(
   layerScheduledTaskProvided,
   layerScratchThreadPromotionProvided,
   layerAttentionItemsProvided,
+  layerPersonalAgentHomeProvided,
   layerSecretRequestsProvided,
   GuestShareService.layer.pipe(
     Layer.provide(Layer.merge(layerOrchestratorProvided, layerCommandOutputHubProvided)),

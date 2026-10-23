@@ -13,7 +13,7 @@ import {
   type TodoSection,
 } from "@t3tools/contracts";
 import * as Haptics from "expo-haptics";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Platform, Pressable, ScrollView, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Screen, ScreenStack, ScreenStackHeaderConfig } from "react-native-screens";
@@ -32,11 +32,15 @@ import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useAdaptiveWorkspaceLayout } from "../layout/AdaptiveWorkspaceLayout";
 import { PullRequestMarkdown } from "../pull-requests/PullRequestMarkdown";
+import { SpokenFeed, TodayStrip } from "./PersonalAgentHomeParts";
 import { useAndroidWorkspaceSelection } from "../workspace/useAndroidWorkspaceSelection";
 
 const HEADER_SCROLL_EDGE_EFFECTS = nativeHeaderScrollEdgeEffects(Platform.OS, Platform.Version);
 
 export type AttentionTarget = { readonly environmentId: EnvironmentId };
+
+// When the user last opened the home, so new spoken entries can be marked.
+let spokenSeenAt = "";
 
 const TONE_CLASS: Record<TodoChipTone, { readonly box: string; readonly text: string }> = {
   attention: { box: "bg-warning", text: "text-warning-foreground" },
@@ -132,7 +136,9 @@ function TodoRow(props: {
             accessibilityRole="checkbox"
             accessibilityState={{ checked: ticked, disabled: !props.canTick || props.busy }}
             accessibilityLabel={item.title}
-            accessibilityHint={ticked ? "Takes the tick back" : "Tells your personal agent it is done"}
+            accessibilityHint={
+              ticked ? "Takes the tick back" : "Tells your personal agent it is done"
+            }
             disabled={!props.canTick || props.busy}
             onPress={props.onToggle}
             hitSlop={10}
@@ -230,13 +236,25 @@ export function AttentionSheet({ route }: StaticScreenProps<AttentionTarget>) {
   const { data, error } = useEnvironmentQuery(
     serverEnvironment.attentionItemsLive({ environmentId, input: {} }),
   );
-  const canTick = useAtomValue(serverEnvironment.setAttentionItemDone.permissionAtom(environmentId));
+  const canTick = useAtomValue(
+    serverEnvironment.setAttentionItemDone.permissionAtom(environmentId),
+  );
   const setTicked = useAtomCommand(serverEnvironment.setAttentionItemDone, "To-do item tick");
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(new Set());
   const [showFolded, setShowFolded] = useState(false);
+  const [tab, setTab] = useState<"todo" | "spoken">("todo");
+  const spoken = data?.spoken ?? [];
+  const newestSpoken = spoken[0] ? (spoken[0].queuedAt ?? spoken[0].statusAt) : "";
+  // What was new when the home opened stays marked while it is open.
+  const [seenAt] = useState(() => spokenSeenAt);
+  const spokenUnseen = newestSpoken > seenAt;
+  useEffect(() => {
+    if (newestSpoken > spokenSeenAt) spokenSeenAt = newestSpoken;
+  }, [newestSpoken]);
 
   const toggle = async (item: AttentionItem) => {
-    if (item.erikTicked === null) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    if (item.erikTicked === null)
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setBusyIds((current) => new Set(current).add(item.id));
     await setTicked({ environmentId, input: { id: item.id, done: item.erikTicked === null } });
     setBusyIds((current) => {
@@ -295,15 +313,68 @@ export function AttentionSheet({ route }: StaticScreenProps<AttentionTarget>) {
       contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 16) + 8 }}
     >
       {error ? <Text className="pt-6 text-sm text-danger-foreground">{error}</Text> : null}
-      {!error && items.length === 0 ? (
+      <TodayStrip today={data?.today ?? null} />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Chat with your personal agent"
+        onPress={() => openThread(PERSONAL_AGENT_THREAD_ID)}
+        className="mt-3 flex-row items-center gap-3 rounded-2xl bg-adaptive-violet-500-a12-a16 px-4 py-3"
+        style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+      >
+        <SymbolView
+          name="bubble.left"
+          size={18}
+          tintColorClassName="accent-adaptive-violet-600-400"
+          type="monochrome"
+        />
+        <Text className="flex-1 text-base font-t3-medium text-foreground">Chat</Text>
+        <SymbolView
+          name="chevron.right"
+          size={14}
+          tintColorClassName="accent-adaptive-violet-600-400"
+          type="monochrome"
+        />
+      </Pressable>
+      <View accessibilityRole="tablist" className="mt-4 flex-row rounded-full bg-subtle p-1">
+        {(
+          [
+            ["todo", needsYouCount > 0 ? `To-do · ${needsYouCount} need you` : "To-do"],
+            ["spoken", spokenUnseen ? "Said aloud · new" : "Said aloud"],
+          ] as const
+        ).map(([value, label]) => (
+          <Pressable
+            key={value}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === value }}
+            onPress={() => setTab(value)}
+            className={cn(
+              "flex-1 items-center rounded-full py-2",
+              tab === value ? "bg-subtle-strong" : null,
+            )}
+          >
+            <Text
+              className={cn(
+                "text-sm font-t3-medium",
+                tab === value ? "text-foreground" : "text-foreground-muted",
+              )}
+            >
+              {label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+      {tab === "spoken" ? (
+        <SpokenFeed environmentId={environmentId} spoken={spoken} seenAt={seenAt} />
+      ) : null}
+      {tab === "todo" && !error && items.length === 0 ? (
         <Text className="pt-6 text-center text-sm text-foreground-muted">
           Nothing on the list. Your personal agent keeps it in its todo/ folder.
         </Text>
       ) : null}
-      {section("needs_you")}
-      {section("moving")}
-      {section("waiting")}
-      {foldedCount > 0 ? (
+      {tab === "todo" ? section("needs_you") : null}
+      {tab === "todo" ? section("moving") : null}
+      {tab === "todo" ? section("waiting") : null}
+      {tab === "todo" && foldedCount > 0 ? (
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ expanded: showFolded }}
@@ -321,7 +392,7 @@ export function AttentionSheet({ route }: StaticScreenProps<AttentionTarget>) {
           </Text>
         </Pressable>
       ) : null}
-      {showFolded ? (
+      {tab === "todo" && showFolded ? (
         <>
           {section("standing")}
           {section("done")}
@@ -330,7 +401,7 @@ export function AttentionSheet({ route }: StaticScreenProps<AttentionTarget>) {
     </ScrollView>
   );
 
-  const title = needsYouCount > 0 ? `To-do · ${needsYouCount} need you` : "To-do";
+  const title = "Personal agent";
 
   if (Platform.OS === "ios") {
     // A formSheet screen never renders a stack header, so it comes from a
