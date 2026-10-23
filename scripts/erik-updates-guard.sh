@@ -22,6 +22,23 @@ set -euo pipefail
 index="$1"
 head="$(git rev-parse HEAD)"
 
+# Commits of <from> whose work is not in <into>: not there as the same patch
+# (git cherry), not as a commit with the same subject (a rebase that resolved
+# a conflict), and their change not in <into>'s tree either (folded into
+# another commit during a rebase).
+missing_commits() { # <into> <from>
+  local into="$1" from="$2" subjects tree
+  subjects="$(git log --format=%s "$from..$into")"
+  tree="$(mktemp)"
+  GIT_INDEX_FILE="$tree" git read-tree "$into"
+  git cherry "$into" "$from" | sed -n 's/^+ //p' | while read -r sha; do
+    grep -qxF -- "$(git log -1 --format=%s "$sha")" <<< "$subjects" && continue
+    git diff "$sha^" "$sha" | GIT_INDEX_FILE="$tree" git apply --cached --check -R 2> /dev/null && continue
+    echo "$sha"
+  done
+  rm -f "$tree"
+}
+
 tip="$(git ls-remote origin refs/heads/erik/main | cut -f1)"
 if [ "$head" != "$tip" ] && [ "${ALLOW_BEHIND_TIP:-false}" = true ]; then
   # Without Actions (t3-android-release) no newer run will publish, so a
@@ -33,18 +50,7 @@ if [ "$head" != "$tip" ] && [ "${ALLOW_BEHIND_TIP:-false}" = true ]; then
     # erik/main was rewritten (a rebase) while this built. Its work may still
     # go out if every commit of it is on erik/main, as the same patch or the
     # same subject; work that was dropped from erik/main never does.
-    # A commit folded into another one during the rebase has neither: then
-    # its change must still be in erik/main's tree (its diff reverts cleanly).
-    on_tip="$(git log --format=%s "$head..$tip")"
-    tip_index="$(mktemp)"
-    GIT_INDEX_FILE="$tip_index" git read-tree "$tip"
-    gone="$(git cherry "$tip" "$head" | sed -n 's/^+ //p' |
-      while read -r sha; do
-        grep -qxF -- "$(git log -1 --format=%s "$sha")" <<< "$on_tip" && continue
-        git diff "$sha^" "$sha" | GIT_INDEX_FILE="$tip_index" git apply --cached --check -R 2> /dev/null && continue
-        echo "$sha"
-      done)"
-    rm -f "$tip_index"
+    gone="$(missing_commits "$tip" "$head")"
     if [ -n "$gone" ]; then
       echo "::error::${head::7} has work that is no longer on erik/main (${tip::7}):" >&2
       while read -r sha; do git log -1 --format='  %h %s' "$sha" >&2; done <<< "$gone"
@@ -78,13 +84,7 @@ for commit in "${shipped[@]}"; do
     }
   fi
   git merge-base --is-ancestor "$commit" "$head" && continue
-  # A commit the nightly rebase replayed with a resolved conflict has another
-  # patch id but keeps its subject.
-  replayed="$(git log --format=%s "$commit..$head")"
-  missing="$(git cherry "$head" "$commit" | sed -n 's/^+ //p' |
-    while read -r sha; do
-      grep -qxF -- "$(git log -1 --format=%s "$sha")" <<< "$replayed" || echo "$sha"
-    done)"
+  missing="$(missing_commits "$head" "$commit")"
   if [ -n "$missing" ]; then
     echo "::error::${head::7} lacks work already shipped in ${commit::7}:" >&2
     while read -r sha; do git log -1 --format='  %h %s' "$sha" >&2; done <<< "$missing"
