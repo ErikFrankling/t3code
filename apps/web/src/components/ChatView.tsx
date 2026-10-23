@@ -257,6 +257,7 @@ import {
 import type { AssistantCitationRequest } from "./chat/AssistantCitationSource";
 import type { MessagesTimelineHistoryControls } from "./chat/MessagesTimeline";
 import { ReadAloudDock } from "./chat/ReadAloud";
+import { setFocusedThread } from "./chat/activityLog";
 import { ThreadTimeline } from "./chat/ThreadTimeline";
 import { VoiceModeOverlay, voiceMode } from "./chat/VoiceMode";
 import { ProviderSubagentBar } from "./chat/ProviderSubagentBar";
@@ -988,6 +989,12 @@ export default function ChatView(props: ChatViewProps) {
       threadPanelPresentation,
     ),
   );
+
+  const focusedThreadId = isServerThread ? threadId : null;
+  useEffect(() => {
+    setFocusedThread(environmentId, focusedThreadId);
+    return () => setFocusedThread(environmentId, null);
+  }, [environmentId, focusedThreadId]);
 
   useEffect(() => {
     if (!activeThreadRef || !previewSessionsReady) return;
@@ -3438,6 +3445,7 @@ export default function ChatView(props: ChatViewProps) {
                       />
                       <VoiceModeOverlay
                         environmentId={activeThread.environmentId}
+                        threadId={activeThread.id}
                         title={activeThread.title}
                         reply={latestReadAloudMessage}
                         working={isWorking}

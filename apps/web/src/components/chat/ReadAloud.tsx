@@ -32,6 +32,7 @@ import {
   MenuTrigger,
 } from "../ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { reportReadAloudPlayed, setActivityEnvironment } from "./activityLog";
 import { environmentFetch } from "./environmentFetch";
 
 const decodeReadAloudState = Schema.decodeUnknownSync(ReadAloudState);
@@ -133,6 +134,7 @@ export const readAloudPlayer = new ReadAloudPlayer({
   audio,
   speed: readAloudSpeed(storedSpeed),
   onSpeedChange: (speed) => globalThis.localStorage?.setItem(SPEED_KEY, String(speed)),
+  onPlayed: reportReadAloudPlayed,
   request: async (body) => {
     if (!environment) throw new Error("No environment to read with.");
     const response = await environmentFetch(environment, "/api/read-aloud", body, 30_000);
@@ -144,6 +146,7 @@ export const readAloudPlayer = new ReadAloudPlayer({
 /** Points read-aloud at an environment, for readers that start the player themselves. */
 export function setReadAloudEnvironment(environmentId: EnvironmentId) {
   environment = environmentId;
+  setActivityEnvironment(environmentId);
 }
 
 export function startReadAloud(
@@ -153,6 +156,7 @@ export function startReadAloud(
   mode: ReadAloudMode = "summary",
 ) {
   environment = environmentId;
+  setActivityEnvironment(environmentId);
   readAloudPlayer.start(key, text, mode);
 }
 
