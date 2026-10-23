@@ -9,6 +9,7 @@ import {
   RunAttemptId,
   ThreadId,
   withMessageSenderNote,
+  withInputSourceHeader,
 } from "@t3tools/contracts";
 import type * as DateTime from "effect/DateTime";
 import * as Context from "effect/Context";
@@ -466,10 +467,13 @@ export const layer: Layer.Layer<
                 messageId: message.id,
                 text: withMessageSenderNote(
                   message,
+                withInputSourceHeader(
                   projectComposerContextForProvider({
                     text: message.text,
                     records: message.context?.records ?? [],
                   }),
+                  message.inputSource,
+                  ),
                 ),
                 attachments: message.attachments,
                 createdBy: message.createdBy,

@@ -102,6 +102,7 @@ import {
   retryingQueuedMessageIdsAtom,
   threadOutboxShellStatusesAtom,
 } from "./use-thread-outbox";
+import { mobileInputSource } from "../lib/inputSource";
 import { clearThreadComposerError, setThreadComposerError } from "./thread-composer-error";
 import { workspaceConnections } from "./workspace";
 
@@ -1035,6 +1036,9 @@ export function createThreadOutboxDelivery(): {
         ...(queuedMessage.freshContext ? { freshContext: true } : {}),
         resendAfterSocketLoss: false,
         ...(queuedMessage.dictation ? { dictation: queuedMessage.dictation } : {}),
+        inputSource: mobileInputSource(
+          queuedMessage.inputMethod ?? (queuedMessage.dictation ? "dictation" : "typed"),
+        ),
       },
     });
     if (AsyncResult.isFailure(deliveryResult) && !hasAccess()) return;
