@@ -109,6 +109,7 @@ export class DictationRecorder {
   readonly #editors = new Map<string, (text: string) => boolean>();
   readonly #watched = new Map<string, number>();
   readonly #claiming = new Set<string>();
+  readonly #returned = new Set<(serverId: string) => void>();
   #snapshot: readonly DictationEntry[] = [];
   #loaded: Promise<void> | null = null;
 
@@ -124,6 +125,17 @@ export class DictationRecorder {
   };
 
   getSnapshot = () => this.#snapshot;
+
+  /**
+   * Called with the server id of a sent recording that came back unsent (no
+   * speech, or the server lost it), so the chat can drop its pending bubble.
+   */
+  onReturned(listener: (serverId: string) => void) {
+    this.#returned.add(listener);
+    return () => {
+      this.#returned.delete(listener);
+    };
+  }
 
   /** Adopts every recording left on this device by an earlier page. */
   load(): Promise<void> {
@@ -201,7 +213,10 @@ export class DictationRecorder {
   /** Stores a chunk; resolves once it is on the device (or kept in memory if that failed). */
   append(id: string, samples: Int16Array): Promise<void> {
     const live = this.#live.get(id);
-    if (!live || live.gone || samples.length === 0) return Promise.resolve();
+    // Only a recording that records grows: a paused or sent one never takes
+    // audio, whatever microphone is still feeding it.
+    if (!live || live.gone || samples.length === 0 || live.record.state !== "recording")
+      return Promise.resolve();
     const sequence = live.record.sizes.length;
     live.cache.set(sequence, samples);
     live.unsaved.add(sequence);
@@ -224,8 +239,9 @@ export class DictationRecorder {
     );
   }
 
-  pause(id: string) {
-    this.#transition(id, ["recording"], "paused");
+  /** `notice` says why, when it was not the user who paused it. */
+  pause(id: string, notice = "") {
+    this.#transition(id, ["recording"], "paused", notice);
   }
 
   resume(id: string) {
@@ -332,10 +348,15 @@ export class DictationRecorder {
     return done;
   }
 
-  #transition(id: string, from: DictationRecord["state"][], to: DictationRecord["state"]) {
+  #transition(
+    id: string,
+    from: DictationRecord["state"][],
+    to: DictationRecord["state"],
+    notice = "",
+  ) {
     const live = this.#live.get(id);
     if (!live || live.gone || !from.includes(live.record.state)) return;
-    this.#update(live, { state: to, notice: "" });
+    this.#update(live, { state: to, notice });
     void this.#save(live);
     live.wake();
   }
@@ -597,6 +618,7 @@ export class DictationRecorder {
     } catch (cause) {
       if (statusOf(cause) !== 404) throw cause;
       // The server knows neither the recording nor a delivery for it.
+      this.#announceReturned(record.serverId);
       this.#update(live, {
         state: "paused",
         notice: "Not sent: the server lost track of this recording. Send it again or edit it.",
@@ -622,6 +644,7 @@ export class DictationRecorder {
       return "again";
     }
     if (state.delivery === "empty") {
+      this.#announceReturned(record.serverId);
       this.#update(live, {
         state: "paused",
         handedOff: false,
@@ -633,6 +656,10 @@ export class DictationRecorder {
       return "again";
     }
     return 2000;
+  }
+
+  #announceReturned(serverId: string) {
+    for (const listener of this.#returned) listener(serverId);
   }
 
   async #followEdit(live: Live): Promise<"again" | "idle" | number> {
