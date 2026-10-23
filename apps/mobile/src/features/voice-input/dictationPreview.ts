@@ -48,3 +48,7 @@ export function useDictationPreview(ownerKey: string | null): DictationPreview |
   const preview = useSyncExternalStore(subscribe, () => current);
   return preview && ownerKey !== null && preview.ownerKey === ownerKey ? preview : null;
 }
+
+export function getDictationPreview(): DictationPreview | null {
+  return current;
+}

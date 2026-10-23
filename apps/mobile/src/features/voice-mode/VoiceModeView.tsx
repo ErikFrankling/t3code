@@ -1,57 +1,54 @@
 import { VOICE_LOOP_CUE_KEY } from "@t3tools/client-runtime/voice-loop";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { useEffect, useRef, type ComponentRef } from "react";
-import { Modal, Pressable, ScrollView, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Pressable, ScrollView, useWindowDimensions, View } from "react-native";
 
 import { AppText as Text } from "../../components/ui/AppText";
 import { SymbolView, type AppSymbolName } from "../../components/ui/AppSymbol";
-import { ThemedSwitch } from "../../components/ui/ThemedSwitch";
 import { voiceCall } from "../../native/voiceCall";
-import {
-  ReadAloudSpeedMenu,
-  readAloudPlayer,
-  useReadAloud,
-  useReadAloudEnvironment,
-} from "../threads/ReadAloudButton";
+import { useReadAloud, useReadAloudEnvironment } from "../threads/ReadAloudButton";
 import { useDictationPreview } from "../voice-input/dictationPreview";
+import { splitTranscript } from "../voice-input/dictationText";
 import { useGlobalVoiceInput } from "../voice-input/VoiceInputProvider";
 import {
   registerVoiceModeController,
-  useVoiceLoop,
   useVoiceMode,
-  voiceLoop,
+  useVoiceSession,
   voiceMode,
+  voiceModeThreadChanged,
 } from "./voiceMode";
 
-const LOOP_STATUS = {
+const STATUS = {
   off: "",
-  cue: "Recording started",
+  idle: "Voice mode on",
+  speaking: "Speaking",
+  cue: "Your turn",
   listening: "Your turn",
   sending: "Sending…",
-  waiting: "Thinking…",
-  reading: "Reading the reply",
 } as const;
 
 /**
- * Full screen over the thread: what you say while you talk, what is read while
- * the reply speaks, and one big button for the turn.
+ * Voice mode, in the flow right above the composer like the dictation card:
+ * the chat stays visible, scrollable and tappable behind it, so the agent's
+ * last message, a screenshot or anything earlier can be looked at without
+ * leaving voice mode. What the agent says stays in the chat as its own
+ * message; this card shows what is being said now, or Erik's own words as
+ * they are recognized. Only Stop ends it.
  */
-export function VoiceModeView(props: {
+export function VoiceModeCard(props: {
   readonly environmentId: EnvironmentId;
   readonly threadId: string;
-  readonly title: string;
   readonly reply: { readonly id: string; readonly text: string } | null;
   readonly working: boolean;
 }) {
-  const insets = useSafeAreaInsets();
   const mode = useVoiceMode();
-  const loop = useVoiceLoop();
+  const session = useVoiceSession();
   const reading = useReadAloud();
   const voice = useGlobalVoiceInput();
   const preview = useDictationPreview(voice.ownerKey);
   const selectEnvironment = useReadAloudEnvironment(props.environmentId);
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  const { height } = useWindowDimensions();
 
   useEffect(() => {
     registerVoiceModeController(voice.session.controller);
@@ -61,233 +58,148 @@ export function VoiceModeView(props: {
   const replyKey = props.reply?.id ?? null;
   const replyText = props.reply?.text ?? "";
   useEffect(() => {
-    voiceLoop.update({
-      threadId: props.threadId,
-      reply: replyKey ? { key: replyKey, text: replyText } : null,
-      working: props.working,
-    });
-  }, [props.threadId, replyKey, replyText, props.working]);
+    voiceModeThreadChanged(
+      props.threadId,
+      replyKey ? { id: replyKey, text: replyText } : null,
+      props.working,
+    );
+  }, [props.threadId, replyKey, replyText, props.working, mode.on]);
 
-  const recording = voice.state.phase === "recording";
-  const speaking =
-    reading.phase === "loading" || reading.phase === "playing" || reading.phase === "paused";
-  const talking =
-    recording ||
-    voice.state.phase === "preparing" ||
-    loop.phase === "listening" ||
-    loop.phase === "sending";
-  const transcript = preview ? [preview.final, preview.draft].filter(Boolean).join("\n\n") : "";
-  // The cue is shown while it is said, not left on screen afterwards.
-  const shownSentences = reading.key === VOICE_LOOP_CUE_KEY && !speaking ? [] : reading.sentences;
+  const talking = session.phase === "cue" || session.phase === "listening";
+  const { refined, tail } = splitTranscript(preview?.final ?? "", preview?.draft ?? "");
+  const speakingNow =
+    session.phase === "speaking" && reading.key !== null && reading.key !== VOICE_LOOP_CUE_KEY;
+  const sentence = speakingNow ? (reading.sentences[reading.current] ?? "") : "";
 
   useEffect(() => {
     scrollRef.current?.scrollToEnd({ animated: true });
-  }, [transcript, reading.current]);
+  }, [refined, tail]);
 
-  const status = mode.loop
-    ? LOOP_STATUS[loop.phase]
-    : recording
-      ? "Listening"
-      : speaking
-        ? "Reading"
-        : props.working
-          ? "Thinking…"
-          : "Tap to talk";
+  if (!mode.on || mode.threadId !== props.threadId) return null;
 
-  const big = ((): { label: string; icon: AppSymbolName; onPress: () => void } => {
-    if (mode.loop) {
-      if (loop.phase === "reading" || loop.phase === "cue")
-        return {
-          label: "Skip",
-          icon: { ios: "forward.end.fill", android: "skip_next" },
-          onPress: () => voiceLoop.endTurn(),
-        };
-      if (loop.phase === "listening")
-        return {
-          label: "Send",
-          icon: { ios: "arrow.up", android: "arrow_upward" },
-          onPress: () => voiceLoop.endTurn(),
-        };
-      // Waiting: the reply is on its way; talking now adds to it.
-      return {
-        label: "Talk",
-        icon: { ios: "mic", android: "mic" },
-        onPress: () => voiceLoop.endTurn(),
-      };
-    }
-    if (recording)
-      return {
-        label: "Send",
-        icon: { ios: "arrow.up", android: "arrow_upward" },
-        onPress: voiceMode.send,
-      };
-    if (speaking)
-      return {
-        label: "Stop",
-        icon: { ios: "stop.fill", android: "stop_circle" },
-        onPress: () => readAloudPlayer.stop(),
-      };
-    return { label: "Talk", icon: { ios: "mic", android: "mic" }, onPress: voiceMode.talk };
+  const big = ((): { label: string; icon: AppSymbolName } => {
+    if (session.phase === "listening" || session.phase === "cue")
+      return { label: "Send", icon: { ios: "arrow.up", android: "arrow_upward" } };
+    if (session.phase === "speaking")
+      return { label: "Answer", icon: { ios: "mic", android: "mic" } };
+    return { label: "Talk", icon: { ios: "mic", android: "mic" } };
   })();
 
-  const error =
-    mode.error ??
-    loop.error ??
-    voice.state.error ??
-    (reading.phase === "error" ? reading.error : null);
+  const error = mode.error ?? session.error ?? voice.state.error;
+  const hint = talking
+    ? null
+    : session.phase === "speaking"
+      ? "The full message is in the chat."
+      : session.waiting > 0
+        ? `${session.waiting} more to say`
+        : voiceCall.available
+          ? "Your agent may speak to you now. Volume down or an earbud tap to talk."
+          : "Your agent may speak to you now.";
 
   return (
     <View
-      className="flex-1 bg-screen"
-      style={{ paddingTop: insets.top + 8, paddingBottom: insets.bottom + 16 }}
+      accessibilityLabel="Voice mode"
+      className="mx-2 mb-2 rounded-[20px] border border-border bg-card px-3.5 pt-2.5 pb-3"
     >
-      <View className="flex-row items-center gap-3 px-4">
-        <RoundIcon
-          label="Close voice mode"
-          icon={{ ios: "xmark", android: "close" }}
-          onPress={voiceMode.close}
+      <View className="flex-row items-center gap-2">
+        <View
+          className={
+            talking
+              ? "size-2 rounded-full bg-danger-foreground"
+              : session.phase === "speaking"
+                ? "size-2 rounded-full bg-primary"
+                : "size-2 rounded-full bg-foreground-tertiary"
+          }
         />
-        <Text className="flex-1 text-base text-foreground-muted" numberOfLines={1}>
-          {props.title}
+        <SymbolView
+          name={{ ios: "headphones", android: "headphones" }}
+          size={14}
+          tintColorClassName="accent-foreground-secondary"
+          type="monochrome"
+        />
+        <Text className="text-sm font-t3-medium text-foreground-secondary">
+          {STATUS[session.phase]}
         </Text>
-        <Text className="text-base text-foreground">Loop</Text>
-        <ThemedSwitch
-          accessibilityLabel="Loop: read the reply, then listen again"
-          value={mode.loop}
-          onValueChange={voiceMode.setLoop}
-        />
+        <View className="flex-1" />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Stop voice mode"
+          hitSlop={8}
+          onPress={voiceMode.stop}
+          style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+          className="flex-row items-center gap-1 rounded-full border border-border px-2.5 py-1"
+        >
+          <SymbolView
+            name={{ ios: "xmark", android: "close" }}
+            size={12}
+            tintColorClassName="accent-foreground"
+            type="monochrome"
+          />
+          <Text className="text-sm text-foreground">Stop</Text>
+        </Pressable>
       </View>
 
-      <Text className="mt-6 px-6 text-3xl font-t3-bold text-foreground">{status}</Text>
-
-      <ScrollView ref={scrollRef} className="mt-4 flex-1 px-6">
-        {talking ? (
-          <Text className="text-2xl leading-9 text-foreground">
-            {transcript || (recording ? "Listening…" : "")}
+      {talking ? (
+        <ScrollView
+          ref={scrollRef}
+          className="mt-1.5"
+          style={{ maxHeight: Math.round(height * 0.2) }}
+        >
+          <Text className="text-lg leading-7 text-foreground">
+            {refined}
+            {refined && tail ? " " : ""}
+            {tail ? (
+              <Text className="text-lg leading-7 text-foreground-secondary">{tail}</Text>
+            ) : null}
+            {!refined && !tail ? (
+              <Text className="text-lg leading-7 text-foreground-secondary">
+                Listening… your words appear here.
+              </Text>
+            ) : null}
           </Text>
-        ) : (
-          shownSentences.map((sentence, index) => (
-            <Text
-              // Sentences only ever append, so the index is stable.
-              // oxlint-disable-next-line react/no-array-index-key
-              key={index}
-              onPress={() => readAloudPlayer.seek(index)}
-              className={
-                index === reading.current
-                  ? "text-2xl leading-9 text-foreground font-t3-medium"
-                  : "text-2xl leading-9 text-foreground-muted"
-              }
-            >
-              {sentence}
-            </Text>
-          ))
-        )}
-        {error ? <Text className="mt-4 text-base text-foreground-muted">{error}</Text> : null}
-      </ScrollView>
-
-      {speaking ? (
-        <View className="mt-2 flex-row items-center justify-center gap-6">
-          <RoundIcon
-            label="Previous sentence"
-            icon={{ ios: "backward.end.fill", android: "skip_previous" }}
-            onPress={() => readAloudPlayer.seek(reading.current - 1)}
-          />
-          <RoundIcon
-            label={reading.phase === "playing" ? "Pause" : "Play"}
-            icon={
-              reading.phase === "playing"
-                ? { ios: "pause.fill", android: "pause" }
-                : { ios: "play.fill", android: "play_arrow" }
-            }
-            onPress={() => readAloudPlayer.togglePause()}
-          />
-          <ReadAloudSpeedMenu speed={reading.speed} large />
-        </View>
+        </ScrollView>
+      ) : sentence ? (
+        <Text numberOfLines={3} className="mt-1.5 text-lg leading-7 text-foreground">
+          {sentence}
+        </Text>
       ) : null}
 
-      <View className="mt-6 items-center">
+      {error ? <Text className="mt-1.5 text-sm text-foreground-muted">{error}</Text> : null}
+
+      <View className="mt-2.5 flex-row items-center gap-2">
+        {hint ? <Text className="flex-1 text-sm text-foreground-muted">{hint}</Text> : null}
+        {!hint ? <View className="flex-1" /> : null}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={big.label}
-          onPress={big.onPress}
-          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+          disabled={session.phase === "sending"}
+          onPress={voiceMode.press}
+          style={({ pressed }) => ({
+            opacity: session.phase === "sending" ? 0.4 : pressed ? 0.7 : 1,
+          })}
           className={
             talking
-              ? "size-40 items-center justify-center rounded-full border-2 border-danger-border bg-danger"
-              : "size-40 items-center justify-center rounded-full bg-primary"
+              ? "h-11 flex-row items-center justify-center gap-1.5 rounded-full bg-primary px-5"
+              : "h-11 flex-row items-center justify-center gap-1.5 rounded-full bg-subtle-strong px-4"
           }
         >
           <SymbolView
             name={big.icon}
-            size={56}
-            tintColorClassName={talking ? "accent-danger-foreground" : "accent-primary-foreground"}
+            size={18}
+            tintColorClassName={talking ? "accent-primary-foreground" : "accent-foreground"}
             type="monochrome"
           />
           <Text
             className={
               talking
-                ? "mt-1 text-lg font-t3-bold text-danger-foreground"
-                : "mt-1 text-lg font-t3-bold text-primary-foreground"
+                ? "text-base font-t3-bold text-primary-foreground"
+                : "text-base font-t3-medium text-foreground"
             }
           >
             {big.label}
           </Text>
         </Pressable>
-        {!mode.loop && props.reply && !speaking && !recording ? (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => readAloudPlayer.start(props.reply!.id, props.reply!.text)}
-            className="mt-4 rounded-full bg-card px-5 py-3"
-          >
-            <Text className="text-base text-foreground">Read the last reply</Text>
-          </Pressable>
-        ) : null}
-        <Text className="mt-4 px-8 text-center text-sm text-foreground-muted">
-          {mode.loop && voiceCall.available
-            ? "Screen off works. Volume down or an earbud tap sends your turn, or skips the reading. Volume up plays the last reply again."
-            : "Turn on Loop to keep talking: it reads each reply, then listens again."}
-        </Text>
       </View>
     </View>
-  );
-}
-
-function RoundIcon(props: {
-  readonly label: string;
-  readonly icon: AppSymbolName;
-  readonly onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={props.label}
-      hitSlop={8}
-      onPress={props.onPress}
-      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-      className="size-14 items-center justify-center rounded-full bg-card"
-    >
-      <SymbolView
-        name={props.icon}
-        size={24}
-        tintColorClassName="accent-foreground"
-        type="monochrome"
-      />
-    </Pressable>
-  );
-}
-
-/** Voice mode over the whole screen while it is open; Back closes it. */
-export function VoiceModeHost(props: Parameters<typeof VoiceModeView>[0]) {
-  const mode = useVoiceMode();
-  return (
-    <Modal
-      visible={mode.open}
-      animationType="slide"
-      statusBarTranslucent
-      navigationBarTranslucent
-      onRequestClose={voiceMode.close}
-    >
-      {mode.open ? <VoiceModeView {...props} /> : null}
-    </Modal>
   );
 }
