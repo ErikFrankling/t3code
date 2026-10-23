@@ -9,11 +9,11 @@ import { runMigrations } from "../Migrations.ts";
 
 const layer = it.layer(NodeSqliteClient.layer({ filename: ":memory:" }));
 
-layer("069_ThreadMessageSearch", (it) => {
+layer("070_ThreadMessageSearch", (it) => {
   it.effect("backfills what users wrote and agents answered, then follows deletes", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
-      yield* runMigrations({ toMigrationInclusive: 68 });
+      yield* runMigrations({ toMigrationInclusive: 69 });
       const insert = (
         id: string,
         role: string,
