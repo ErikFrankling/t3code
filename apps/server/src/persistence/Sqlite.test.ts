@@ -202,7 +202,7 @@ it.effect("upgrades an existing database on a read-write worker connection", () 
     yield* Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       yield* sql`PRAGMA journal_mode = WAL;`;
-      yield* runMigrations({ toMigrationInclusive: 81 });
+      yield* runMigrations({ toMigrationInclusive: 82 });
     }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: dbPath })));
     const startedBefore = workerData.length;
 
