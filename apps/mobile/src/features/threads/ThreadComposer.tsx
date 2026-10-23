@@ -930,7 +930,8 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
             voiceInput={voiceInput}
             onFullScreen={() => setDictationFullScreen(true)}
           />
-        ) : (
+        ) : inVoiceCall ? null : (
+          // Voice mode's card shows what is heard.
           <DictationLivePreview ownerKey={composerDraftKey} />
         )}
         <DictationScreen
