@@ -5,9 +5,14 @@ import * as NodeOS from "node:os";
 import {
   DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION,
   DesktopAppActivationErrorCode,
-  DesktopAppActivationResponse,
+  DesktopAppControlResponse,
+  type DesktopAppControlRequest,
+  type DesktopSpeakReplyRequest,
+  DesktopSpeakReplyStatus,
+  SPEAK_REPLY_MAX_TEXT_LENGTH,
   type DesktopAppActivationPlatform,
   type DesktopAppActivationRequest,
+  ThreadId,
 } from "@t3tools/contracts";
 import { resolveDesktopAppControlAddress } from "@t3tools/shared/desktopAppControl";
 import * as HostProcess from "@t3tools/shared/HostProcess";
@@ -15,17 +20,20 @@ import * as Config from "effect/Config";
 import * as Console from "effect/Console";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
-import { Argument, Command } from "effect/cli";
+import { Argument, Command, Flag } from "effect/cli";
 
 import { expandHomePath, resolveBaseDir } from "../os-jank.ts";
 import { baseDirFlag } from "./config.ts";
 
 const CLI_RESPONSE_TIMEOUT_MS = 17_000;
 const MAX_RESPONSE_BYTES = 64 * 1024;
-const isDesktopAppActivationResponse = Schema.is(DesktopAppActivationResponse);
+const isDesktopAppControlResponse = Schema.is(DesktopAppControlResponse);
+const isDesktopAppActivationErrorCode = Schema.is(DesktopAppActivationErrorCode);
+const encodeSpeakReplyStatus = Schema.encodeSync(Schema.fromJsonString(DesktopSpeakReplyStatus));
 
 export class DesktopAppSshUnsupportedError extends Schema.TaggedError<DesktopAppSshUnsupportedError>()(
   "DesktopAppSshUnsupportedError",
@@ -80,9 +88,9 @@ function isDesktopPlatform(platform: NodeJS.Platform): platform is DesktopAppAct
 function sendDesktopAppActivationRequest(input: {
   readonly address: string;
   readonly fallbackAddress?: string;
-  readonly request: DesktopAppActivationRequest;
+  readonly request: DesktopAppControlRequest;
   readonly timeoutMs?: number;
-}): Promise<DesktopAppActivationResponse> {
+}): Promise<DesktopAppControlResponse> {
   return new Promise((resolve, reject) => {
     const socket = NodeNet.createConnection(input.address);
     socket.setEncoding("utf8");
@@ -92,7 +100,7 @@ function sendDesktopAppActivationRequest(input: {
 
     const finish = (
       result:
-        | { readonly type: "success"; readonly response: DesktopAppActivationResponse }
+        | { readonly type: "success"; readonly response: DesktopAppControlResponse }
         | { readonly type: "failure"; readonly error: Error },
     ) => {
       if (settled) return;
@@ -133,7 +141,7 @@ function sendDesktopAppActivationRequest(input: {
         });
         return;
       }
-      if (!isDesktopAppActivationResponse(parsed)) {
+      if (!isDesktopAppControlResponse(parsed)) {
         finish({ type: "failure", error: new Error("The desktop app response is invalid.") });
         return;
       }
@@ -179,10 +187,10 @@ const appEnvironment = Config.all({
   sshTty: Config.String("SSH_TTY").pipe(Config.option),
 });
 
-const runAppCommand = Effect.fn("cli.app")(function* (flags: {
-  readonly baseDir: Option.Option<string>;
-  readonly workspaceRoot: Option.Option<string>;
-}) {
+/** The local desktop app's control socket, plus the dev app's when no T3 home was chosen. */
+const resolveControlTarget = Effect.fn("cli.app.resolveControlTarget")(function* (
+  baseDirFlag: Option.Option<string>,
+) {
   const environment = yield* appEnvironment;
   const hostPlatform = yield* HostProcess.Platform;
   if (Option.isSome(environment.sshConnection) || Option.isSome(environment.sshTty)) {
@@ -193,12 +201,9 @@ const runAppCommand = Effect.fn("cli.app")(function* (flags: {
   }
 
   const path = yield* Path.Path;
-  const configuredBaseDir = Option.getOrUndefined(flags.baseDir) ?? environment.t3Home;
+  const configuredBaseDir = Option.getOrUndefined(baseDirFlag) ?? environment.t3Home;
   const baseDir = yield* resolveBaseDir(configuredBaseDir);
-  const allowDevFallback = Option.isNone(flags.baseDir) && !environment.t3Home?.trim();
-  const rawWorkspaceRoot =
-    Option.getOrUndefined(flags.workspaceRoot) ?? (yield* HostProcess.WorkingDirectory);
-  const workspaceRoot = path.resolve(yield* expandHomePath(rawWorkspaceRoot));
+  const allowDevFallback = Option.isNone(baseDirFlag) && !environment.t3Home?.trim();
   const userId = yield* HostProcess.UserId;
   const resolveAddress = (stateSubdirectory: "userdata" | "dev") =>
     resolveDesktopAppControlAddress({
@@ -209,35 +214,60 @@ const runAppCommand = Effect.fn("cli.app")(function* (flags: {
       joinPath: path.join,
     }).address;
   const crypto = yield* Crypto.Crypto;
-  const requestId = yield* crypto.randomUUIDv4().pipe(Effect.orDie);
-  const request: DesktopAppActivationRequest = {
-    version: DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION,
-    requestId,
-    type: "open-workspace",
-    workspaceRoot,
+  return {
     platform: hostPlatform,
+    requestId: yield* crypto.randomUUIDv4().pipe(Effect.orDie),
+    address: resolveAddress("userdata"),
+    fallbackAddress: allowDevFallback ? resolveAddress("dev") : undefined,
   };
-  const address = resolveAddress("userdata");
-  const fallbackAddress = allowDevFallback ? resolveAddress("dev") : undefined;
+});
 
-  const response = yield* Effect.tryPromise({
+const sendControlRequest = (
+  target: { readonly address: string; readonly fallbackAddress: string | undefined },
+  request: DesktopAppControlRequest,
+  workspaceRoot: string,
+) =>
+  Effect.tryPromise({
     try: () =>
       sendDesktopAppActivationRequest({
-        address,
-        ...(fallbackAddress === undefined ? {} : { fallbackAddress }),
+        address: target.address,
+        ...(target.fallbackAddress === undefined
+          ? {}
+          : { fallbackAddress: target.fallbackAddress }),
         request,
       }),
     catch: (cause) =>
       new DesktopAppUnreachableError({
-        candidateAddresses: fallbackAddress === undefined ? [address] : [address, fallbackAddress],
+        candidateAddresses:
+          target.fallbackAddress === undefined
+            ? [target.address]
+            : [target.address, target.fallbackAddress],
         requestId: request.requestId,
         workspaceRoot,
         cause,
       }),
   });
+
+const runAppCommand = Effect.fn("cli.app")(function* (flags: {
+  readonly baseDir: Option.Option<string>;
+  readonly workspaceRoot: Option.Option<string>;
+}) {
+  const target = yield* resolveControlTarget(flags.baseDir);
+  const path = yield* Path.Path;
+  const rawWorkspaceRoot =
+    Option.getOrUndefined(flags.workspaceRoot) ?? (yield* HostProcess.WorkingDirectory);
+  const workspaceRoot = path.resolve(yield* expandHomePath(rawWorkspaceRoot));
+  const request: DesktopAppActivationRequest = {
+    version: DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION,
+    requestId: target.requestId,
+    type: "open-workspace",
+    workspaceRoot,
+    platform: target.platform,
+  };
+  const response = yield* sendControlRequest(target, request, workspaceRoot);
   if (!response.ok) {
     return yield* new DesktopAppRequestFailedError({
-      code: response.code,
+      code: isDesktopAppActivationErrorCode(response.code) ? response.code : "internal-error",
       requestId: response.requestId,
       workspaceRoot,
       cause: response,
@@ -246,6 +276,153 @@ const runAppCommand = Effect.fn("cli.app")(function* (flags: {
 
   yield* Console.log(`Opened ${workspaceRoot} in T3 Code.`);
 });
+
+export class DesktopSpeakReplyUsageError extends Schema.TaggedError<DesktopSpeakReplyUsageError>()(
+  "DesktopSpeakReplyUsageError",
+  { detail: Schema.String },
+) {
+  override get message(): string {
+    return this.detail;
+  }
+}
+
+export class DesktopSpeakReplyFailedError extends Schema.TaggedError<DesktopSpeakReplyFailedError>()(
+  "DesktopSpeakReplyFailedError",
+  { code: Schema.String, detail: Schema.String },
+) {
+  override get message(): string {
+    return `T3 Code could not do that (${this.code}): ${this.detail}`;
+  }
+}
+
+const runSpeakReplyCommand = Effect.fn("cli.app.speakReply")(function* (flags: {
+  readonly baseDir: Option.Option<string>;
+  readonly thread: Option.Option<string>;
+  readonly text: Option.Option<string>;
+  readonly textFile: Option.Option<string>;
+  readonly queuedAt: Option.Option<number>;
+  readonly send: boolean;
+  readonly cancel: boolean;
+  readonly status: boolean;
+}) {
+  const actions = [flags.send, flags.cancel, flags.status, Option.isSome(flags.thread)].filter(
+    Boolean,
+  ).length;
+  if (actions !== 1) {
+    return yield* new DesktopSpeakReplyUsageError({
+      detail:
+        "Use exactly one of: --thread <id> with --text or --text-file (open), --send, --cancel or --status.",
+    });
+  }
+  let text = "";
+  if (Option.isSome(flags.thread)) {
+    if (Option.isSome(flags.text) === Option.isSome(flags.textFile)) {
+      return yield* new DesktopSpeakReplyUsageError({
+        detail: "Opening needs exactly one of --text or --text-file.",
+      });
+    }
+    if (Option.isSome(flags.textFile)) {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const file = flags.textFile.value;
+      text = yield* fileSystem.readFileString(file === "-" ? "/dev/stdin" : file).pipe(
+        Effect.mapError(
+          (cause) =>
+            new DesktopSpeakReplyUsageError({
+              detail: `Could not read ${file}: ${cause.message}`,
+            }),
+        ),
+      );
+    } else text = Option.getOrThrow(flags.text);
+    text = text.trim();
+    if (!text) return yield* new DesktopSpeakReplyUsageError({ detail: "The message is empty." });
+    if (text.length > SPEAK_REPLY_MAX_TEXT_LENGTH) {
+      return yield* new DesktopSpeakReplyUsageError({
+        detail: `The message is longer than ${SPEAK_REPLY_MAX_TEXT_LENGTH} characters.`,
+      });
+    }
+  }
+
+  const target = yield* resolveControlTarget(flags.baseDir);
+  const base = {
+    version: DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION,
+    requestId: target.requestId,
+    type: "speak-reply",
+  } as const;
+  const request: DesktopSpeakReplyRequest = Option.isSome(flags.thread)
+    ? {
+        ...base,
+        action: "open",
+        threadId: ThreadId.make(flags.thread.value.trim()),
+        text,
+        ...(Option.isSome(flags.queuedAt) ? { queuedAt: flags.queuedAt.value } : {}),
+      }
+    : { ...base, action: flags.send ? "send" : flags.cancel ? "cancel" : "status" };
+  const response = yield* sendControlRequest(target, request, "speak-reply");
+  if (!response.ok) {
+    return yield* new DesktopSpeakReplyFailedError({
+      code: response.code,
+      detail: response.message,
+    });
+  }
+  if (!("status" in response)) {
+    return yield* new DesktopSpeakReplyFailedError({
+      code: "invalid-response",
+      detail: "The desktop app answered with something else.",
+    });
+  }
+  if (request.action === "status") {
+    yield* Console.log(encodeSpeakReplyStatus(response.status));
+    return;
+  }
+  yield* Console.log(
+    request.action === "open"
+      ? "Opened the speak-reply window."
+      : request.action === "send"
+        ? "Sent the reply."
+        : "Cancelled the reply; the recording is kept in the thread.",
+  );
+});
+
+const speakReplyCommand = Command.make("speak-reply", {
+  baseDir: baseDirFlag,
+  thread: Flag.String("thread").pipe(
+    Flag.withDescription("Thread that gets the reply. Opens the window with --text/--text-file."),
+    Flag.optional,
+  ),
+  text: Flag.String("text").pipe(
+    Flag.withDescription("The spoken line to show above the recording."),
+    Flag.optional,
+  ),
+  textFile: Flag.String("text-file").pipe(
+    Flag.withDescription("Read the spoken line from this file ('-' for stdin)."),
+    Flag.optional,
+  ),
+  queuedAt: Flag.Finite("queued-at").pipe(
+    Flag.withDescription(
+      "When the line was queued (epoch ms). The details are the latest assistant message at or before it. Default: now.",
+    ),
+    Flag.optional,
+  ),
+  send: Flag.Boolean("send").pipe(
+    Flag.withDescription("Send the open window's recording."),
+    Flag.withDefault(false),
+  ),
+  cancel: Flag.Boolean("cancel").pipe(
+    Flag.withDescription("Close the open window; the recording stays in the thread's composer."),
+    Flag.withDefault(false),
+  ),
+  status: Flag.Boolean("status").pipe(
+    Flag.withDescription(
+      'Print the window\'s state as JSON: {"open","threadId","phase","recording","heard"}.',
+    ),
+    Flag.withDefault(false),
+  ),
+}).pipe(
+  Command.withDescription(
+    "Show a spoken message in a small always-on-top window that records your spoken reply.",
+  ),
+  Command.withHandler(runSpeakReplyCommand),
+);
 
 export const appCommand = Command.make("app", {
   baseDir: baseDirFlag,
@@ -256,4 +433,5 @@ export const appCommand = Command.make("app", {
 }).pipe(
   Command.withDescription("Open a project in the running T3 Code desktop app."),
   Command.withHandler(runAppCommand),
+  Command.withSubcommands([speakReplyCommand]),
 );

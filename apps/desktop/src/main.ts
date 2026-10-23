@@ -73,6 +73,7 @@ import * as DesktopBrowserHost from "./preview/DesktopBrowserHost.ts";
 import * as PreviewManager from "./preview/Manager.ts";
 import * as PreviewPasskeys from "./preview/Passkeys.ts";
 import * as DesktopWindow from "./window/DesktopWindow.ts";
+import * as SpeakReplyWindow from "./window/SpeakReplyWindow.ts";
 import * as DesktopWslBackend from "./wsl/DesktopWslBackend.ts";
 import * as DesktopWslEnvironment from "./wsl/DesktopWslEnvironment.ts";
 import * as DesktopWslServerTree from "./wsl/DesktopWslServerTree.ts";
@@ -179,8 +180,13 @@ const layerDesktopSnapShot = DesktopSnapShot.layer.pipe(
   Layer.provideMerge(layerDesktopWindow),
   Layer.provideMerge(layerDesktopFoundation),
 );
+const layerSpeakReplyWindow = SpeakReplyWindow.layer.pipe(
+  Layer.provideMerge(layerDesktopFoundation),
+);
 const layerDesktopAppActivation = DesktopAppActivation.layer.pipe(
   Layer.provide(layerDesktopWindow),
+  // Merged: the IPC handlers reach the speak-reply window too.
+  Layer.provideMerge(layerSpeakReplyWindow),
 );
 
 const layerDesktopBackend = DesktopBackendPool.layer.pipe(
