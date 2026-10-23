@@ -156,6 +156,8 @@ export const SPEAK_REPLY_CLOSE_CHANNEL = "desktop:speak-reply-close";
 export const SPEAK_REPLY_CONTENT_CHANNEL = "desktop:speak-reply-content";
 export const SPEAK_REPLY_STATE_CHANNEL = "desktop:speak-reply-state";
 export const SPEAK_REPLY_OPEN_IN_MAIN_CHANNEL = "desktop:speak-reply-open-in-main";
+export const DICTATION_REPORT_CHANNEL = "desktop:dictation-report";
+export const DICTATION_SEND_CHANNEL = "desktop:dictation-send";
 
 export const RESTART_AUDIO_SERVICE_CHANNEL = "desktop:restart-audio-service";
 
