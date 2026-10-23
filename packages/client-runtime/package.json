@@ -123,6 +123,10 @@
       "types": "./src/readAloud.ts",
       "default": "./src/readAloud.ts"
     },
+    "./activity-log": {
+      "types": "./src/activityLog.ts",
+      "default": "./src/activityLog.ts"
+    },
     "./voice-loop": {
       "types": "./src/voiceLoop.ts",
       "default": "./src/voiceLoop.ts"

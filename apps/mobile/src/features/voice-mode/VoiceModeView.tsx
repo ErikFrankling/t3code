@@ -39,6 +39,7 @@ const LOOP_STATUS = {
  */
 export function VoiceModeView(props: {
   readonly environmentId: EnvironmentId;
+  readonly threadId: string;
   readonly title: string;
   readonly reply: { readonly id: string; readonly text: string } | null;
   readonly working: boolean;
@@ -61,10 +62,11 @@ export function VoiceModeView(props: {
   const replyText = props.reply?.text ?? "";
   useEffect(() => {
     voiceLoop.update({
+      threadId: props.threadId,
       reply: replyKey ? { key: replyKey, text: replyText } : null,
       working: props.working,
     });
-  }, [replyKey, replyText, props.working]);
+  }, [props.threadId, replyKey, replyText, props.working]);
 
   const recording = voice.state.phase === "recording";
   const speaking =
