@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import type { ReadAloudPlayer, ReadAloudSnapshot, ReadAloudTake } from "./readAloud.ts";
-import { VOICE_LOOP_CUE, VoiceLoop, type VoiceLoopSpan } from "./voiceLoop.ts";
+import { VOICE_LOOP_CUE, VoiceLoop, voiceLoopCueWav, type VoiceLoopSpan } from "./voiceLoop.ts";
 
 /**
  * Stands in for the read-aloud player: each start() plays until finish(). A
@@ -78,9 +78,8 @@ describe("VoiceLoop", () => {
 
     finish();
     await tick();
-    expect(loop.getSnapshot().phase).toBe("cue");
-    finish();
-    await tick();
+    // Recording again right away; the cue plays over it.
+    expect(loop.getSnapshot().phase).toBe("listening");
     expect(calls).toEqual(["listen", "send", "listen"]);
   });
 
@@ -89,11 +88,10 @@ describe("VoiceLoop", () => {
     player.start("reply", "Hello.");
     loop.start();
     expect(loop.getSnapshot().phase).toBe("reading");
+    expect(calls).toEqual([]);
     finish();
     await tick();
-    expect(loop.getSnapshot().phase).toBe("cue");
-    finish();
-    await tick();
+    expect(loop.getSnapshot().phase).toBe("listening");
     expect(calls).toEqual(["listen"]);
   });
 
@@ -103,9 +101,7 @@ describe("VoiceLoop", () => {
     loop.start();
     loop.endTurn();
     await tick();
-    expect(loop.getSnapshot().phase).toBe("cue");
-    finish();
-    await tick();
+    expect(loop.getSnapshot().phase).toBe("listening");
     expect(calls).toEqual(["listen"]);
   });
 
@@ -116,7 +112,8 @@ describe("VoiceLoop", () => {
     expect(player.getSnapshot().phase).toBe("idle");
     finish();
     await tick();
-    expect(calls).toEqual([]);
+    // The turn had started recording; turning off leaves it to the composer.
+    expect(calls).toEqual(["listen"]);
     expect(loop.getSnapshot().phase).toBe("off");
   });
 
@@ -153,7 +150,7 @@ describe("VoiceLoop waiting", () => {
 });
 
 describe("VoiceLoop replay (volume up)", () => {
-  /** A loop that read the reply "r1" to the end and is now saying the cue. */
+  /** A loop that read the reply "r1" to the end and is now recording your turn. */
   async function afterReply() {
     const harness = setup();
     harness.loop.update({ reply: null, working: false });
@@ -165,45 +162,47 @@ describe("VoiceLoop replay (volume up)", () => {
     harness.loop.update({ reply: { key: "r1", text: "It works." }, working: false });
     harness.finish();
     await tick();
-    expect(harness.loop.getSnapshot().phase).toBe("cue");
+    expect(harness.loop.getSnapshot().phase).toBe("listening");
     return harness;
   }
 
-  it("plays the last reply again from the phone's kept audio, then listens", async () => {
-    const { loop, started, replayed, finish, calls } = await afterReply();
+  it("on your turn, plays the last reply again from the kept audio over the recording", async () => {
+    const { loop, started, replayed, calls } = await afterReply();
     const requested = started.length;
     loop.replay();
-    expect(loop.getSnapshot().phase).toBe("reading");
     expect(replayed).toEqual(["r1"]);
     // No new summary is asked for.
     expect(started).toHaveLength(requested);
-    finish();
-    await tick();
-    expect(loop.getSnapshot().phase).toBe("cue");
-    finish();
-    await tick();
-    expect(calls.at(-1)).toBe("listen");
+    // The recording goes on: still your turn, nothing sent, no new recording.
     expect(loop.getSnapshot().phase).toBe("listening");
+    expect(calls).toEqual(["listen", "send", "listen"]);
   });
 
-  it("restarts the reply while it is being read", async () => {
-    const { loop, replayed, finish } = await afterReply();
-    loop.replay();
-    loop.replay();
-    expect(replayed).toEqual(["r1", "r1"]);
-    finish();
+  it("restarts the reply while it is being read, then it is your turn", async () => {
+    const harness = setup();
+    harness.loop.update({ reply: null, working: false });
+    harness.loop.start();
+    harness.finish();
     await tick();
-    expect(loop.getSnapshot().phase).toBe("cue");
+    harness.loop.endTurn();
+    await tick();
+    harness.loop.update({ reply: { key: "r1", text: "It works." }, working: false });
+    expect(harness.loop.getSnapshot().phase).toBe("reading");
+    const before = harness.started.length;
+    harness.loop.replay();
+    expect(harness.started).toHaveLength(before + 1);
+    expect(harness.started.at(-1)?.key).toBe("r1");
+    expect(harness.loop.getSnapshot().phase).toBe("reading");
+    harness.finish();
+    await tick();
+    expect(harness.loop.getSnapshot().phase).toBe("listening");
   });
 
-  it("does nothing while you talk, so a press never costs your words", async () => {
-    const { loop, replayed, finish, calls } = await afterReply();
-    finish();
-    await tick();
-    expect(loop.getSnapshot().phase).toBe("listening");
+  it("never stops or sends your turn", async () => {
+    const { loop, calls } = await afterReply();
+    loop.replay();
     loop.replay();
     expect(loop.getSnapshot().phase).toBe("listening");
-    expect(replayed).toEqual([]);
     expect(calls.filter((call) => call === "send")).toHaveLength(1);
   });
 
@@ -259,5 +258,47 @@ describe("VoiceLoop span", () => {
     loop.stop();
     loop.stop();
     expect(spans).toEqual([{ threadId: "thread-1", startedAt: 5_000, endedAt: 95_000 }]);
+  });
+});
+
+describe("VoiceLoop recording starts with the cue", () => {
+  it("records from the moment the turn starts, while the cue plays, and plays the cue without the player", async () => {
+    const fake = fakePlayer();
+    const calls: string[] = [];
+    let endCue: () => void = () => undefined;
+    const loop = new VoiceLoop({
+      player: fake.player,
+      listen: () => void calls.push("listen"),
+      send: () => void calls.push("send"),
+      cue: () =>
+        new Promise<void>((resolve) => {
+          calls.push("cue");
+          endCue = resolve;
+        }),
+    });
+    loop.start();
+    await tick();
+    // Listening already, with the cue still playing: words said as it plays are recorded.
+    expect(calls).toEqual(["listen", "cue"]);
+    expect(loop.getSnapshot().phase).toBe("listening");
+    // The read-aloud player was never used for it, so its controls do not flash.
+    expect(fake.started).toEqual([]);
+    endCue();
+    await tick();
+    expect(loop.getSnapshot().phase).toBe("listening");
+  });
+});
+
+describe("voiceLoopCueWav", () => {
+  it("is a short 16-bit mono WAV, over before a sentence starts", () => {
+    const bytes = Uint8Array.from(atob(voiceLoopCueWav()), (char) => char.charCodeAt(0));
+    const view = new DataView(bytes.buffer);
+    const text = (offset: number) => String.fromCharCode(...bytes.slice(offset, offset + 4));
+    expect([text(0), text(8), text(36)]).toEqual(["RIFF", "WAVE", "data"]);
+    const rate = view.getUint32(24, true);
+    const seconds = view.getUint32(40, true) / 2 / rate;
+    expect(view.getUint16(22, true)).toBe(1);
+    expect(seconds).toBeGreaterThan(0.15);
+    expect(seconds).toBeLessThan(0.4);
   });
 });
