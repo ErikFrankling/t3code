@@ -5,6 +5,7 @@ import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { isElectron } from "../env";
+import { takeRouteToRestore } from "../lib/lastRoute";
 import { NoProjectsHero } from "../components/NoProjectsHero";
 import { sortScopedProjectsForSidebar } from "../components/Sidebar.logic";
 import { Button } from "../components/ui/button";
@@ -48,10 +49,26 @@ function IndexDraftLanding() {
     sortScopedProjectsForSidebar(projects, threads, "updated_at")[0] ?? null;
   const attempt = startState.retryRequest;
 
+  const restoringRef = useRef(false);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- starts a draft thread in the most recent project and navigates to it while still on the index
   useEffect(() => {
+    // The desktop app reopens the thread it was in (a restart or a deploy
+    // relaunch), instead of a new draft.
+    if (isElectron && !restoringRef.current && isStillOnIndex()) {
+      const saved = takeRouteToRestore();
+      if (saved) {
+        restoringRef.current = true;
+        router.history.replace(saved);
+        return;
+      }
+    }
     // Starting a draft after the user has left would replace the page they picked.
-    if (mostRecentProject === null || startedAttemptRef.current === attempt || !isStillOnIndex()) {
+    if (
+      restoringRef.current ||
+      mostRecentProject === null ||
+      startedAttemptRef.current === attempt ||
+      !isStillOnIndex()
+    ) {
       return;
     }
     const projectRef = scopeProjectRef(mostRecentProject.environmentId, mostRecentProject.id);
@@ -68,7 +85,7 @@ function IndexDraftLanding() {
       .catch(() => {
         setStartState((state) => ({ ...state, failed: true }));
       });
-  }, [attempt, handleNewThread, mostRecentProject]);
+  }, [attempt, handleNewThread, mostRecentProject, router]);
 
   if (mostRecentProject !== null) {
     return startState.failed ? (
