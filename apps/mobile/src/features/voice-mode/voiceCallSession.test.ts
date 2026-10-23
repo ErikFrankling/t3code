@@ -153,6 +153,7 @@ beforeEach(() => {
     },
   });
   registerVoiceModeController({
+    cancelAndDelete: () => undefined,
     currentState: {
       get phase() {
         return recording.on ? "recording" : "idle";
