@@ -26,6 +26,7 @@ import {
   setReadAloudEnvironment,
   useReadAloud,
 } from "./ReadAloud";
+import { reportVoiceModeSpan } from "./activityLog";
 
 /**
  * Voice mode on web and desktop: the thread over the whole window as speech.
@@ -78,6 +79,7 @@ const useLiveDictation = () =>
 
 export const voiceLoop = new VoiceLoop({
   player: readAloudPlayer,
+  onSpan: reportVoiceModeSpan,
   listen: async () => {
     if (!dictation) throw new Error("Open a thread to talk to it.");
     await dictation.start();
@@ -144,10 +146,12 @@ const LOOP_STATUS: Record<VoiceLoopPhase, string> = {
 
 export function VoiceModeOverlay({
   environmentId,
+  threadId,
   title,
   reply,
   working,
 }: {
+  threadId: string;
   environmentId: EnvironmentId;
   title: string;
   reply: { id: string; text: string } | null;
@@ -167,10 +171,11 @@ export function VoiceModeOverlay({
   const replyText = reply?.text ?? "";
   useEffect(() => {
     voiceLoop.update({
+      threadId,
       reply: replyKey ? { key: replyKey, text: replyText } : null,
       working,
     });
-  }, [replyKey, replyText, working]);
+  }, [threadId, replyKey, replyText, working]);
 
   const speaking =
     reading.phase === "loading" || reading.phase === "playing" || reading.phase === "paused";

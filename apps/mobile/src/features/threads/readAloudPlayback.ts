@@ -12,6 +12,7 @@ import { File, Paths } from "expo-file-system";
 import { useSyncExternalStore } from "react";
 
 import { voiceCall } from "../../native/voiceCall";
+import { reportReadAloudPlayed, setActivityConnection } from "./activityLog";
 import { createReadAloudAudio } from "./readAloudAudio";
 
 /**
@@ -139,6 +140,7 @@ export const readAloudPlayer = new ReadAloudPlayer({
   onSpeedChange: (speed) => {
     void Promise.resolve(speedFile.write(JSON.stringify({ speed }))).catch(() => undefined);
   },
+  onPlayed: reportReadAloudPlayed,
   request: async (body) => {
     const authorization = connection?.httpAuthorization ?? null;
     if (!connection || authorization?._tag === "Dpop") {
@@ -169,4 +171,5 @@ export const useReadAloud = () =>
 /** Points read-aloud at an environment's connection. */
 export function setReadAloudConnection(next: PreparedConnection | null) {
   connection = next;
+  setActivityConnection(next);
 }
