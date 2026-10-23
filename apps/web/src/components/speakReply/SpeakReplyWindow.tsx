@@ -28,6 +28,7 @@ import { useProject, useThreadShell, useThreadVisibleTurnItems } from "../../sta
 import { threadEnvironment } from "../../state/threads";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
 import ChatMarkdown from "../ChatMarkdown";
+import { inputSourceFor, useInputDevice } from "../../inputSource";
 import { announceDictationRecording, dictationRecorder } from "../chat/Dictation";
 import {
   microphoneError,
@@ -103,6 +104,7 @@ export function SpeakReplyWindow({
   const startTurn = useOrchestrationCommand(threadEnvironment.startTurn, {
     reportFailure: false,
   });
+  const inputDevice = useInputDevice();
 
   const [phase, setPhase] = useState<DesktopSpeakReplyPhase>("starting");
   const [problem, setProblem] = useState("");
@@ -204,6 +206,11 @@ export function SpeakReplyWindow({
       input: {
         commandId: CommandId.make(serverId),
         dictation: { id: serverId, draft },
+        inputSource: inputSourceFor({
+          device: inputDevice,
+          dictated: true,
+          via: "speak reply window",
+        }),
         threadId,
         message: {
           messageId: MessageId.make(serverId),
