@@ -1,6 +1,6 @@
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
-import { Outlet, createFileRoute, redirect, useMatches } from "@tanstack/react-router";
-import { useState } from "react";
+import { Outlet, createFileRoute, redirect, useLocation, useMatches } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 
 import { ThreadRouteView } from "../components/ThreadRouteView";
 import { isAppModalPage } from "../components/sidebar/mainAppLocation";
@@ -9,6 +9,8 @@ import { resolveThreadRouteTarget, type ThreadRouteTarget } from "../threadRoute
 import { retainThreadFindForRoute } from "../components/chat/threadFindStore";
 import { ThreadLinkPrompt } from "../components/promptLinks/ThreadLinkPrompt";
 import { useThreadRouteTarget } from "../hooks/useThreadRouteTarget";
+import { rememberRoute } from "../lib/lastRoute";
+import { isElectron } from "../env";
 
 function threadRouteTargetKey(target: ThreadRouteTarget | null) {
   if (!target) return null;
@@ -28,6 +30,11 @@ function ChatRouteLayout() {
     setBackgroundTarget(threadTarget);
   }
   const shownTarget = modalOpen ? backgroundTarget : threadTarget;
+  // The desktop app opens where it was last time (see lib/lastRoute.ts).
+  const pathname = useLocation({ select: (location) => location.pathname });
+  useEffect(() => {
+    if (isElectron) rememberRoute(pathname);
+  }, [pathname]);
   return (
     <>
       {shownTarget?.kind === "server" && !modalOpen ? (
