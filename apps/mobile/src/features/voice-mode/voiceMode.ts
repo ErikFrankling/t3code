@@ -155,6 +155,7 @@ async function poll(run: number) {
     }
     if (run !== polling) return;
     for (const utterance of utterances) {
+      speaksHere = true;
       spokenSources.set(utterance.id, utterance.source ?? utterance.text);
       voiceSession.say({ key: utterance.id, text: utterance.text, mode: "full" });
     }
@@ -169,6 +170,7 @@ async function poll(run: number) {
 async function start(threadId: string) {
   if (state.on) return;
   set({ on: true, threadId, error: null });
+  speaksHere = false;
   // The call's service may only use the microphone once it is granted.
   const permission = await getRecordingPermissionsAsync();
   if (!permission.granted && !(await requestRecordingPermissionsAsync()).granted) {
@@ -204,15 +206,23 @@ function stop() {
 
 /**
  * On a thread without a speak tool, a reply that finished after voice mode
- * came on is what the agent has to say (read as a short spoken summary).
+ * came on is what the agent has to say (read as a short spoken summary). Once
+ * the thread has spoken through the speak tool, that is what it says, and its
+ * replies are not read as well.
  */
 let replySeen: string | null = null;
+let speaksHere = false;
 export function voiceModeThreadChanged(
   threadId: string,
   reply: { readonly id: string; readonly text: string } | null,
   working: boolean,
 ) {
-  if (!state.on || state.threadId !== threadId || threadId === PERSONAL_AGENT_THREAD_ID) {
+  if (
+    !state.on ||
+    state.threadId !== threadId ||
+    threadId === PERSONAL_AGENT_THREAD_ID ||
+    speaksHere
+  ) {
     replySeen = reply?.id ?? null;
     return;
   }
