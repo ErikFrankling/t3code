@@ -580,8 +580,9 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
       environmentId: props.environmentId,
       project: project?.workspaceRoot ?? "",
       // Sent like the web composer: the server sends it once the transcript is final.
-      // A new-task draft has no thread to send into yet, so it fills the draft instead.
-      ...(props.draftKey === undefined
+      // A new-task draft has no thread to send into yet, and editing a queued
+      // message edits it, so those fill the draft instead.
+      ...(!props.isDraft && !props.queuedEdit
         ? {
             send: async (recording: { readonly id: string; readonly draft: string }) =>
               (await onSendMessage(undefined, undefined, recording)) !== null,
@@ -609,7 +610,10 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
   // on, already runs the conversation, so it carries on untouched.
   const voiceModeOpen = useVoiceMode().on;
   const canStartLinkedDictation =
-    props.draftKey === undefined && voiceInput.isAvailable && voiceInput.state.phase === "idle";
+    !props.isDraft &&
+    !props.queuedEdit &&
+    voiceInput.isAvailable &&
+    voiceInput.state.phase === "idle";
   useEffect(() => {
     if (!canStartLinkedDictation) return;
     const startIfRequested = () => {
