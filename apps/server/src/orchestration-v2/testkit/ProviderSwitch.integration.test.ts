@@ -1470,6 +1470,107 @@ describe("orchestration v2 provider switching", () => {
       ),
   );
 
+  it.live("tells the provider where a message came from without storing it in the text", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const cwd = yield* checkpointWorkspace("input-source-header");
+        const capturedTurns = yield* Ref.make<ReadonlyArray<CapturedTurn>>([]);
+        const layerRegistry = ProviderAdapterRegistry.layerFromAdapters([
+          makeTestAdapter({
+            instanceId: CLAUDE_MODEL_SELECTION.instanceId,
+            driver: CLAUDE_DRIVER,
+            capabilities: ClaudeProviderCapabilitiesV2,
+            modelSelection: CLAUDE_MODEL_SELECTION,
+            responseByRunOrdinal: {},
+            capturedTurns,
+          }),
+        ]);
+        yield* Effect.gen(function* () {
+          const orchestrator = yield* Orchestrator.OrchestratorV2;
+          const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;
+          yield* orchestrator.dispatch({
+            type: "thread.create",
+            commandId: CommandId.make("input-source:create"),
+            threadId,
+            projectId,
+            createdBy: "user",
+            creationSource: "web",
+            title: "Input source",
+            modelSelection: CLAUDE_MODEL_SELECTION,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            branch: null,
+            worktreePath: null,
+          });
+          const send = Effect.fn("send")(function* (
+            ordinal: number,
+            text: string,
+            inputSource?: { readonly device: string; readonly method: "typed" | "dictation" },
+          ) {
+            yield* orchestrator.dispatch({
+              type: "message.dispatch",
+              commandId: CommandId.make(`input-source:${ordinal}`),
+              threadId,
+              messageId: MessageId.make(`input-source:${ordinal}`),
+              createdBy: "user",
+              creationSource: "web",
+              text,
+              ...(inputSource === undefined ? {} : { inputSource }),
+              attachments: [],
+              modelSelection: CLAUDE_MODEL_SELECTION,
+              dispatchMode: { type: "start_immediately" },
+            });
+            yield* orchestrator.streamStoredEvents.pipe(
+              Stream.filter(
+                ({ event }) =>
+                  event.type === "run.updated" &&
+                  event.payload.ordinal === ordinal &&
+                  event.payload.status === "completed",
+              ),
+              Stream.runHead,
+            );
+            yield* worker.drain();
+          });
+          yield* send(1, "make it faster", { device: "phone", method: "dictation" });
+          yield* send(2, "no source");
+
+          const turns = yield* Ref.get(capturedTurns);
+          assert.deepEqual(
+            turns.map((turn) => turn.text),
+            ["[phone · dictation]\nmake it faster", "no source"],
+          );
+          const projection = yield* orchestrator.getThreadProjection(threadId);
+          const dictated = projection.messages.find(
+            (message) => message.id === MessageId.make("input-source:1"),
+          );
+          assert.equal(dictated?.text, "make it faster");
+          assert.deepEqual(dictated?.inputSource, { device: "phone", method: "dictation" });
+          const dictatedItem = projection.turnItems.find(
+            (item) => item.type === "user_message" && item.messageId === dictated?.id,
+          );
+          assert.deepEqual(
+            dictatedItem?.type === "user_message" ? dictatedItem.inputSource : undefined,
+            { device: "phone", method: "dictation" },
+          );
+        }).pipe(
+          Effect.provide(
+            ProviderReplayHarness.layerWithRegistry(
+              {
+                name: "input-source-header",
+                runtimePolicyOverride: {
+                  cwd,
+                  approvalPolicy: "never",
+                  sandboxPolicy: { type: "readOnly" },
+                },
+              },
+              layerRegistry,
+            ),
+          ),
+        );
+      }),
+    ),
+  );
+
   it.live.each([
     ["background work", new ClaudeBackgroundWorkBlocksQueryReplacementError()],
     ["an unreadable append file", new ClaudeAppendSystemPromptFileError({ path: "missing.md" })],
