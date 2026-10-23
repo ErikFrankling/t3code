@@ -4,7 +4,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import ChatView from "./ChatView";
-import { NeedsYouPanel } from "./chat/NeedsYouPanel";
+import { TodoPanel } from "./chat/TodoPanel";
 import { resolveDraftPromotionNavigationTarget, threadHasStarted } from "./ChatView.logic";
 import { waitForDraftHeroTransition } from "./chat/draftHeroTransition";
 import { SidebarInset } from "./ui/sidebar";
@@ -209,7 +209,7 @@ export function ThreadRouteView({ target }: { target: ThreadRouteTarget }) {
       {view !== null && needsYouEnvironmentId !== null ? (
         <div className="flex h-full min-h-0">
           <div className="flex min-w-0 flex-1 flex-col">{view}</div>
-          <NeedsYouPanel environmentId={needsYouEnvironmentId} />
+          <TodoPanel environmentId={needsYouEnvironmentId} />
         </div>
       ) : (
         view
