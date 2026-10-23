@@ -7,6 +7,7 @@ import * as Arr from "effect/Array";
 import * as Order from "effect/Order";
 import { useNavigation } from "@react-navigation/native";
 import { useCallback, useMemo, useState } from "react";
+import { PERSONAL_AGENT_THREAD_ID } from "@t3tools/contracts";
 import { Platform, useWindowDimensions } from "react-native";
 
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
@@ -154,6 +155,11 @@ export function HomeRouteScreen() {
     threads,
     onSelectThread: handleSelectThread,
   });
+  // The personal agent has its own card and home, so it is never a row in Chats.
+  const listedThreads = useMemo(
+    () => threads.filter((thread) => thread.id !== PERSONAL_AGENT_THREAD_ID),
+    [threads],
+  );
   const projectFilterOptions = useMemo(
     () =>
       buildHomeProjectScopes({
@@ -291,7 +297,7 @@ export function HomeRouteScreen() {
           searchQuery={searchQuery}
           selectedEnvironmentId={selectedEnvironmentId}
           selectedProjectKey={selectedProjectKey}
-          threads={threads}
+          threads={listedThreads}
         />
         <ThreadUndoNotice visible={visible} />
       </>
