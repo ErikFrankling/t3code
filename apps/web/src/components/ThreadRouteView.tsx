@@ -4,6 +4,7 @@ import { parseThreadKey, threadKey } from "@t3tools/client-runtime/state/entitie
 import { visibilityParentKey } from "@t3tools/client-runtime/state/threads";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import * as Option from "effect/Option";
+import { isThreadWorking } from "@t3tools/client-runtime/state/thread-inbox";
 import { PERSONAL_AGENT_THREAD_ID } from "@t3tools/contracts";
 import { Link, Navigate, useNavigate } from "@tanstack/react-router";
 import { T } from "gt-react";
@@ -11,7 +12,7 @@ import { useEffect, useState } from "react";
 
 import ChatView from "./ChatView";
 import { BackgroundThreadContext, HiddenThreadContext } from "./chat/backgroundThread";
-import { NeedsYouPanel } from "./chat/NeedsYouPanel";
+import { PersonalAgentHome } from "./personalAgent/PersonalAgentHome";
 import { Button } from "./ui/button";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from "./ui/empty";
 import { SidebarInset } from "./ui/sidebar";
@@ -165,9 +166,9 @@ export function ThreadRouteView({
     }
   }, [background, bootstrapComplete, environmentHasAnyThreads, navigate, renderState, target]);
 
-  // The personal agent's chat gets the Needs you list beside it.
+  // The personal agent is not another thread: its chat sits inside its home.
   const serverConfigs = useServerConfigs();
-  const needsYouEnvironmentId =
+  const personalAgentEnvironmentId =
     target.kind === "server" &&
     target.threadRef.threadId === PERSONAL_AGENT_THREAD_ID &&
     serverConfigs.get(target.threadRef.environmentId)?.environment.capabilities.attentionItems ===
@@ -254,14 +255,15 @@ export function ThreadRouteView({
     >
       <BackgroundThreadContext value={background}>
         <HiddenThreadContext value={background}>
-          {view !== null && needsYouEnvironmentId !== null ? (
-            <div className="flex h-full min-h-0">
-              <div className="flex min-w-0 flex-1 flex-col">{view}</div>
-              <NeedsYouPanel environmentId={needsYouEnvironmentId} />
-            </div>
-          ) : (
-            view
-          )}
+        {view !== null && personalAgentEnvironmentId !== null ? (
+          <PersonalAgentHome
+            environmentId={personalAgentEnvironmentId}
+            working={serverThreadShell !== null && isThreadWorking(serverThreadShell)}
+            chat={view}
+          />
+        ) : (
+          view
+        )}
         </HiddenThreadContext>
       </BackgroundThreadContext>
       {background ? null : redirect}
