@@ -12,6 +12,8 @@
 #   a commit with the same subject (a conflict resolved during the rebase).
 #
 #   erik-updates-guard.sh <index.json>    prints publish=true|false for $GITHUB_OUTPUT;
+#                                         ALLOW_BEHIND_TIP=true (no Actions) lets a commit
+#                                         that is still on erik/main publish;
 #                                         fails when shipped work would be lost, unless
 #                                         ACCEPT_DROPPED_COMMITS=true (removed on purpose)
 # Needs full history (actions/checkout fetch-depth: 0), GH_REPO and gh.
@@ -21,7 +23,16 @@ index="$1"
 head="$(git rev-parse HEAD)"
 
 tip="$(git ls-remote origin refs/heads/erik/main | cut -f1)"
-if [ "$head" != "$tip" ]; then
+if [ "$head" != "$tip" ] && [ "${ALLOW_BEHIND_TIP:-false}" = true ]; then
+  # Without Actions (t3-android-release) no newer run will publish, so a
+  # commit still on erik/main may go out; the next release catches up.
+  git cat-file -e "$tip^{commit}" 2> /dev/null || git fetch --quiet origin "$tip"
+  if ! git merge-base --is-ancestor "$head" "$tip"; then
+    echo "::error::${head::7} is no longer on erik/main (${tip::7})" >&2
+    exit 1
+  fi
+  echo "${head::7} is behind erik/main (${tip::7}); publishing it anyway." >&2
+elif [ "$head" != "$tip" ]; then
   echo "::notice::erik/main moved on to ${tip::7}; that run publishes instead of ${head::7}." >&2
   echo "publish=false"
   exit 0
