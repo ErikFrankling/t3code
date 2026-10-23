@@ -314,6 +314,30 @@ contextBridge.exposeInMainWorld("desktopBridge", {
       };
     },
   },
+  speakReply: {
+    close: () => ipcRenderer.invoke(IpcChannels.SPEAK_REPLY_CLOSE_CHANNEL),
+    onCommand: (listener) => {
+      const wrappedListener = (_event: Electron.IpcRendererEvent, command: unknown) => {
+        if (command === "send" || command === "cancel") listener(command);
+      };
+      ipcRenderer.on(IpcChannels.SPEAK_REPLY_COMMAND_CHANNEL, wrappedListener);
+      return () => {
+        ipcRenderer.removeListener(IpcChannels.SPEAK_REPLY_COMMAND_CHANNEL, wrappedListener);
+      };
+    },
+    onContent: (listener) => {
+      const wrappedListener = (_event: Electron.IpcRendererEvent, content: unknown) => {
+        if (typeof content !== "object" || content === null) return;
+        listener(content as Parameters<typeof listener>[0]);
+      };
+      ipcRenderer.on(IpcChannels.SPEAK_REPLY_CONTENT_CHANNEL, wrappedListener);
+      return () => {
+        ipcRenderer.removeListener(IpcChannels.SPEAK_REPLY_CONTENT_CHANNEL, wrappedListener);
+      };
+    },
+    reportState: (state) => ipcRenderer.invoke(IpcChannels.SPEAK_REPLY_STATE_CHANNEL, state),
+    openInMain: (url) => ipcRenderer.invoke(IpcChannels.SPEAK_REPLY_OPEN_IN_MAIN_CHANNEL, url),
+  },
   preview: {
     setForwardedShortcuts: (shortcuts) =>
       ipcRenderer.invoke(IpcChannels.PREVIEW_SET_FORWARDED_SHORTCUTS_CHANNEL, shortcuts),
