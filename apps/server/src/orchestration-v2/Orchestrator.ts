@@ -2931,6 +2931,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           ...(queuedMessage.idleCompaction === undefined
             ? {}
             : { idleCompaction: queuedMessage.idleCompaction }),
+          ...(queuedMessage.inputSource === undefined
+            ? {}
+            : { inputSource: queuedMessage.inputSource }),
         }),
         ...(freshContext ? { freshContext: true } : {}),
         providerThreadId: queuedProviderThread.id,
@@ -5984,6 +5987,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     readonly senderThreadId?: OrchestrationV2ConversationMessage["senderThreadId"];
     readonly linkedSender?: OrchestrationV2ConversationMessage["linkedSender"];
     readonly idleCompaction?: OrchestrationV2ConversationMessage["idleCompaction"];
+    readonly inputSource?: OrchestrationV2ConversationMessage["inputSource"];
     readonly delegatedCompletion?: OrchestrationV2ConversationMessage["delegatedCompletion"];
     readonly notification?: OrchestrationV2ConversationMessage["notification"];
     readonly forceRestart: boolean;
@@ -6129,6 +6133,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           ...(input.senderThreadId === undefined ? {} : { senderThreadId: input.senderThreadId }),
           ...(input.linkedSender === undefined ? {} : { linkedSender: input.linkedSender }),
           ...(input.idleCompaction === undefined ? {} : { idleCompaction: input.idleCompaction }),
+          ...(input.inputSource === undefined ? {} : { inputSource: input.inputSource }),
           id: input.messageId,
           threadId: input.command.threadId,
           runId: messageInput.runId,
@@ -6150,6 +6155,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           ...(input.senderThreadId === undefined ? {} : { senderThreadId: input.senderThreadId }),
           ...(input.linkedSender === undefined ? {} : { linkedSender: input.linkedSender }),
           ...(input.idleCompaction === undefined ? {} : { idleCompaction: input.idleCompaction }),
+          ...(input.inputSource === undefined ? {} : { inputSource: input.inputSource }),
           id: idAllocator.derive.userTurnItem({ messageId: input.messageId }),
           threadId: input.command.threadId,
           runId: messageInput.runId,
@@ -7358,6 +7364,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         ...(command.senderThreadId === undefined ? {} : { senderThreadId: command.senderThreadId }),
         ...(command.linkedSender === undefined ? {} : { linkedSender: command.linkedSender }),
         ...(command.idleCompaction === undefined ? {} : { idleCompaction: command.idleCompaction }),
+        ...(command.inputSource === undefined ? {} : { inputSource: command.inputSource }),
         forceRestart: dispatchMode.type === "restart_active",
       });
       return;
@@ -7664,6 +7671,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         ...(command.senderThreadId === undefined ? {} : { senderThreadId: command.senderThreadId }),
         ...(command.linkedSender === undefined ? {} : { linkedSender: command.linkedSender }),
         ...(command.idleCompaction === undefined ? {} : { idleCompaction: command.idleCompaction }),
+        ...(command.inputSource === undefined ? {} : { inputSource: command.inputSource }),
         id: command.messageId,
         threadId: command.threadId,
         runId,
@@ -8076,6 +8084,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         ...(command.senderThreadId === undefined ? {} : { senderThreadId: command.senderThreadId }),
         ...(command.linkedSender === undefined ? {} : { linkedSender: command.linkedSender }),
         ...(command.idleCompaction === undefined ? {} : { idleCompaction: command.idleCompaction }),
+        ...(command.inputSource === undefined ? {} : { inputSource: command.inputSource }),
         id: command.messageId,
         threadId: command.threadId,
         runId,
@@ -8099,6 +8108,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         ...(command.senderThreadId === undefined ? {} : { senderThreadId: command.senderThreadId }),
         ...(command.linkedSender === undefined ? {} : { linkedSender: command.linkedSender }),
         ...(command.idleCompaction === undefined ? {} : { idleCompaction: command.idleCompaction }),
+        ...(command.inputSource === undefined ? {} : { inputSource: command.inputSource }),
         id: idAllocator.derive.userTurnItem({ messageId: command.messageId }),
         threadId: command.threadId,
         runId,
@@ -8864,6 +8874,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       ...(command.senderThreadId === undefined ? {} : { senderThreadId: command.senderThreadId }),
       ...(command.linkedSender === undefined ? {} : { linkedSender: command.linkedSender }),
       ...(command.idleCompaction === undefined ? {} : { idleCompaction: command.idleCompaction }),
+      ...(command.inputSource === undefined ? {} : { inputSource: command.inputSource }),
       id: command.messageId,
       threadId: command.threadId,
       runId,
@@ -8887,6 +8898,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       ...(command.senderThreadId === undefined ? {} : { senderThreadId: command.senderThreadId }),
       ...(command.linkedSender === undefined ? {} : { linkedSender: command.linkedSender }),
       ...(command.idleCompaction === undefined ? {} : { idleCompaction: command.idleCompaction }),
+      ...(command.inputSource === undefined ? {} : { inputSource: command.inputSource }),
       id: idAllocator.derive.userTurnItem({ messageId: command.messageId }),
       threadId: command.threadId,
       runId,
@@ -11369,6 +11381,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       ...(queuedMessage.idleCompaction === undefined
         ? {}
         : { idleCompaction: queuedMessage.idleCompaction }),
+      ...(queuedMessage.inputSource === undefined
+        ? {}
+        : { inputSource: queuedMessage.inputSource }),
       forceRestart: false,
     });
   });

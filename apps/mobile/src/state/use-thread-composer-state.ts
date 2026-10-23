@@ -119,6 +119,7 @@ import {
   useSelectedThreadVisibleTurnItems,
 } from "./use-thread-detail";
 import { useThreadSelection } from "./use-thread-selection";
+import { voiceMode } from "../features/voice-mode/voiceMode";
 import { enqueueThreadOutboxMessage } from "./thread-outbox";
 import { dispatchingQueuedMessageIdAtom, useThreadOutboxMessages } from "./use-thread-outbox";
 import { threadEnvironment } from "./threads";
@@ -822,6 +823,7 @@ export function useThreadComposerState(input: {
           : { dispatchMode: followUpDispatchMode }),
       ...(freshContext ? { freshContext: true } : {}),
       ...(dictation ? { dictation } : {}),
+      inputMethod: dictation ? (voiceMode.isOpen() ? "voice mode" : "dictation") : "typed",
       createdAt: metadata.createdAt,
     });
     clearComposerDraftContent(threadKey, { deferAttachmentCleanup: true });
