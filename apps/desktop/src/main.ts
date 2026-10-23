@@ -40,6 +40,7 @@ import * as DesktopAppIdentity from "./app/DesktopAppIdentity.ts";
 import * as DesktopConnectionCatalogStore from "./app/DesktopConnectionCatalogStore.ts";
 import * as DesktopClerk from "./app/DesktopClerk.ts";
 import * as DesktopCliCommand from "./app/DesktopCliCommand.ts";
+import * as DesktopDictation from "./app/DesktopDictation.ts";
 import * as DesktopApplicationMenu from "./window/DesktopApplicationMenu.ts";
 import * as DesktopAssets from "./app/DesktopAssets.ts";
 import * as DesktopBackendConfiguration from "./backend/DesktopBackendConfiguration.ts";
@@ -187,6 +188,8 @@ const layerDesktopAppActivation = DesktopAppActivation.layer.pipe(
   Layer.provide(layerDesktopWindow),
   // Merged: the IPC handlers reach the speak-reply window too.
   Layer.provideMerge(layerSpeakReplyWindow),
+  // Merged: the dictation report IPC handler reaches it too.
+  Layer.provideMerge(DesktopDictation.layer),
 );
 
 const layerDesktopBackend = DesktopBackendPool.layer.pipe(
