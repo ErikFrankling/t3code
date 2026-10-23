@@ -20,6 +20,8 @@
 #   ALLOW_BEHIND_TIP=true             publish even if erik/main moved on meanwhile (no
 #                                     newer run will; set by t3-android-release)
 #   GRADLE_ARGS                       extra Gradle arguments (worker limits)
+#   PREBUILT_APK                      publish this signed APK (built by an earlier run
+#                                     from the same commit) instead of building
 #   EXTRA_TEST_ABI                    also build an unpublished APK for this ABI
 #                                     (e.g. x86_64, for an emulator check)
 #   OUT                               where to leave the APKs (default: a temp dir)
@@ -118,14 +120,16 @@ base="$(sed -nE 's/.*T3CODE_MOBILE_VERSION \?\? "([^"]+)".*/\1/p' apps/mobile/ap
 code="$(($(date +%s) / 60))"
 name="${base}-erik.$(date -u +%Y%m%d%H%M).${sha::7}"
 
-step "Prebuild"
-(
-  cd apps/mobile
-  npx expo prebuild --clean --platform android --no-install
-  manifest=android/app/src/main/AndroidManifest.xml
-  grep -qF "android:name=\"expo.modules.updates.EXPO_UPDATE_URL\" android:value=\"$T3CODE_MOBILE_UPDATES_URL\"" "$manifest"
-  grep -q 'expo.modules.updates.CODE_SIGNING_CERTIFICATE' "$manifest"
-)
+prebuild() {
+  step "Prebuild"
+  (
+    cd apps/mobile
+    npx expo prebuild --clean --platform android --no-install
+    manifest=android/app/src/main/AndroidManifest.xml
+    grep -qF "android:name=\"expo.modules.updates.EXPO_UPDATE_URL\" android:value=\"$T3CODE_MOBILE_UPDATES_URL\"" "$manifest"
+    grep -q 'expo.modules.updates.CODE_SIGNING_CERTIFICATE' "$manifest"
+  )
+}
 
 build_tools="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
 printf '%s' "$ANDROID_KEYSTORE_B64" | base64 -d > "$work/keys/release.jks"
@@ -153,8 +157,21 @@ build_and_sign() { # <abis> <out.apk>
   done
 }
 
-apk="$OUT/t3code-erik-$code.apk"
-build_and_sign arm64-v8a "$apk"
+if [ -n "${PREBUILT_APK:-}" ]; then
+  # An APK an earlier run built from this commit but could not publish.
+  step "Prebuilt $PREBUILT_APK"
+  badging="$("$build_tools/aapt2" dump badging "$PREBUILT_APK")"
+  code="$(sed -nE "s/.*versionCode='([0-9]+)'.*/\1/p" <<< "$badging" | head -1)"
+  name="$(sed -nE "s/.*versionName='([^']+)'.*/\1/p" <<< "$badging" | head -1)"
+  [[ "$name" == *".${sha::7}" ]] || { echo "$PREBUILT_APK ($name) was not built from ${sha::7}" >&2; exit 1; }
+  "$build_tools/apksigner" verify "$PREBUILT_APK"
+  apk="$OUT/t3code-erik-$code.apk"
+  cp "$PREBUILT_APK" "$apk"
+else
+  prebuild
+  apk="$OUT/t3code-erik-$code.apk"
+  build_and_sign arm64-v8a "$apk"
+fi
 apk_runtime="$(fingerprint "$apk")"
 [ "$apk_runtime" = "$runtime" ] ||
   echo "warning: APK runtime $apk_runtime differs from the resolved $runtime; JS updates will build APKs until they agree" >&2
@@ -185,7 +202,7 @@ if [ -n "${T3CODE_FCM_SERVICE_ACCOUNT_JSON:-}" ]; then
   node scripts/erik-updates-ping.mjs || echo "warning: release ping failed; apps still poll" >&2
 fi
 
-if [ -n "${EXTRA_TEST_ABI:-}" ]; then
+if [ -n "${EXTRA_TEST_ABI:-}" ] && [ -z "${PREBUILT_APK:-}" ]; then
   # Same commit, version and key, for an emulator; never published. Built
   # after publishing so it never delays the release.
   build_and_sign "$EXTRA_TEST_ABI" "$OUT/t3code-erik-$code-$EXTRA_TEST_ABI.apk"
