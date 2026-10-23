@@ -201,6 +201,8 @@ export interface StartThreadTurnInput extends ThreadCommandInput {
   readonly freshContext?: boolean;
   /** Defaults to true. Callers with their own retry queue opt out so a dead socket fails fast. */
   readonly resendAfterSocketLoss?: boolean;
+  /** Which device and input method wrote the message; the agent is told, the chat is not. */
+  readonly inputSource?: import("@t3tools/contracts").InputSource;
   /**
    * A stopped recording: the server holds this turn until the final transcript
    * replaces `[dictation:<id>]` in the message text, then sends it.
@@ -816,6 +818,7 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
         messageId: input.message.messageId,
         text: input.message.text,
         ...(context ? { context } : {}),
+        ...(input.inputSource ? { inputSource: input.inputSource } : {}),
         attachments,
       },
     } satisfies OrchestrationV2ThreadLaunchInput;
@@ -845,6 +848,7 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
       ...(input.message.idleCompaction === undefined
         ? {}
         : { idleCompaction: input.message.idleCompaction }),
+      ...(input.inputSource ? { inputSource: input.inputSource } : {}),
       attachments,
       ...(input.modelSelection === undefined ? {} : { modelSelection: input.modelSelection }),
       ...(input.sourceProposedPlan === undefined
@@ -871,6 +875,7 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
     ...(input.message.idleCompaction === undefined
       ? {}
       : { idleCompaction: input.message.idleCompaction }),
+    ...(input.inputSource ? { inputSource: input.inputSource } : {}),
     attachments,
     // The personal agent keeps its name; its first message is not a topic.
     ...(input.titleSeed === undefined || input.threadId === PERSONAL_AGENT_THREAD_ID

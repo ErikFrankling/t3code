@@ -6,6 +6,7 @@ import {
 } from "@t3tools/shared/markdownPipeline";
 import { findRevealRef } from "./markdownFindContext";
 import {
+  describeInputSource,
   type EnvironmentId,
   type MessageId,
   type ScheduledTaskId,
@@ -805,6 +806,11 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
         >
           Open thread
         </InlineButton>
+      ) : null}
+      {row.message.inputSource ? (
+        <span className="text-muted-foreground text-xs">
+          {describeInputSource(row.message.inputSource)}
+        </span>
       ) : null}
       <Tooltip>
         <TooltipTrigger render={<p className="text-muted-foreground text-xs tabular-nums" />}>
