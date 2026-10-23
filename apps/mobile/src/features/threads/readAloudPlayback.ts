@@ -4,6 +4,7 @@ import {
   type ReadAloudAudio,
 } from "@t3tools/client-runtime/read-aloud";
 import type { PreparedConnection } from "@t3tools/client-runtime/connection";
+import { voiceLoopCueWav } from "@t3tools/client-runtime/voice-loop";
 import { ReadAloudState } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { createAudioPlayer, setAudioModeAsync, setIsAudioActiveAsync } from "expo-audio";
@@ -131,6 +132,14 @@ const audio: ReadAloudAudio = {
     mediaAudio.stop();
   },
 };
+
+/**
+ * Voice mode's "recording" sound, straight on the audio (the call's speaker during
+ * a call): not through the read-aloud player, whose controls would flash for it.
+ */
+export function playVoiceCue(): Promise<void> {
+  return audio.play({ id: `cue:${Date.now()}`, audio: voiceLoopCueWav() }, { rate: 1 });
+}
 
 // The chosen speed outlives the app: read once at startup, written on every change.
 const speedFile = new File(Paths.document, "read-aloud-speed.json");
