@@ -405,7 +405,7 @@ export const make = Effect.gen(function* () {
         yield* track(scope.systemctl, threadId, owned ? unit : undefined, shared === true);
       // The journal keeps this, so resource history per scope (process
       // metrics, below) can be traced back to the thread that started it.
-      yield* Effect.logInfo("Agent scope started", { unit, threadId: threadId ?? null, shared });
+      yield* Effect.logInfo(`Agent scope started: ${unit} thread=${threadId ?? "none"}`);
       const systemdScope: AgentSystemdScope = {
         systemdRun: scope.systemdRun,
         runtimeDir: scope.runtimeDir,
