@@ -207,10 +207,18 @@ const bootstrap = Effect.gen(function* () {
     ),
   );
 
+  // The control socket (`t3 app`, `t3 app speak-reply`) talks to this app,
+  // not to a backend, so it starts for a client-only desktop too.
+  const startAppActivation = appActivation.start.pipe(
+    Effect.tap(() => logBootstrapInfo("desktop app control socket ready")),
+    Effect.catch((error) => logStartupError("desktop app control socket unavailable", { error })),
+  );
+
   if (!settings.localEnvironmentEnabled) {
     yield* logBootstrapInfo("bootstrap skipping local environment (disabled in settings)");
     if (!(yield* Ref.get(state.quitting))) {
       yield* desktopWindow.createMainIfBackendReady;
+      yield* startAppActivation;
     }
     return;
   }
@@ -291,10 +299,7 @@ const bootstrap = Effect.gen(function* () {
     ) {
       yield* desktopWindow.ensureMain;
     }
-    yield* appActivation.start.pipe(
-      Effect.tap(() => logBootstrapInfo("desktop app control socket ready")),
-      Effect.catch((error) => logStartupError("desktop app control socket unavailable", { error })),
-    );
+    yield* startAppActivation;
     yield* Effect.forkScoped(wslBackend.reconcile);
   }
 }).pipe(Effect.withSpan("desktop.bootstrap"));
