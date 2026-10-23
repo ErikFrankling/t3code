@@ -186,7 +186,7 @@ import {
   THREAD_COMPOSER_BOTTOM_GUTTER,
   ThreadComposer,
 } from "./ThreadComposer";
-import { ReadAloudDock } from "./ReadAloudButton";
+import { ReadAloudDock, ReadAloudPanel } from "./ReadAloudButton";
 import { VoiceModeHost } from "../voice-mode/VoiceModeView";
 import { voiceMode } from "../voice-mode/voiceMode";
 import { ComposerPopoverHost } from "./ComposerPopoverHost";
@@ -1463,6 +1463,8 @@ function ThreadDetailBody(props: ThreadDetailScreenProps) {
                       />
                     </View>
                   ) : null}
+                  {/* What is read aloud, as text: in the flow, so the chat makes room. */}
+                  {!isProviderSubagent && !composerSlotHidden ? <ReadAloudPanel /> : null}
                   {props.queuedRunEdit !== null ? (
                     <Animated.View
                       className="shrink-0"
