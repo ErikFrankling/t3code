@@ -22,6 +22,7 @@
 #   GRADLE_ARGS                       extra Gradle arguments (worker limits)
 #   PREBUILT_APK                      publish this signed APK (built by an earlier run
 #                                     from the same commit) instead of building
+#   JS_ONLY=true                      stop (exit 3) instead of building an APK
 #   EXTRA_TEST_ABI                    also build an unpublished APK for this ABI
 #                                     (e.g. x86_64, for an emulator check)
 #   OUT                               where to leave the APKs (default: a temp dir)
@@ -83,6 +84,10 @@ else
   kind=apk
 fi
 echo "kind=$kind"
+if [ "$kind" = apk ] && [ "${JS_ONLY:-false}" = true ]; then
+  echo "this release needs an APK; JS_ONLY is set, so nothing was built or published" >&2
+  exit 3
+fi
 
 guard_again() { # erik/main or the index may have moved while this built
   # Publish on top of the live index, never the copy fetched at the start:
