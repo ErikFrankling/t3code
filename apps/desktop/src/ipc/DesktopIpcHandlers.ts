@@ -73,6 +73,7 @@ import {
 import * as PreviewIpc from "./methods/preview.ts";
 import * as AppActivationIpc from "./methods/appActivation.ts";
 import * as WebLinksIpc from "./methods/webLinks.ts";
+import * as SpeakReplyIpc from "./methods/speakReply.ts";
 import {
   completeLegacyLocalStorage,
   takeLegacyLocalStorage,
@@ -92,6 +93,9 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(AppActivationIpc.setReady);
   yield* ipc.handle(AppActivationIpc.complete);
   yield* ipc.handle(WebLinksIpc.setReady);
+  yield* ipc.handle(SpeakReplyIpc.close);
+  yield* ipc.handle(SpeakReplyIpc.reportState);
+  yield* ipc.handle(SpeakReplyIpc.openInMain);
 
   yield* ipc.handleSync(takeLegacyLocalStorage);
   yield* ipc.handle(completeLegacyLocalStorage);
