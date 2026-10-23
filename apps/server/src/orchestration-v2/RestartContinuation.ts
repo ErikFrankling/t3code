@@ -1,4 +1,3 @@
-import { runRanAfter } from "@t3tools/shared/orchestrationV2ThreadError";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import {
   CommandId,
@@ -31,6 +30,35 @@ import {
 const CONTINUE_PROMPT = "Continue where you left off.";
 
 const MAX_CONTINUATION_CHAIN = 3;
+// A run interrupted longer ago than this is stale: its context and the
+// user's intent have moved on, so a restart does not wake it.
+const MAX_CONTINUATION_AGE_MS = 6 * 60 * 60 * 1_000;
+
+/**
+ * Whether `run` ended after `other`, robust to clock jumps. A hard reboot on a
+ * machine whose RTC runs in local time can start the server hours ahead until
+ * NTP corrects it; runs ended in that window carry future timestamps and would
+ * otherwise look newer than every later run, so no restart ever continued
+ * their threads again. A future end time is not trusted and the ordinal,
+ * which a run that starts ahead of the queue renews, decides instead.
+ */
+function ranAfter(
+  run: Pick<OrchestrationV2Run, "ordinal" | "completedAt">,
+  other: Pick<OrchestrationV2Run, "ordinal" | "completedAt">,
+  nowMs: number,
+): boolean {
+  const end = (candidate: typeof run) =>
+    candidate.completedAt == null
+      ? Number.POSITIVE_INFINITY
+      : DateTime.toEpochMillis(candidate.completedAt);
+  const runEnd = end(run);
+  const otherEnd = end(other);
+  // A finished run cannot have ended in the future: its clock was wrong, so
+  // only the ordinal orders it.
+  const untrusted =
+    (Number.isFinite(runEnd) && runEnd > nowMs) || (Number.isFinite(otherEnd) && otherEnd > nowMs);
+  return untrusted || runEnd === otherEnd ? run.ordinal > other.ordinal : runEnd > otherEnd;
+}
 const CONTINUATION_LOOP_WINDOW_MS = 5 * 60 * 1_000;
 
 function restartContinuationBlocked(
@@ -125,7 +153,7 @@ export function restartContinuationRun(
     (latest, candidate) =>
       candidate.status !== "queued" &&
       !neverStarted(candidate) &&
-      (!latest || runRanAfter(candidate, latest))
+      (!latest || ranAfter(candidate, latest, DateTime.toEpochMillis(now)))
         ? candidate
         : latest,
     undefined,
@@ -184,6 +212,12 @@ export const continueRestartedRun = Effect.fn("RestartContinuation.continueResta
     const settings = yield* ServerSettings.ServerSettingsService;
     const enabled = yield* settings.getSettings.pipe(Effect.orElseSucceed(() => null));
     if (!enabled) return;
+    const skip = (reason: string) =>
+      Effect.logInfo("orchestration-v2.restart-continuation.skipped", {
+        threadId: input.threadId,
+        sourceRunId: input.sourceRunId,
+        reason,
+      });
     const threads = yield* ThreadManagementService.ThreadManagementService;
     const messageId = MessageId.make(`message:restart-continuation:${input.sourceRunId}`);
     const projection = yield* threads.getThreadRecords(
@@ -195,31 +229,38 @@ export const continueRestartedRun = Effect.fn("RestartContinuation.continueResta
       !resolveProjectSettings(enabled, projection.thread.projectId).settings
         .continueThreadsAfterServerUpdate
     )
-      return;
+      return yield* skip("continueThreadsAfterServerUpdate is off for this project");
     if (projection.messages.some((message) => message.id === messageId)) return;
     const source = projection.runs.find((run) => run.id === input.sourceRunId);
+    const now = yield* DateTime.now;
+    const nowMs = DateTime.toEpochMillis(now);
+    if (!source) return yield* skip("source run not found");
+    if (!isRestartContinuationSource(source, projection.providerTurns))
+      return yield* skip("not interrupted by the restart");
     if (
-      !source ||
-      !isRestartContinuationSource(source, projection.providerTurns) ||
       restartContinuationBlocked(
         projection,
         source,
-        yield* DateTime.now,
+        now,
         isRestartNoteSource(source, projection.providerTurns),
       )
     )
-      return;
+      return yield* skip("blocked (archived, settled, snoozed, ended turn or pending request)");
+    const startedAt = source.startedAt ?? source.requestedAt;
+    if (startedAt != null && nowMs - DateTime.toEpochMillis(startedAt) > MAX_CONTINUATION_AGE_MS)
+      return yield* skip("started more than 6 hours ago");
     if (
       projection.runs.some(
         (run) =>
           run.id !== source.id &&
           run.status !== "queued" &&
           !cancelledBeforeStart(run) &&
-          runRanAfter(run, source),
+          ranAfter(run, source, nowMs),
       )
     )
-      return;
-    if (projection.thread.providerInstanceId !== source.providerInstanceId) return;
+      return yield* skip("a newer run already started");
+    if (projection.thread.providerInstanceId !== source.providerInstanceId)
+      return yield* skip("the thread moved to another provider instance");
     // A turn that keeps crashing the server would otherwise restart it forever.
     let chainLength = 0;
     const loopWindowStart =
@@ -254,7 +295,7 @@ export const continueRestartedRun = Effect.fn("RestartContinuation.continueResta
         (item) => item.runId === source.id && item.type === "run_interrupt_request",
       )
     )
-      return;
+      return yield* skip("the user stopped this run");
     const sourceMessage = sourceRecords.messages.find(
       (message) => message.id === source.userMessageId,
     );
