@@ -242,7 +242,7 @@ export function VoiceModeView(props: {
         ) : null}
         <Text className="mt-4 px-8 text-center text-sm text-foreground-muted">
           {mode.loop && voiceCall.available
-            ? "Screen off works. A volume key or earbud tap sends your turn, or skips the reading."
+            ? "Screen off works. Volume down or an earbud tap sends your turn, or skips the reading. Volume up plays the last reply again."
             : "Turn on Loop to keep talking: it reads each reply, then listens again."}
         </Text>
       </View>
