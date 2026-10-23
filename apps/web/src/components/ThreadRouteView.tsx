@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 
 import ChatView from "./ChatView";
 import { BackgroundThreadContext } from "./chat/backgroundThread";
-import { NeedsYouPanel } from "./chat/NeedsYouPanel";
+import { TodoPanel } from "./chat/TodoPanel";
 import { SidebarInset } from "./ui/sidebar";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { useSidebarPendingFileDropStore } from "../sidebarPendingFileDropStore";
@@ -179,7 +179,7 @@ export function ThreadRouteView({
         {view !== null && needsYouEnvironmentId !== null ? (
           <div className="flex h-full min-h-0">
             <div className="flex min-w-0 flex-1 flex-col">{view}</div>
-            <NeedsYouPanel environmentId={needsYouEnvironmentId} />
+            <TodoPanel environmentId={needsYouEnvironmentId} />
           </div>
         ) : (
           view

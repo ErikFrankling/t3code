@@ -31,31 +31,22 @@ launches in those projects, never into its own folder.
 Unpinning, archiving or renaming the thread are ordinary thread actions.
 Opening the personal agent again unarchives it.
 
-## Needs you
+## To-do list
 
-Beside the personal agent's chat (and from the **Needs you** pill on its card in
-the Android app) is a list of what only you can do: sign in somewhere, make a
-decision, answer a question. Each item says which threads it unblocks and which
-thread filed it.
+Beside the personal agent's chat (and from the pill on its card in the Android
+app) is one to-do list. It is read live from the personal agent's to-do files,
+`~/.t3/personal/todo/*.md` (format in `todo/README.md`), so the agent keeps one
+list and the panel follows every edit.
 
-Tick an item when it is done. The personal agent gets a message naming the item
-and its blocked threads, checks it, and resumes them; if it is not actually
-done, the agent puts it back. Untick an item to put it back yourself, or remove
-it with ×. Ticked items stay under **Done this week** for seven days.
+- **Needs you**, on top: items blocked on you (`blocked_on: erik` or
+  `decision`), repeated requests first. Tick one when it is done: T3 Code
+  records `erik_ticked` in the file and tells the personal agent, which checks
+  it and moves the item on. Untick to take it back.
+- **Moving**: items a thread is working on (with a link to it) or the agent can
+  pick up now.
+- **Waiting**: items blocked on time or someone else, with when they come back.
+- **Standing** rules and items **done** in the last week, collapsed.
 
-The personal agent keeps the list current, and any thread blocked on you can
-file its own item, through the `attention_item_upsert`, `attention_item_resolve`
-and `attention_item_list` tools of the T3 Code MCP server.
-
-## In flight
-
-Below Needs you is **In flight**: what you asked the personal agent for and it
-owns until it is done. Each entry shows its state (open, in progress, waiting on
-you, done), the thread doing the work, the date you asked, the proof that will
-close it and, once done, that proof (screenshots as thumbnails, links). A
-**Repeated** badge marks something you had to ask for twice; those sort first.
-
-You don't tick these. Only the personal agent closes an entry, and only with
-proof, through the `commitment_upsert`, `commitment_resolve` and
-`commitment_list` tools. Delivered entries stay under **Delivered this week**
-for seven days.
+Tap an item to read its file. Other threads add items with the
+`attention_item_*` and `commitment_*` tools of the T3 Code MCP server, which
+write the same files.
