@@ -114,6 +114,7 @@ import {
   threadRouteIsHydrating,
   threadRouteOpensDraft,
 } from "./thread-route-hydration";
+import { requestLinkedDictation } from "../voice-input/linkedDictation";
 import { ThreadHeader } from "./ThreadHeader";
 import { resumeThread } from "./resume-thread";
 import {
@@ -172,6 +173,8 @@ type ThreadRouteScreenRouteProps = StaticScreenProps<{
   readonly draft?: NewTaskDraftRouteParams;
   readonly inspector?: ThreadInspectorTarget;
   readonly prompt?: string | string[];
+  /** `dictate`: start dictating in the composer (a tapped voice-reply notification). */
+  readonly intent?: string | string[];
 }>;
 
 interface ThreadRouteScreenProps extends ThreadRouteScreenRouteProps {
@@ -291,6 +294,12 @@ function LiveThreadRouteController(props: ThreadRouteScreenProps) {
     ) : (
       content
     );
+  const intent = firstRouteParam(params.intent);
+  useEffect(() => {
+    if (intent !== "dictate" || routeThreadKey === null) return;
+    navigation.setParams({ intent: undefined });
+    requestLinkedDictation(routeThreadKey);
+  }, [intent, navigation, routeThreadKey]);
 
   if (environmentId === null || threadIdRaw === null) {
     return withInspectorHeader(<OpeningThreadLoadingScreen />);
