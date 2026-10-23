@@ -9,8 +9,9 @@ import * as NodePath from "node:path";
 
 import {
   DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION,
-  DesktopAppActivationRequest,
+  DesktopAppControlRequest,
   type DesktopAppActivationResponse,
+  type DesktopAppControlResponse,
 } from "@t3tools/contracts";
 import { resolveDesktopAppControlAddress } from "@t3tools/shared/desktopAppControl";
 import * as HostProcess from "@t3tools/shared/HostProcess";
@@ -27,13 +28,14 @@ import type * as Electron from "electron";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import { DESKTOP_APP_ACTIVATION_REQUEST_CHANNEL } from "../ipc/channels.ts";
 import * as DesktopWindow from "../window/DesktopWindow.ts";
+import * as SpeakReplyWindow from "../window/SpeakReplyWindow.ts";
 import { DesktopAppActivationBroker } from "./DesktopAppActivationBroker.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import { makeComponentLogger } from "./DesktopObservability.ts";
 
 const MAX_REQUEST_BYTES = 64 * 1024;
 const REQUEST_TIMEOUT_MS = 15_000;
-const isDesktopAppActivationRequest = Schema.is(DesktopAppActivationRequest);
+const isDesktopAppControlRequest = Schema.is(DesktopAppControlRequest);
 
 export class DesktopAppActivationStartError extends Schema.TaggedError<DesktopAppActivationStartError>()(
   "DesktopAppActivationStartError",
@@ -52,7 +54,7 @@ interface RunningControlServer {
   readonly close: () => Promise<void>;
 }
 
-function invalidResponse(requestId: string, message: string): DesktopAppActivationResponse {
+function invalidResponse(requestId: string, message: string): DesktopAppControlResponse {
   return {
     version: DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION,
     requestId,
@@ -109,7 +111,7 @@ export async function startDesktopAppControlServer(input: {
   readonly address: string;
   readonly directory: string | null;
   readonly userId: number | undefined;
-  readonly handle: (request: DesktopAppActivationRequest) => Promise<DesktopAppActivationResponse>;
+  readonly handle: (request: DesktopAppControlRequest) => Promise<DesktopAppControlResponse>;
   readonly cancel: (requestId: string) => void;
   readonly onReclaimError: (error: unknown) => void;
 }): Promise<RunningControlServer> {
@@ -124,7 +126,7 @@ export async function startDesktopAppControlServer(input: {
 
     socket.setTimeout(5_000, () => socket.destroy());
 
-    const finish = (response: DesktopAppActivationResponse) => {
+    const finish = (response: DesktopAppControlResponse) => {
       responseSent = true;
       if (!socket.destroyed) socket.end(`${JSON.stringify(response)}\n`);
     };
@@ -151,7 +153,7 @@ export async function startDesktopAppControlServer(input: {
         return;
       }
 
-      if (!isDesktopAppActivationRequest(parsed)) {
+      if (!isDesktopAppControlRequest(parsed)) {
         pipe(
           requestIdFromUnknown(parsed),
           (requestId) => invalidResponse(requestId, "The desktop app request is invalid."),
@@ -299,6 +301,7 @@ export const make = Effect.gen(function* () {
   const desktopEnvironment = yield* DesktopEnvironment.DesktopEnvironment;
   const desktopWindow = yield* DesktopWindow.DesktopWindow;
   const electronWindow = yield* ElectronWindow.ElectronWindow;
+  const speakReply = yield* SpeakReplyWindow.SpeakReplyWindow;
   const path = yield* Path.Path;
   const userId = yield* HostProcess.UserId;
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -337,7 +340,10 @@ export const make = Effect.gen(function* () {
           startDesktopAppControlServer({
             ...address,
             userId,
-            handle: (request) => broker.request(request),
+            handle: (request) =>
+              request.type === "speak-reply"
+                ? runPromise(speakReply.handle(request))
+                : broker.request(request),
             cancel: (requestId) => broker.cancel(requestId),
             onReclaimError: (cause) =>
               void runPromise(
