@@ -86,6 +86,12 @@ ever differ, the APK step warns and every push builds an APK, which is slow
 but safe. Do not build test APKs inside `nix develop .#android` without
 unsetting `T3CODE_MOBILE_UPDATES_ENABLED`: the dev shell turns updates off.
 
+Install-time downloads must stay out of the fingerprint too:
+`react-native-enriched-markdown` fetches native sources in its postinstall,
+and while they were hashed the PC resolved a different runtime than the
+homelab worker for the same commit (so `t3-android-release --local` is off).
+Ignoring them changes the runtime once, so it ships with a native release.
+
 ## Never a rollback
 
 Installed apps take whatever `index.json` offers, and a version code only
