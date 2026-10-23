@@ -141,6 +141,7 @@ import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
 import * as Workflows from "./workflows/Workflows.ts";
 import * as WorkflowRuntime from "./workflows/WorkflowRuntime.ts";
 import * as AttentionItems from "./attention/AttentionItemService.ts";
+import * as PersonalAgentHome from "./attention/PersonalAgentHome.ts";
 import * as SecretRequests from "./secrets/SecretRequests.ts";
 import * as FeedbackStore from "./feedback/FeedbackStore.ts";
 import * as GuestShareService from "./guest/GuestShareService.ts";
@@ -1521,6 +1522,7 @@ export const layerWsRpc = (
       const toWorkflowRequestError = (error: Workflows.WorkflowError) =>
         new WorkflowRequestError({ message: error.message });
       const attentionItems = yield* AttentionItems.AttentionItemService;
+      const personalAgentHome = yield* PersonalAgentHome.PersonalAgentHome;
       const secretRequests = yield* SecretRequests.SecretRequests;
       const feedbackStore = yield* FeedbackStore.FeedbackStore;
       const guestShares = yield* GuestShareService.GuestShareService;
@@ -2486,7 +2488,7 @@ export const layerWsRpc = (
           Effect.annotateCurrentSpan({ "scheduled_task.id": input.id }).pipe(
             Effect.andThen(scheduledTasks.getWebhookDelivery(input)),
           ),
-        [WS_METHODS.attentionItemsSubscribe]: (_input) => attentionItems.subscribeList(),
+        [WS_METHODS.attentionItemsSubscribe]: (_input) => personalAgentHome.subscribe(),
         // A client tick is the user's, so it wakes the personal agent.
         [WS_METHODS.attentionItemsSetDone]: (input) =>
           Effect.annotateCurrentSpan({ "attention_item.id": input.id }).pipe(
