@@ -1,6 +1,6 @@
 import { useNavigation } from "@react-navigation/native";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 
 import { SymbolView, type AppSymbolName } from "../../components/ui/AppSymbol";
 import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
@@ -78,10 +78,17 @@ export function PersonalAgentCard(props: {
     <View className={cn("pb-2 pt-1", sidebarPane ? "px-1" : "px-4")}>
       <RowPressable
         accessibilityRole="button"
-        accessibilityLabel="Open the personal agent"
+        accessibilityLabel={
+          needsYouCount !== null && needsYouCount > 0
+            ? `Open the personal agent, ${needsYouCount} need you`
+            : "Open the personal agent"
+        }
         accessibilityHint={subtitle.label}
         disabled={opening}
-        onPress={open}
+        // The home (to-do, what it said, today) is the way in; it opens the chat.
+        onPress={() =>
+          needsYouCount === null ? open() : navigation.navigate("Attention", { environmentId })
+        }
         className="flex-row items-center gap-3.5 rounded-[20px] bg-adaptive-violet-500-a12-a16 py-3 pl-3 pr-4"
         interactionClassName={sidebarPane ? "bg-thread-hover" : "bg-row-hover"}
       >
@@ -120,21 +127,11 @@ export function PersonalAgentCard(props: {
           </View>
         </View>
         {needsYouCount !== null ? (
-          // Its own target: the card opens the chat, the pill opens the list.
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={
-              needsYouCount > 0
-                ? `${needsYouCount} ${needsYouCount === 1 ? "thing needs" : "things need"} you`
-                : "Needs you list"
-            }
-            onPress={() => navigation.navigate("Attention", { environmentId })}
-            hitSlop={8}
+          <View
             className={cn(
               "flex-row items-center gap-1 rounded-full px-3 py-1.5",
               needsYouCount > 0 ? "bg-primary" : "bg-adaptive-violet-500-a12-a16",
             )}
-            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
           >
             <Text
               className={cn(
@@ -142,9 +139,9 @@ export function PersonalAgentCard(props: {
                 needsYouCount > 0 ? "text-primary-foreground" : "text-adaptive-violet-600-400",
               )}
             >
-              {needsYouCount > 0 ? `${needsYouCount} need you` : "Needs you"}
+              {needsYouCount > 0 ? `${needsYouCount} need you` : "To-do"}
             </Text>
-          </Pressable>
+          </View>
         ) : null}
         {opening ? (
           <AppActivityIndicator size="small" colorClassName="accent-adaptive-violet-600-400" />

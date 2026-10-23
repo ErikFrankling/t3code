@@ -35,10 +35,12 @@ export const TodoStatus = Schema.Literals([
 export type TodoStatus = typeof TodoStatus.Type;
 
 /** Kept for the commitment tools' input; mapped onto TodoStatus. */
-export const CommitmentState = Schema.Literals(["open", "in_progress", "waiting", "done"]).annotate({
-  description:
-    "open: not started. in_progress: a thread is working on it. waiting: blocked on the user. done: finished and proven.",
-});
+export const CommitmentState = Schema.Literals(["open", "in_progress", "waiting", "done"]).annotate(
+  {
+    description:
+      "open: not started. in_progress: a thread is working on it. waiting: blocked on the user. done: finished and proven.",
+  },
+);
 export type CommitmentState = typeof CommitmentState.Type;
 
 export const AttentionItem = Schema.Struct({
@@ -70,6 +72,61 @@ export const AttentionItemListResult = Schema.Struct({
   items: ForwardCompatibleArray(AttentionItem),
 });
 export type AttentionItemListResult = typeof AttentionItemListResult.Type;
+
+/** Where an utterance from the speak tool ended up. */
+export const SpokenStatus = Schema.Literals([
+  "queued",
+  "waiting",
+  "generated",
+  "speaking",
+  "spoken",
+  "dropped",
+  "interrupted",
+]);
+export type SpokenStatus = typeof SpokenStatus.Type;
+
+/** One thing the personal agent said (or tried to say) out loud. */
+export const SpokenEntry = Schema.Struct({
+  id: Schema.String,
+  /** What was said: the spoken version when the speak tool shortened it. */
+  text: Schema.String,
+  source: Schema.NullOr(Schema.String),
+  queuedAt: Schema.NullOr(IsoDateTime),
+  status: SpokenStatus,
+  statusAt: IsoDateTime,
+  /** Why it waits or was not said. */
+  reason: Schema.NullOr(Schema.String),
+  /** The speaker or headset it played on. */
+  sink: Schema.NullOr(Schema.String),
+  /** Absolute path of the generated audio on the server, for replay. */
+  audioPath: Schema.NullOr(Schema.String),
+  seconds: Schema.NullOr(Schema.Number),
+});
+export type SpokenEntry = typeof SpokenEntry.Type;
+
+export const TodayActivity = Schema.Struct({
+  activity: Schema.String,
+  minutes: Schema.Number,
+});
+export type TodayActivity = typeof TodayActivity.Type;
+
+/** Today so far from the Time tracker. */
+export const TodaySummary = Schema.Struct({
+  date: Schema.String,
+  totalMinutes: Schema.Number,
+  activities: ForwardCompatibleArray(TodayActivity),
+  /** The latest classified minute: activity and project. */
+  current: Schema.NullOr(Schema.String),
+});
+export type TodaySummary = typeof TodaySummary.Type;
+
+/** Everything the personal agent home shows, in one live stream. */
+export const PersonalAgentHomeState = Schema.Struct({
+  items: ForwardCompatibleArray(AttentionItem),
+  spoken: ForwardCompatibleArray(SpokenEntry),
+  today: Schema.NullOr(TodaySummary),
+});
+export type PersonalAgentHomeState = typeof PersonalAgentHomeState.Type;
 
 export const AttentionItemUpsertInput = Schema.Struct({
   id: Schema.optional(

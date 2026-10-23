@@ -14,14 +14,13 @@ import { ChevronRightIcon } from "lucide-react";
 import { useState } from "react";
 
 import { useNowMinute } from "../../hooks/useNowMinute";
-import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { cn } from "../../lib/utils";
 import ChatMarkdown from "../ChatMarkdown";
 import { ThreadContextChip } from "../ThreadContextChip";
 import { Checkbox } from "../ui/checkbox";
-import { ThreadDetailsSection } from "./ThreadDetailsSection";
+import { ThreadDetailsSection } from "../chat/ThreadDetailsSection";
 
 const TONE_CLASS: Record<TodoChipTone, string> = {
   attention: "bg-warning/14 text-warning-foreground",
@@ -60,13 +59,7 @@ function TodoRow({
   const age = todoAge(item, now);
   const needsYou = section === "needs_you";
   return (
-    <li
-      className={cn(
-        "rounded-lg px-1.5 py-1.5",
-        needsYou && "bg-warning/6",
-        "hover:bg-muted/60",
-      )}
-    >
+    <li className={cn("rounded-lg px-1.5 py-1.5", needsYou && "bg-warning/6", "hover:bg-muted/60")}>
       <div className="flex items-start gap-2">
         {needsYou ? (
           <Checkbox
@@ -154,14 +147,19 @@ function TodoRow({
  * Items that wait on the user are marked Needs you and come first; ticking one
  * records it in the file and wakes the personal agent to verify it.
  */
-export function TodoPanel({ environmentId }: { environmentId: EnvironmentId }) {
-  const { data, error } = useEnvironmentQuery(
-    serverEnvironment.attentionItemsLive({ environmentId, input: {} }),
-  );
+export function TodoList({
+  environmentId,
+  items,
+}: {
+  environmentId: EnvironmentId;
+  items: ReadonlyArray<AttentionItem>;
+}) {
   const setTicked = useAtomCommand(serverEnvironment.setAttentionItemDone, {
     label: "To-do item tick",
   });
-  const canTick = useAtomValue(serverEnvironment.setAttentionItemDone.permissionAtom(environmentId));
+  const canTick = useAtomValue(
+    serverEnvironment.setAttentionItemDone.permissionAtom(environmentId),
+  );
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(new Set());
   const [showFolded, setShowFolded] = useState(false);
   // The minute is UTC without a zone suffix.
@@ -177,13 +175,11 @@ export function TodoPanel({ environmentId }: { environmentId: EnvironmentId }) {
     });
   };
 
-  const items = data?.items ?? [];
   const bySection = new Map<TodoSection, AttentionItem[]>();
   for (const item of items) {
     const section = todoSection(item, now);
     bySection.set(section, [...(bySection.get(section) ?? []), item]);
   }
-  const needsYou = bySection.get("needs_you") ?? [];
   const folded = [...(bySection.get("standing") ?? []), ...(bySection.get("done") ?? [])];
 
   const sectionList = (section: TodoSection, separated = true) => {
@@ -214,26 +210,14 @@ export function TodoPanel({ environmentId }: { environmentId: EnvironmentId }) {
   };
 
   return (
-    <aside
-      aria-label="To-do"
-      className="hidden h-full w-80 shrink-0 flex-col overflow-y-auto border-l border-border/65 bg-background lg:flex"
-    >
-      <div className="flex items-baseline justify-between px-3.5 pt-3 pb-1">
-        <h2 className="text-sm font-semibold text-foreground">To-do</h2>
-        {needsYou.length > 0 ? (
-          <span className="text-xs font-medium text-warning-foreground">
-            {needsYou.length} need{needsYou.length === 1 ? "s" : ""} you
-          </span>
-        ) : null}
-      </div>
-      {error ? <p className="px-3.5 py-2 text-xs text-muted-foreground">{error}</p> : null}
-      {!error && items.length === 0 ? (
+    <div className="flex flex-col">
+      {items.length === 0 ? (
         <p className="px-3.5 py-2 text-xs text-muted-foreground">
           Nothing on the list. Your personal agent keeps it in its todo/ folder.
         </p>
       ) : null}
       {sectionList("needs_you", false)}
-      {sectionList("moving", needsYou.length > 0)}
+      {sectionList("moving", (bySection.get("needs_you")?.length ?? 0) > 0)}
       {sectionList("waiting")}
       {folded.length > 0 ? (
         <div className="border-t border-border/65 px-2 py-2">
@@ -256,6 +240,6 @@ export function TodoPanel({ environmentId }: { environmentId: EnvironmentId }) {
           {sectionList("done")}
         </>
       ) : null}
-    </aside>
+    </div>
   );
 }
