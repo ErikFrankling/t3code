@@ -1,11 +1,12 @@
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
+import { isThreadWorking } from "@t3tools/client-runtime/state/thread-inbox";
 import { PERSONAL_AGENT_THREAD_ID } from "@t3tools/contracts";
 import { Navigate, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import ChatView from "./ChatView";
 import { BackgroundThreadContext } from "./chat/backgroundThread";
-import { TodoPanel } from "./chat/TodoPanel";
+import { PersonalAgentHome } from "./personalAgent/PersonalAgentHome";
 import { SidebarInset } from "./ui/sidebar";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { useSidebarPendingFileDropStore } from "../sidebarPendingFileDropStore";
@@ -105,9 +106,9 @@ export function ThreadRouteView({
     }
   }, [background, bootstrapComplete, environmentHasAnyThreads, navigate, renderState, target]);
 
-  // The personal agent's chat gets the Needs you list beside it.
+  // The personal agent is not another thread: its chat sits inside its home.
   const serverConfigs = useServerConfigs();
-  const needsYouEnvironmentId =
+  const personalAgentEnvironmentId =
     target.kind === "server" &&
     target.threadRef.threadId === PERSONAL_AGENT_THREAD_ID &&
     serverConfigs.get(target.threadRef.environmentId)?.environment.capabilities.attentionItems ===
@@ -115,9 +116,9 @@ export function ThreadRouteView({
       ? target.threadRef.environmentId
       : null;
 
-  // The personal agent's chat gets the Needs you list beside it.
+  // The personal agent is not another thread: its chat sits inside its home.
   const serverConfigs = useServerConfigs();
-  const needsYouEnvironmentId =
+  const personalAgentEnvironmentId =
     target.kind === "server" &&
     target.threadRef.threadId === PERSONAL_AGENT_THREAD_ID &&
     serverConfigs.get(target.threadRef.environmentId)?.environment.capabilities.attentionItems ===
@@ -176,11 +177,12 @@ export function ThreadRouteView({
       inert={background}
     >
       <BackgroundThreadContext value={background}>
-        {view !== null && needsYouEnvironmentId !== null ? (
-          <div className="flex h-full min-h-0">
-            <div className="flex min-w-0 flex-1 flex-col">{view}</div>
-            <TodoPanel environmentId={needsYouEnvironmentId} />
-          </div>
+        {view !== null && personalAgentEnvironmentId !== null ? (
+          <PersonalAgentHome
+            environmentId={personalAgentEnvironmentId}
+            working={serverThreadShell !== null && isThreadWorking(serverThreadShell)}
+            chat={view}
+          />
         ) : (
           view
         )}
