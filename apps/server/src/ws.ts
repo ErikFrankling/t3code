@@ -123,6 +123,7 @@ import { ensurePersonalAgent } from "./project/PersonalAgent.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
 import * as AttentionItems from "./attention/AttentionItemService.ts";
+import * as PersonalAgentHome from "./attention/PersonalAgentHome.ts";
 import * as SecretRequests from "./secrets/SecretRequests.ts";
 import {
   archivedShellStreamItemFromThreadShell,
@@ -1263,6 +1264,7 @@ export const layerWsRpc = (
       const providerSessionManager = yield* ProviderSessionManager.ProviderSessionManagerV2;
       const scheduledTasks = yield* ScheduledTasks.ScheduledTaskService;
       const attentionItems = yield* AttentionItems.AttentionItemService;
+      const personalAgentHome = yield* PersonalAgentHome.PersonalAgentHome;
       const secretRequests = yield* SecretRequests.SecretRequests;
       const pullRequests = yield* PullRequestService.PullRequestService;
       const reviewGuides = yield* PullRequestReviewGuideService.PullRequestReviewGuideService;
@@ -2132,7 +2134,7 @@ export const layerWsRpc = (
           Effect.annotateCurrentSpan({ "scheduled_task.id": input.id }).pipe(
             Effect.andThen(scheduledTasks.getWebhookDelivery(input)),
           ),
-        [WS_METHODS.attentionItemsSubscribe]: (_input) => attentionItems.subscribeList(),
+        [WS_METHODS.attentionItemsSubscribe]: (_input) => personalAgentHome.subscribe(),
         // A client tick is the user's, so it wakes the personal agent.
         [WS_METHODS.attentionItemsSetDone]: (input) =>
           Effect.annotateCurrentSpan({ "attention_item.id": input.id }).pipe(

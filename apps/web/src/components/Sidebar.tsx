@@ -206,6 +206,7 @@ import {
 } from "./ui/combobox";
 import { SidebarContent, SidebarGroup, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
+import { SidebarPersonalAgentButton } from "./sidebar/SidebarPersonalAgentButton";
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
 import { TooltipProvider } from "./ui/tooltip";
 import { composerDraftHasUserContent, DraftId, useComposerDraftStore } from "../composerDraftStore";
@@ -360,6 +361,12 @@ function routeThreadOnly(
 // each value reaches the component frozen and cached on its real inputs: in
 // the component body, later hook calls made the compiler treat these maps as
 // possibly mutated and recompute them, and every dnd-kit input with them.
+// The personal agent has its own button above the list, so it is never a row.
+function useListedThreadShells() {
+  const threads = useQuietThreadShells();
+  return threads.filter((thread) => thread.id !== PERSONAL_AGENT_THREAD_ID);
+}
+
 function useSidebarThreads(input: {
   readonly projectScopeKey: string | null;
   readonly scopedProjectKeys: ReadonlySet<string> | null;
@@ -369,7 +376,7 @@ function useSidebarThreads(input: {
 }) {
   const { projectScopeKey, scopedProjectKeys, serverConfigs, optimisticDrop, routeThreadRef } =
     input;
-  const threads = useQuietThreadShells();
+  const threads = useListedThreadShells();
   const routeRowThreadKey =
     routeThreadRef === null
       ? null
@@ -2694,6 +2701,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         className="min-h-full"
         fixedHeader={
           <SidebarGroup className="z-[1]">
+            <SidebarPersonalAgentButton />
             <SidebarThreadHeader
               searchFieldRef={headerSearchRef}
               hasProjects={projectGroups.length > 0}
@@ -3238,9 +3246,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           ) : null}
         </SidebarGroup>
       </SidebarContent>
-      <SidebarChromeFooter
-        personalAgentListed={pinnedThreads.some((thread) => thread.id === PERSONAL_AGENT_THREAD_ID)}
-      />
+      <SidebarChromeFooter />
     </>
   );
 }
