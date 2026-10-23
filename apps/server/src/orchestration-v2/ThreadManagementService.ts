@@ -1,6 +1,7 @@
 import type {
   OrchestrationV2SearchThreadInput,
   OrchestrationV2SearchThreadResult,
+  InputSource,
 } from "@t3tools/contracts";
 import type {
   ActiveThreadListEntry,
@@ -154,6 +155,7 @@ export interface ThreadManagementSendInput {
   readonly scheduledTaskId?: ScheduledTaskId;
   readonly senderThreadId?: ThreadId;
   readonly linkedSender?: OrchestrationV2LinkedSender;
+  readonly inputSource?: InputSource;
   readonly text: string;
   readonly attachments: ReadonlyArray<ChatAttachment>;
   readonly modelSelection?: ModelSelection;
@@ -934,6 +936,7 @@ const make = Effect.gen(function* () {
       ...(input.scheduledTaskId === undefined ? {} : { scheduledTaskId: input.scheduledTaskId }),
       ...(input.senderThreadId === undefined ? {} : { senderThreadId: input.senderThreadId }),
       ...(input.linkedSender === undefined ? {} : { linkedSender: input.linkedSender }),
+      ...(input.inputSource === undefined ? {} : { inputSource: input.inputSource }),
       text: input.text,
       attachments: input.attachments,
       ...(input.modelSelection === undefined ? {} : { modelSelection: input.modelSelection }),
