@@ -75,5 +75,6 @@ export * from "./secretReference.ts";
 export * from "./settingsSecretValue.ts";
 export * from "./clientRpcPermissions.ts";
 export * from "./dictation.ts";
+export * from "./activityLog.ts";
 export * from "./readAloud.ts";
 export * from "./personalAgent.ts";

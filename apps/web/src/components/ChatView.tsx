@@ -296,6 +296,7 @@ import type { AssistantCitationRequest } from "./chat/AssistantCitationSource";
 import { useCitedHistory } from "./chat/citationProcedure";
 import type { MessagesTimelineHistoryControls } from "./chat/MessagesTimeline";
 import { ReadAloudDock } from "./chat/ReadAloud";
+import { setFocusedThread } from "./chat/activityLog";
 import { ThreadTimeline } from "./chat/ThreadTimeline";
 import { NativeChildWorkDialog } from "./chat/NativeChildWorkDialog";
 import { VoiceModeOverlay, voiceMode } from "./chat/VoiceMode";
@@ -1129,6 +1130,12 @@ export default function ChatView(props: ChatViewProps) {
   const inlineRightPanelOwnsTitleBar = rightPanelOpen && !shouldUsePlanSidebarSheet;
   const [threadPanelPopoverHandle] = useState(PopoverCreateHandle);
   const [chatCanvasStore] = useState(createChatCanvasStore);
+
+  const focusedThreadId = isServerThread ? threadId : null;
+  useEffect(() => {
+    setFocusedThread(environmentId, focusedThreadId);
+    return () => setFocusedThread(environmentId, null);
+  }, [environmentId, focusedThreadId]);
 
   const latestRunSettled = isLatestRunSettled(activeLatestRun, activeRuntime);
   const activeThreadEnvironmentId = activeThread?.environmentId;
@@ -3592,6 +3599,7 @@ export default function ChatView(props: ChatViewProps) {
                       />
                       <VoiceModeOverlay
                         environmentId={activeThread.environmentId}
+                        threadId={activeThread.id}
                         title={activeThread.title}
                         reply={latestReadAloudMessage}
                         working={isWorking}
