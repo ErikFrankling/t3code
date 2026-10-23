@@ -235,7 +235,8 @@ const VOICE_LABEL: Record<string, string> = { big: "Higgs", small: "Kokoro" };
 
 /**
  * Above the composer: a pinned "Read latest" button, and while something is
- * being read, the subtitles of what is spoken with its controls.
+ * being read (and after, until closed), the text of what is spoken with its
+ * controls.
  */
 export function ReadAloudDock({
   environmentId,
@@ -294,8 +295,11 @@ export function ReadAloudDock({
 
   const restartMode: ReadAloudMode = state.mode === "summary" ? "full" : "summary";
 
+  // In the composer stack's flow (not floating over the chat): the timeline makes
+  // room, so its last message stays visible above the text being read. It stays
+  // after the reading ends, until closed.
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-full mb-2 px-2">
+    <div className="mb-2 px-2">
       <div
         role="region"
         aria-label="Read aloud"
@@ -366,16 +370,19 @@ export function ReadAloudDock({
           <Button size="xs" variant="ghost" onClick={() => readAloudPlayer.switchMode(restartMode)}>
             {restartMode === "full" ? "Read full message" : "Read summary"}
           </Button>
-          <span className="ml-auto text-muted-foreground text-xs">
+          {/* The voice's name gives way on a narrow screen; Close never does. */}
+          <span className="ml-auto hidden text-muted-foreground text-xs sm:inline">
             {VOICE_LABEL[state.voice] ?? ""}
           </span>
           <Button
-            aria-label="Stop reading"
-            size="icon-xs"
-            variant="ghost"
+            aria-label="Stop reading and close"
+            className="ml-auto shrink-0 sm:ml-0"
+            size="xs"
+            variant="outline"
             onClick={() => readAloudPlayer.stop()}
           >
             <XIcon />
+            Close
           </Button>
         </div>
       </div>
