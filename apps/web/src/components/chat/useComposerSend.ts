@@ -397,6 +397,17 @@ export function useComposerSend(input: ComposerSendInput) {
     respondingRequestIdsRef.current = respondingRequestIds;
   }, [pendingApprovals, respondingRequestIds]);
 
+  /** The chat cannot take a message right now (another send, a reconnect, a revert). */
+  const sendBlocked = () =>
+    !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope) ||
+    (isSendBusy && !sendQueuesBehindSetup) ||
+    isRevertingCheckpoint ||
+    !clientSettingsHydrated ||
+    threadDetailLoading ||
+    readPendingEnvironmentChange() !== null ||
+    sendInFlightRef.current ||
+    feedbackUploadsInFlightRef.current.has(routeThreadKey);
+
   const onSend = async (
     e?: { preventDefault: () => void },
     dispatchMode: ComposerDispatchMode = "auto",
@@ -437,17 +448,7 @@ export function useComposerSend(input: ComposerSendInput) {
         }),
       );
     };
-    if (
-      !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope) ||
-      !activeThread ||
-      (isSendBusy && !sendQueuesBehindSetup) ||
-      isRevertingCheckpoint ||
-      !clientSettingsHydrated ||
-      threadDetailLoading ||
-      readPendingEnvironmentChange() !== null ||
-      sendInFlightRef.current ||
-      feedbackUploadsInFlightRef.current.has(routeThreadKey)
-    ) {
+    if (!activeThread || sendBlocked()) {
       notifyDirectAnnotationAttached();
       return;
     }
@@ -1356,6 +1357,10 @@ export function useComposerSend(input: ComposerSendInput) {
         failure = startResult;
       } else {
         turnStartSucceeded = true;
+        // The server holds a dictated turn durably and sends it once the transcript
+        // exists, which can take a while or end in "no speech". The composer is free
+        // meanwhile; only the bubble waits (removed if the recording comes back).
+        if (dictation && !sendQueuesBehindSetup) resetLocalDispatch();
         setKeepFullHistory(routeThreadKey, false);
         clearUsageLimitsFor(routeThreadKey);
         if (turnUsesAttachmentUploads) {
@@ -1478,5 +1483,5 @@ export function useComposerSend(input: ComposerSendInput) {
     return turnStartSucceeded;
   };
 
-  return { onSend };
+  return { onSend, sendBlocked };
 }
