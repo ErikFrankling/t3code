@@ -239,10 +239,6 @@
       "types": "./src/state/attachmentUploads.ts",
       "default": "./src/state/attachmentUploads.ts"
     },
-    "./commitment-proof": {
-      "types": "./src/commitmentProof.ts",
-      "default": "./src/commitmentProof.ts"
-    },
     "./text-paste": {
       "types": "./src/textPaste.ts",
       "default": "./src/textPaste.ts"
