@@ -80,7 +80,7 @@ function TodayStrip({ today }: { today: TodaySummary | null }) {
   return (
     <div className="mx-3 mb-2 rounded-lg border border-border/65 px-3 py-2">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-2xs font-medium text-muted-foreground">Today</span>
+        <span className="text-xs font-semibold text-foreground">Today</span>
         <span className="text-2xs text-muted-foreground">
           {formatMinutes(today.totalMinutes)} tracked
         </span>
@@ -126,32 +126,22 @@ const dayOf = (iso: string) => {
       }).format(ms);
 };
 
-function spokenStatus(entry: SpokenEntry): { readonly label: string; readonly tone: string } {
+/** A chip for anything but a normal delivery, which needs no label. */
+function spokenChip(entry: SpokenEntry): { readonly label: string; readonly tone: string } | null {
+  const why = entry.reason ? `: ${entry.reason}` : "";
   switch (entry.status) {
     case "spoken":
-      return {
-        label: `Said ${timeOf(entry.statusAt)}${entry.sink ? ` · ${entry.sink}` : ""}`,
-        tone: "text-muted-foreground",
-      };
+      return null;
     case "speaking":
-      return { label: "Speaking now", tone: "text-info-foreground" };
+      return { label: "Speaking now", tone: "bg-info/12 text-info-foreground" };
     case "waiting":
-      return {
-        label: `Waiting${entry.reason ? `: ${entry.reason}` : ""}`,
-        tone: "text-warning-foreground",
-      };
+      return { label: `Waiting${why}`, tone: "bg-warning/14 text-warning-foreground" };
     case "dropped":
-      return {
-        label: `Not said${entry.reason ? `: ${entry.reason}` : ""}`,
-        tone: "text-destructive-foreground",
-      };
+      return { label: `Not said${why}`, tone: "bg-destructive/12 text-destructive-foreground" };
     case "interrupted":
-      return {
-        label: `Cut off${entry.reason ? `: ${entry.reason}` : ""}`,
-        tone: "text-warning-foreground",
-      };
+      return { label: `Cut off${why}`, tone: "bg-warning/14 text-warning-foreground" };
     default:
-      return { label: "Getting ready", tone: "text-muted-foreground" };
+      return { label: "Getting ready", tone: "bg-muted text-muted-foreground" };
   }
 }
 
@@ -178,7 +168,7 @@ function SpokenItem({
   unseen: boolean;
 }) {
   const [playing, setPlaying] = useState(false);
-  const status = spokenStatus(entry);
+  const chip = spokenChip(entry);
   return (
     <div
       className={cn(
@@ -187,14 +177,16 @@ function SpokenItem({
       )}
     >
       <div className="flex items-center gap-2">
-        <span className="text-2xs font-medium tabular-nums text-foreground">
-          {timeOf(entry.queuedAt ?? entry.statusAt)}
+        <span className="text-xs font-semibold tabular-nums text-foreground">
+          {timeOf(entry.status === "spoken" ? entry.statusAt : (entry.queuedAt ?? entry.statusAt))}
         </span>
-        <span className={cn("min-w-0 flex-1 text-2xs", status.tone)}>{status.label}</span>
+        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+          {entry.status === "spoken" && entry.sink ? entry.sink : null}
+        </span>
         {entry.audioPath ? (
           <Button
             variant="ghost-muted"
-            size="icon-xs"
+            size="icon-sm"
             aria-label={playing ? "Hide the player" : "Replay"}
             onClick={() => setPlaying((current) => !current)}
           >
@@ -202,6 +194,11 @@ function SpokenItem({
           </Button>
         ) : null}
       </div>
+      {chip ? (
+        <span className={cn("self-start rounded px-1.5 py-px text-2xs font-semibold", chip.tone)}>
+          {chip.label}
+        </span>
+      ) : null}
       <p className="text-sm leading-snug text-foreground [overflow-wrap:anywhere]">{entry.text}</p>
       {playing && entry.audioPath ? (
         <ReplayPlayer environmentId={environmentId} path={entry.audioPath} />
@@ -291,7 +288,7 @@ export function PersonalAgentHome({
     <div className="flex h-full min-h-0">
       <aside
         aria-label="Personal agent"
-        className="hidden w-[22rem] shrink-0 flex-col border-r border-border/65 bg-background lg:flex"
+        className="hidden w-80 shrink-0 2xl:w-[22rem] flex-col border-r border-border/65 bg-background lg:flex"
       >
         <header className="flex items-center gap-2 px-3.5 pt-3 pb-2">
           <SparklesIcon className="size-4 text-primary" />
@@ -305,7 +302,7 @@ export function PersonalAgentHome({
           </span>
         </header>
         <TodayStrip today={state?.today ?? null} />
-        <div className="mx-3 mb-1 flex rounded-md bg-muted p-0.5 xl:hidden" role="tablist">
+        <div className="mx-3 mb-1 flex rounded-md bg-muted p-0.5 2xl:hidden" role="tablist">
           {(
             [
               ["todo", needsYou > 0 ? `To-do · ${needsYou} need you` : "To-do"],
@@ -329,8 +326,8 @@ export function PersonalAgentHome({
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
           {error ? <p className="px-3.5 py-2 text-xs text-muted-foreground">{error}</p> : null}
-          <div className={cn(tab === "spoken" && "max-xl:hidden")}>
-            <h3 className="hidden px-3.5 pt-1 text-xs font-semibold text-foreground xl:block">
+          <div className={cn(tab === "spoken" && "max-2xl:hidden")}>
+            <h3 className="hidden px-3.5 pt-1 text-xs font-semibold text-foreground 2xl:block">
               To-do
               {needsYou > 0 ? (
                 <span className="ml-2 font-medium text-warning-foreground">
@@ -340,13 +337,13 @@ export function PersonalAgentHome({
             </h3>
             <TodoList environmentId={environmentId} items={items} />
           </div>
-          <div className={cn("xl:hidden", tab !== "spoken" && "hidden")}>{spokenFeed}</div>
+          <div className={cn("2xl:hidden", tab !== "spoken" && "hidden")}>{spokenFeed}</div>
         </div>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">{chat}</div>
       <aside
         aria-label="Said aloud"
-        className="hidden w-80 shrink-0 flex-col border-l border-border/65 bg-background xl:flex"
+        className="hidden w-80 shrink-0 flex-col border-l border-border/65 bg-background 2xl:flex"
       >
         <header className="flex items-baseline justify-between px-3.5 pt-3 pb-1">
           <h2 className="text-sm font-semibold text-foreground">Said aloud</h2>
