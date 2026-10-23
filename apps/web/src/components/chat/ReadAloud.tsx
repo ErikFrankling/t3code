@@ -7,6 +7,7 @@ import {
   type ReadAloudAudio,
   type ReadAloudClip,
 } from "@t3tools/client-runtime/read-aloud";
+import { voiceLoopCueWav } from "@t3tools/client-runtime/voice-loop";
 import { Schema } from "effect";
 import {
   ChevronDownIcon,
@@ -129,6 +130,14 @@ const audio: ReadAloudAudio = {
 };
 
 const storedSpeed = Number(globalThis.localStorage?.getItem(SPEED_KEY));
+
+/**
+ * Voice mode's "recording" sound, straight on the audio elements: not through the
+ * read-aloud player, whose panel would flash for it.
+ */
+export function playVoiceCue(): Promise<void> {
+  return audio.play({ id: `cue:${Date.now()}`, audio: voiceLoopCueWav() }, { rate: 1 });
+}
 
 export const readAloudPlayer = new ReadAloudPlayer({
   audio,
