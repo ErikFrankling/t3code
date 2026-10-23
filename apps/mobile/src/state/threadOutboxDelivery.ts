@@ -89,6 +89,7 @@ import {
   editingQueuedMessageIdsAtom,
   threadOutboxShellStatusesAtom,
 } from "./use-thread-outbox";
+import { mobileInputSource } from "../lib/inputSource";
 import { clearThreadComposerError, setThreadComposerError } from "./thread-composer-error";
 import { workspaceConnections } from "./workspace";
 
@@ -893,6 +894,9 @@ export function createThreadOutboxDelivery(): {
         createdAt: queuedMessage.createdAt,
         dispatchMode: queuedMessage.dispatchMode ?? "start",
         ...(queuedMessage.dictation ? { dictation: queuedMessage.dictation } : {}),
+        inputSource: mobileInputSource(
+          queuedMessage.inputMethod ?? (queuedMessage.dictation ? "dictation" : "typed"),
+        ),
       },
     });
     if (AsyncResult.isFailure(deliveryResult) && !hasAccess()) return true;
