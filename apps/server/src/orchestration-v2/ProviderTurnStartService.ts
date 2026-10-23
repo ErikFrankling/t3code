@@ -11,6 +11,7 @@ import {
   type OrchestrationV2TurnItem,
   RunId,
   ThreadId,
+  withInputSourceHeader,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Cause from "effect/Cause";
@@ -1019,10 +1020,13 @@ export const layer: Layer.Layer<
       const routableSubagents = projection.subagents.filter((subagent) =>
         RunExecutionService.canRouteRelatedSubagent(subagent.status),
       );
-      const userText = projectComposerContextForProvider({
-        text: message.text,
-        records: message.context?.records ?? [],
-      });
+      const userText = withInputSourceHeader(
+        projectComposerContextForProvider({
+          text: message.text,
+          records: message.context?.records ?? [],
+        }),
+        message.inputSource,
+      );
       // Delivered once: this run's provider turn marks the work as told. A
       // restart continuation is prompted by its own text or resumes natively.
       const noteContinuation = isRestartNoteContinuation(

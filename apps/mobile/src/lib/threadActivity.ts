@@ -39,6 +39,7 @@ import {
 } from "@t3tools/shared/t3McpToolPresentation";
 import type {
   ChatAttachment,
+  InputSource,
   MessageId,
   OrchestrationV2Actor,
   OrchestrationV2CreationSource,
@@ -141,6 +142,7 @@ export interface ThreadFeedMessage {
   readonly creationSource?: OrchestrationV2CreationSource;
   readonly scheduledTaskId?: ScheduledTaskId;
   readonly senderThreadId?: ThreadId;
+  readonly inputSource?: InputSource;
   readonly visibility: OrchestrationV2ProjectedTurnItem["visibility"];
   readonly sourceThreadId: ThreadId;
   readonly createdAt: string;
@@ -2155,6 +2157,7 @@ export function buildThreadFeed(
                 creationSource: item.creationSource,
                 ...(item.scheduledTaskId ? { scheduledTaskId: item.scheduledTaskId } : {}),
                 ...(item.senderThreadId ? { senderThreadId: item.senderThreadId } : {}),
+                ...(item.inputSource ? { inputSource: item.inputSource } : {}),
               }
             : {}),
           visibility: row.visibility,
