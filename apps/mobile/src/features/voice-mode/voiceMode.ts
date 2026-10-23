@@ -146,14 +146,21 @@ async function beat(waitMs: number): Promise<ReadonlyArray<Utterance>> {
 /** While voice mode is on: wait for what the agent has to say, one long poll after another. */
 async function poll(run: number) {
   while (run === polling && state.on) {
+    const started = Date.now();
+    let utterances: ReadonlyArray<Utterance> = [];
     try {
-      for (const utterance of await beat(20_000)) {
-        if (run !== polling) return;
-        spokenSources.set(utterance.id, utterance.source ?? utterance.text);
-        voiceSession.say({ key: utterance.id, text: utterance.text, mode: "full" });
-      }
+      utterances = await beat(20_000);
     } catch {
-      // Offline for a moment: try again shortly; the daemon sees the phone gone meanwhile.
+      // Offline for a moment: the daemon sees the phone gone meanwhile.
+    }
+    if (run !== polling) return;
+    for (const utterance of utterances) {
+      spokenSources.set(utterance.id, utterance.source ?? utterance.text);
+      voiceSession.say({ key: utterance.id, text: utterance.text, mode: "full" });
+    }
+    // A poll that came back empty at once (no connection yet, a failure)
+    // waits before the next: otherwise the loop spins and freezes the app.
+    if (utterances.length === 0 && Date.now() - started < 1000) {
       await new Promise((resolve) => setTimeout(resolve, 3000));
     }
   }
