@@ -67,7 +67,7 @@ async function checkThemes() {
   for (const appearance of ["light", "dark"] as const) {
     document.documentElement.classList.toggle("dark", appearance === "dark");
     // The full-screen view's own background, not a button's.
-    const view = button("Resume").closest(".fixed.inset-0");
+    const view = document.querySelector('[data-testid="dictation-view"]');
     expect(view).not.toBeNull();
     const background = luminance(paintedBackground(view!));
     if (appearance === "dark") expect(background).toBeLessThan(0.2);

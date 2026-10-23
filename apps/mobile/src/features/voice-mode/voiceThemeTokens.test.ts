@@ -15,6 +15,7 @@ const SURFACES = [
   "features/threads/ReadAloudButton.tsx",
   "features/voice-input/ComposerDictationControl.tsx",
   "features/voice-input/DictationLivePreview.tsx",
+  "features/voice-input/DictationCard.tsx",
   "features/voice-input/DictationScreen.tsx",
   "features/voice-input/GlobalVoiceInputControl.tsx",
 ];

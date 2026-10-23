@@ -1,16 +1,27 @@
-import { useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from "react";
+import {
+  type RefObject,
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { createPortal } from "react-dom";
 import { DictationState, type DictationRequest, type EnvironmentId } from "@t3tools/contracts";
 import { Schema } from "effect";
 import {
   ArrowUpIcon,
+  ChevronDownIcon,
   DownloadIcon,
+  Maximize2Icon,
   MicIcon,
   Minimize2Icon,
   PauseIcon,
   PencilIcon,
   PlusIcon,
   Trash2Icon,
+  XIcon,
 } from "lucide-react";
 
 import { useStableCallback } from "../../hooks/useStableCallback";
@@ -109,6 +120,60 @@ function microphoneError(cause: unknown) {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
+const FULL_SCREEN_KEY = "t3code:dictation-full-screen";
+
+/** Whether dictation opens full screen; small (over the chat) unless chosen. */
+function useFullScreenPreference(): [boolean, (value: boolean) => void] {
+  const [value, setValue] = useState(() => {
+    try {
+      return localStorage.getItem(FULL_SCREEN_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const set = (next: boolean) => {
+    setValue(next);
+    try {
+      localStorage.setItem(FULL_SCREEN_KEY, next ? "1" : "0");
+    } catch {
+      // Not remembered; the choice still holds for this page.
+    }
+  };
+  return [value, set];
+}
+
+type Anchor = { readonly left: number; readonly width: number; readonly bottom: number };
+
+/** Where the message box is, so the small dictation card sits right above it at its width. */
+function useComposerAnchor(trigger: RefObject<HTMLElement | null>, active: boolean) {
+  const [anchor, setAnchor] = useState<Anchor | null>(null);
+  useLayoutEffect(() => {
+    if (!active) return;
+    const form = trigger.current?.closest<HTMLElement>('[data-chat-composer-form="true"]');
+    if (!form) return;
+    const measure = () => {
+      const rect = form.getBoundingClientRect();
+      setAnchor({ left: rect.left, width: rect.width, bottom: window.innerHeight - rect.top + 8 });
+    };
+    measure();
+    // The page resizing (the sidebar opening) moves the message box too.
+    return observeResize([form, document.documentElement], measure);
+  }, [trigger, active]);
+  return active ? anchor : null;
+}
+
+/** The composer stack's place for the small card, when the app provides one. */
+function useDictationSlot(trigger: RefObject<HTMLElement | null>, active: boolean) {
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    if (!active) return;
+    const stack = trigger.current?.closest<HTMLElement>('[data-chat-composer-stack="true"]');
+    // oxlint-disable-next-line react/set-state-in-effect -- The slot is found in the committed DOM, which render cannot read.
+    setSlot(stack?.querySelector<HTMLElement>('[data-dictation-slot="true"]') ?? null);
+  }, [trigger, active]);
+  return active ? slot : null;
+}
+
 /** Refined text, then the part of the live draft it does not cover yet. */
 function transcript(server: DictationEntry["record"]["server"]) {
   if (!server) return { refined: "", tail: "" };
@@ -170,6 +235,9 @@ export function Dictation({
   const textPanel = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   const viewRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [fullScreen, setFullScreen] = useFullScreenPreference();
+  const [textScrolled, setTextScrolled] = useState(false);
 
   useEffect(() => engine.registerEditor(target, onInsert), [engine, target, onInsert]);
 
@@ -203,6 +271,10 @@ export function Dictation({
 
   const shownText = transcript(selected?.record.server ?? null);
   const viewVisible = open && !voice.open;
+  // In the app the card sits in the composer stack, in the flow (see ChatView);
+  // elsewhere it floats right above the message box.
+  const slot = useDictationSlot(triggerRef, viewVisible && !fullScreen);
+  const anchor = useComposerAnchor(triggerRef, viewVisible && !fullScreen && !slot);
   useEffect(() => {
     const unfinished = () =>
       engine
@@ -395,6 +467,9 @@ export function Dictation({
     selected.record.sizes.length > 0;
 
   const onKey = useEffectEvent((event: KeyboardEvent) => {
+    // Small, the card shares the page: its keys only act while it has focus
+    // (it takes it when it opens), so Space in the chat scrolls and typing types.
+    if (!fullScreen && !viewRef.current?.contains(document.activeElement)) return;
     if (event.key === "Escape") setOpen(false);
     else if (event.key === " ") {
       if (listening) pauseRecording();
@@ -448,127 +523,331 @@ export function Dictation({
   const problem = micError || selected?.record.notice || selected?.error || "";
   const bigLabel = listening ? "Pause" : selected ? "Resume" : "Start";
 
-  const view = viewVisible
-    ? createPortal(
-        <div
-          ref={viewRef}
-          tabIndex={-1}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Dictation"
-          data-testid="dictation-view"
-          className="fixed inset-0 z-50 flex flex-col bg-background text-foreground outline-none"
-        >
-          <header className="flex items-center gap-2 border-b px-4 py-3 sm:px-6">
-            <h2 className="font-semibold text-lg">Dictation</h2>
-            <nav aria-label="Recordings" className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
-              {entries.length > 1 &&
-                entries.map((entry) => (
-                  <Button
-                    key={entry.record.id}
-                    size="sm"
-                    variant={entry.record.id === selected?.record.id ? "secondary" : "ghost"}
-                    aria-pressed={entry.record.id === selected?.record.id}
-                    disabled={micRecording && entry.record.id !== micId}
-                    onClick={() => setSelectedId(entry.record.id)}
-                  >
-                    {duration(recordingSeconds(entry.record))}
-                    {entry.record.id === micId ? " · recording" : ""}
-                  </Button>
-                ))}
-            </nav>
-            {!micRecording && !starting && (
-              <Button variant="ghost" size="sm" onClick={() => void openMicrophone(null)}>
-                <PlusIcon />
-                New recording
-              </Button>
-            )}
-            {selected && selected.record.sizes.length > 0 && (
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Save audio as a file"
-                onClick={() => void download(selected.record.id)}
-              >
-                <DownloadIcon />
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Minimize; recording continues"
-              onClick={() => setOpen(false)}
-            >
-              <Minimize2Icon />
-            </Button>
-          </header>
+  const transcriptText = (
+    <p
+      aria-live="polite"
+      data-testid="dictation-transcript"
+      className={cn(
+        "whitespace-pre-wrap leading-relaxed",
+        fullScreen ? "mx-auto max-w-3xl px-6 py-8 text-xl md:text-2xl" : "px-4 py-3 text-base",
+      )}
+    >
+      {shownText.refined || shownText.tail ? (
+        <>
+          <span className="text-foreground">{shownText.refined}</span>
+          {shownText.refined && shownText.tail ? " " : ""}
+          <span className="text-muted-foreground">{shownText.tail}</span>
+        </>
+      ) : (
+        <span className="text-muted-foreground">
+          {starting
+            ? "Getting ready…"
+            : listening
+              ? "Speak naturally. Your words appear here."
+              : selected && selected.record.sizes.length > 0
+                ? "The transcript appears here once the speech service has the audio."
+                : "Press Resume or Space to talk."}
+        </span>
+      )}
+    </p>
+  );
 
-          <div
-            ref={textPanel}
-            className="scrollbar-gutter-both min-h-0 flex-1 overflow-y-auto"
-            onScroll={(event) => {
-              const panel = event.currentTarget;
-              follow.current = panel.scrollHeight - panel.scrollTop - panel.clientHeight < 80;
-            }}
+  // The full screen's round Pause/Resume button (the card has a labelled one).
+  const bigButton = (
+    <button
+      type="button"
+      aria-label={bigLabel}
+      disabled={starting || (!listening && selectedState !== "paused" && !!selected)}
+      onClick={() =>
+        listening
+          ? pauseRecording()
+          : selected
+            ? resumeRecording(selected.record.id)
+            : void openMicrophone(null)
+      }
+      className={cn(
+        "flex size-20 shrink-0 flex-col items-center justify-center gap-0.5 rounded-full font-medium text-sm shadow-lg transition-transform active:scale-95 disabled:opacity-60",
+        listening ? "bg-destructive text-white" : "bg-primary text-primary-foreground",
+      )}
+      style={
+        listening
+          ? {
+              boxShadow: `0 0 0 ${4 + level * 14}px color-mix(in srgb, var(--destructive) ${10 + Math.round(level * 18)}%, transparent)`,
+            }
+          : undefined
+      }
+    >
+      {listening ? <PauseIcon className="size-7" /> : <MicIcon className="size-7" />}
+      {bigLabel}
+    </button>
+  );
+
+  const recordingTabs =
+    entries.length > 1
+      ? entries.map((entry) => (
+          <Button
+            key={entry.record.id}
+            size={fullScreen ? "sm" : "xs"}
+            variant={entry.record.id === selected?.record.id ? "secondary" : "ghost"}
+            aria-pressed={entry.record.id === selected?.record.id}
+            disabled={micRecording && entry.record.id !== micId}
+            onClick={() => setSelectedId(entry.record.id)}
           >
-            <p
-              aria-live="polite"
-              data-testid="dictation-transcript"
-              className="mx-auto max-w-3xl whitespace-pre-wrap px-6 py-8 text-xl leading-relaxed md:text-2xl"
-            >
-              {shownText.refined || shownText.tail ? (
-                <>
-                  <span className="text-foreground">{shownText.refined}</span>
-                  {shownText.refined && shownText.tail ? " " : ""}
-                  <span className="text-muted-foreground">{shownText.tail}</span>
-                </>
-              ) : (
-                <span className="text-muted-foreground">
-                  {starting
-                    ? "Getting ready…"
-                    : listening
-                      ? "Speak naturally. Your words appear here."
-                      : selected && selected.record.sizes.length > 0
-                        ? "The transcript appears here once the speech service has the audio."
-                        : "Press Resume or Space to talk."}
-                </span>
-              )}
-            </p>
-          </div>
+            {duration(recordingSeconds(entry.record))}
+            {entry.record.id === micId ? " · recording" : ""}
+          </Button>
+        ))
+      : null;
 
-          <footer className="border-t px-4 pt-3 pb-5 sm:px-6">
-            <p role="status" className="text-center text-muted-foreground text-sm tabular-nums">
-              {status}
-            </p>
+  const headerActions = (
+    <>
+      {!micRecording && !starting && (
+        <Button
+          variant="ghost"
+          size={fullScreen ? "sm" : "icon-xs"}
+          aria-label="New recording"
+          title="New recording"
+          onClick={() => void openMicrophone(null)}
+        >
+          <PlusIcon />
+          {fullScreen ? "New recording" : null}
+        </Button>
+      )}
+      {selected && selected.record.sizes.length > 0 && (
+        <Button
+          variant="ghost"
+          size={fullScreen ? "icon" : "icon-xs"}
+          aria-label="Save audio as a file"
+          title="Save audio as a file"
+          onClick={() => void download(selected.record.id)}
+        >
+          <DownloadIcon />
+        </Button>
+      )}
+      <Button
+        variant="ghost"
+        size={fullScreen ? "icon" : "icon-xs"}
+        aria-label={fullScreen ? "Make it small again" : "Full screen"}
+        title={fullScreen ? "Make it small again" : "Full screen"}
+        aria-pressed={fullScreen}
+        onClick={() => setFullScreen(!fullScreen)}
+      >
+        {fullScreen ? <Minimize2Icon /> : <Maximize2Icon />}
+      </Button>
+      <Button
+        variant="ghost"
+        size={fullScreen ? "icon" : "icon-xs"}
+        aria-label="Hide; recording continues"
+        title="Hide (the recording goes on)"
+        onClick={() => setOpen(false)}
+      >
+        {fullScreen ? <XIcon /> : <ChevronDownIcon />}
+      </Button>
+    </>
+  );
+
+  const deleteDialog = (
+    <AlertDialog open={confirming} onOpenChange={setConfirming}>
+      <AlertDialogPopup>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete this recording?</AlertDialogTitle>
+          <AlertDialogDescription>{amount(seconds)} of audio will be gone.</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogClose render={<Button variant="outline" />}>Keep it</AlertDialogClose>
+          <Button
+            variant="destructive"
+            onClick={() => selected && void deleteRecording(selected.record.id)}
+          >
+            Delete recording
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogPopup>
+    </AlertDialog>
+  );
+
+  const textArea = (
+    <div
+      ref={textPanel}
+      className={cn(
+        "min-h-0 flex-1 overflow-y-auto",
+        fullScreen ? "scrollbar-gutter-both" : "min-h-16",
+      )}
+      // In the card, earlier words that scrolled away fade out at the top edge,
+      // so it is clear there is more to scroll back to.
+      style={
+        !fullScreen && textScrolled
+          ? { maskImage: "linear-gradient(to bottom, transparent, black 2rem)" }
+          : undefined
+      }
+      onScroll={(event) => {
+        const panel = event.currentTarget;
+        follow.current = panel.scrollHeight - panel.scrollTop - panel.clientHeight < 80;
+        setTextScrolled(panel.scrollTop > 4);
+      }}
+    >
+      {transcriptText}
+    </div>
+  );
+
+  // Small by default: a card right above the message box, the width of it,
+  // so the chat stays visible, scrollable and clickable behind it (Erik reads
+  // the last reply, or looks at a screenshot, while he talks). Full screen is
+  // one click away and remembered.
+  const view = !viewVisible
+    ? null
+    : createPortal(
+        fullScreen ? (
+          <div
+            ref={viewRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Dictation"
+            data-testid="dictation-view"
+            data-size="full"
+            className="fixed inset-0 z-50 flex flex-col bg-background text-foreground outline-none"
+          >
+            <header className="flex items-center gap-2 border-b px-4 py-3 sm:px-6">
+              <h2 className="font-semibold text-lg">Dictation</h2>
+              <nav aria-label="Recordings" className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
+                {recordingTabs}
+              </nav>
+              {headerActions}
+            </header>
+            {textArea}
+            <footer className="border-t px-4 pt-3 pb-5 sm:px-6">
+              <p role="status" className="text-center text-muted-foreground text-sm tabular-nums">
+                {status}
+              </p>
+              {problem ? (
+                <p role="alert" className="mt-1 text-center text-destructive text-sm">
+                  {problem}
+                </p>
+              ) : null}
+              <div className="mx-auto mt-4 grid max-w-3xl grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="ghost-destructive"
+                    size="lg"
+                    disabled={!selected}
+                    onClick={() => setConfirming(true)}
+                  >
+                    <Trash2Icon />
+                    Delete
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    disabled={!canFinish}
+                    onClick={() => selected && editRecording(selected.record.id)}
+                  >
+                    <PencilIcon />
+                    Edit
+                  </Button>
+                </div>
+                {bigButton}
+                <div className="flex justify-end">
+                  <Button
+                    size="xl"
+                    disabled={!canFinish}
+                    onClick={() => selected && void sendRecording(selected.record.id)}
+                  >
+                    <ArrowUpIcon />
+                    Send
+                  </Button>
+                </div>
+              </div>
+              <p className="mt-3 hidden text-center text-muted-foreground text-xs sm:block">
+                Space pauses or resumes · Enter sends · Esc minimizes
+              </p>
+            </footer>
+            {deleteDialog}
+          </div>
+        ) : (
+          <div
+            ref={viewRef}
+            tabIndex={-1}
+            role="region"
+            aria-label="Dictation"
+            data-testid="dictation-view"
+            data-size="compact"
+            className={cn(
+              "flex flex-col rounded-2xl border bg-popover text-popover-foreground outline-none",
+              slot ? "mb-2 shadow-lg" : "fixed z-40 shadow-xl",
+            )}
+            style={
+              slot
+                ? { maxHeight: "min(28rem, 50dvh)" }
+                : anchor
+                  ? {
+                      left: anchor.left,
+                      width: anchor.width,
+                      bottom: anchor.bottom,
+                      maxHeight: `min(28rem, calc(100dvh - ${anchor.bottom + 16}px))`,
+                    }
+                  : {
+                      right: 16,
+                      bottom: 96,
+                      width: "min(32rem, calc(100vw - 2rem))",
+                      maxHeight: "55dvh",
+                    }
+            }
+          >
+            <header className="flex items-center gap-1.5 px-3 pt-2.5">
+              <span
+                aria-hidden
+                className={cn(
+                  "size-2 shrink-0 rounded-full",
+                  listening ? "animate-pulse bg-destructive" : "bg-muted-foreground/50",
+                )}
+              />
+              <p
+                role="status"
+                className="min-w-0 truncate text-muted-foreground text-xs tabular-nums"
+              >
+                {status || "Dictation"}
+              </p>
+              <nav aria-label="Recordings" className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
+                {recordingTabs}
+              </nav>
+              {headerActions}
+            </header>
+            {textArea}
             {problem ? (
-              <p role="alert" className="mt-1 text-center text-destructive text-sm">
+              <p role="alert" className="px-4 pb-1 text-destructive text-xs">
                 {problem}
               </p>
             ) : null}
-            <div className="mx-auto mt-4 grid max-w-3xl grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="ghost-destructive"
-                  size="lg"
-                  disabled={!selected}
-                  onClick={() => setConfirming(true)}
-                >
-                  <Trash2Icon />
-                  Delete
-                </Button>
-                <Button
-                  variant="outline"
-                  size="lg"
-                  disabled={!canFinish}
-                  onClick={() => selected && editRecording(selected.record.id)}
-                >
-                  <PencilIcon />
-                  Edit
-                </Button>
-              </div>
-              <button
-                type="button"
-                aria-label={bigLabel}
+            <footer className="flex items-center gap-2 border-t px-3 py-2">
+              <Button
+                variant="ghost-destructive"
+                size="sm"
+                aria-label="Delete"
+                title="Delete this recording"
+                disabled={!selected}
+                onClick={() => setConfirming(true)}
+              >
+                <Trash2Icon />
+                <span className="hidden sm:inline">Delete</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!canFinish}
+                onClick={() => selected && editRecording(selected.record.id)}
+              >
+                <PencilIcon />
+                Edit
+              </Button>
+              <span className="hidden flex-1 text-center text-muted-foreground text-xs lg:block">
+                Space pause · Enter send · Esc hide
+              </span>
+              <span className="flex-1 lg:hidden" />
+              {/* Labelled, so recording and paused cannot be mistaken. */}
+              <Button
+                size="lg"
+                variant={listening ? "destructive" : "secondary"}
                 disabled={starting || (!listening && selectedState !== "paused" && !!selected)}
                 onClick={() =>
                   listening
@@ -577,59 +856,24 @@ export function Dictation({
                       ? resumeRecording(selected.record.id)
                       : void openMicrophone(null)
                 }
-                className={cn(
-                  "flex size-20 flex-col items-center justify-center gap-0.5 rounded-full font-medium text-sm shadow-lg transition-transform active:scale-95 disabled:opacity-60",
-                  listening ? "bg-destructive text-white" : "bg-primary text-primary-foreground",
-                )}
-                style={
-                  listening
-                    ? {
-                        boxShadow: `0 0 0 ${4 + level * 14}px color-mix(in srgb, var(--destructive) ${10 + Math.round(level * 18)}%, transparent)`,
-                      }
-                    : undefined
-                }
               >
-                {listening ? <PauseIcon className="size-7" /> : <MicIcon className="size-7" />}
+                {listening ? <PauseIcon /> : <MicIcon />}
                 {bigLabel}
-              </button>
-              <div className="flex justify-end">
-                <Button
-                  size="xl"
-                  disabled={!canFinish}
-                  onClick={() => selected && void sendRecording(selected.record.id)}
-                >
-                  <ArrowUpIcon />
-                  Send
-                </Button>
-              </div>
-            </div>
-            <p className="mt-3 hidden text-center text-muted-foreground text-xs sm:block">
-              Space pauses or resumes · Enter sends · Esc minimizes
-            </p>
-          </footer>
-          <AlertDialog open={confirming} onOpenChange={setConfirming}>
-            <AlertDialogPopup>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete this recording?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  {amount(seconds)} of audio will be gone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogClose render={<Button variant="outline" />}>Keep it</AlertDialogClose>
-                <Button
-                  variant="destructive"
-                  onClick={() => selected && void deleteRecording(selected.record.id)}
-                >
-                  Delete recording
-                </Button>
-              </AlertDialogFooter>
-            </AlertDialogPopup>
-          </AlertDialog>
-        </div>,
-        document.body,
-      )
-    : null;
+              </Button>
+              <Button
+                size="lg"
+                disabled={!canFinish}
+                onClick={() => selected && void sendRecording(selected.record.id)}
+              >
+                <ArrowUpIcon />
+                Send
+              </Button>
+            </footer>
+            {deleteDialog}
+          </div>
+        ),
+        fullScreen || !slot ? document.body : slot,
+      );
 
   return (
     <>
@@ -640,6 +884,7 @@ export function Dictation({
               type="button"
               variant="ghost"
               size="icon-sm"
+              ref={triggerRef}
               data-testid="dictation"
               onPointerDown={(event) => event.preventDefault()}
               onClick={() => {
