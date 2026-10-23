@@ -456,3 +456,85 @@ describe("t3 app speak-reply", () => {
     ),
   );
 });
+
+describe("t3 app dictation", () => {
+  it.effect("sends the recording dictation and reports status", () =>
+    withTempDirectory("t3-dictation-test-", (root) =>
+      Effect.gen(function* () {
+        const baseDir = NodePath.join(root, "t3-home");
+        const desktop = yield* fakeDesktop({
+          baseDir,
+          reply: (request) => {
+            const dictation = request as unknown as { requestId: string; action: string };
+            return {
+              version: 1,
+              requestId: dictation.requestId,
+              ok: true,
+              action: dictation.action,
+              dictation: { recording: true },
+            };
+          },
+        });
+        const env = { T3CODE_HOME: baseDir };
+        yield* runCli(["app", "dictation", "--send"], env);
+        yield* runCli(["app", "dictation", "--status"], env);
+        expect(
+          desktop.received.map((request) => {
+            const {
+              requestId: _requestId,
+              version: _version,
+              ...rest
+            } = request as unknown as Record<string, unknown>;
+            return rest;
+          }),
+        ).toEqual([
+          { type: "dictation", action: "send" },
+          { type: "dictation", action: "status" },
+        ]);
+      }).pipe(Effect.scoped),
+    ),
+  );
+
+  it.effect("needs exactly one of --send or --status", () =>
+    withTempDirectory("t3-dictation-usage-", (root) =>
+      Effect.gen(function* () {
+        const baseDir = NodePath.join(root, "t3-home");
+        const desktop = yield* fakeDesktop({ baseDir });
+        const env = { T3CODE_HOME: baseDir };
+        for (const args of [[], ["--send", "--status"]]) {
+          const error = yield* runCli(["app", "dictation", ...args], env).pipe(Effect.flip);
+          expect(error).toMatchObject({ _tag: "DesktopDictationUsageError" });
+        }
+        expect(desktop.received).toHaveLength(0);
+      }).pipe(Effect.scoped),
+    ),
+  );
+
+  it.effect("fails when no desktop app runs or nothing records", () =>
+    withTempDirectory("t3-dictation-none-", (root) =>
+      Effect.gen(function* () {
+        const baseDir = NodePath.join(root, "t3-home");
+        const unreachable = yield* runCli(["app", "dictation", "--send"], {
+          T3CODE_HOME: baseDir,
+        }).pipe(Effect.flip);
+        expect(unreachable).toMatchObject({ _tag: "DesktopAppUnreachableError" });
+
+        yield* fakeDesktop({
+          baseDir,
+          reply: (request) => ({
+            version: 1,
+            requestId: request.requestId,
+            ok: false,
+            code: "no-recording",
+            message: "No dictation is recording.",
+          }),
+        });
+        const idle = yield* runCli(["app", "dictation", "--send"], {
+          T3CODE_HOME: baseDir,
+        }).pipe(Effect.flip);
+        expect(idle).toMatchObject({ _tag: "DesktopDictationFailedError", code: "no-recording" });
+        expect(idle.message).toBe("No dictation is recording.");
+      }).pipe(Effect.scoped),
+    ),
+  );
+});

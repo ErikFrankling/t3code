@@ -29,6 +29,7 @@ import { DESKTOP_APP_ACTIVATION_REQUEST_CHANNEL } from "../ipc/channels.ts";
 import * as DesktopWindow from "../window/DesktopWindow.ts";
 import * as SpeakReplyWindow from "../window/SpeakReplyWindow.ts";
 import { DesktopAppActivationBroker } from "./DesktopAppActivationBroker.ts";
+import * as DesktopDictation from "./DesktopDictation.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import { makeComponentLogger } from "./DesktopObservability.ts";
 
@@ -299,6 +300,7 @@ export const make = Effect.gen(function* () {
   const desktopWindow = yield* DesktopWindow.DesktopWindow;
   const electronWindow = yield* ElectronWindow.ElectronWindow;
   const speakReply = yield* SpeakReplyWindow.SpeakReplyWindow;
+  const dictation = yield* DesktopDictation.DesktopDictation;
   const path = yield* Path.Path;
   const userId = yield* HostProcess.UserId;
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -340,7 +342,9 @@ export const make = Effect.gen(function* () {
             handle: (request) =>
               request.type === "speak-reply"
                 ? runPromise(speakReply.handle(request))
-                : broker.request(request),
+                : request.type === "dictation"
+                  ? runPromise(dictation.handle(request))
+                  : broker.request(request),
             cancel: (requestId) => broker.cancel(requestId),
             onReclaimError: (cause) =>
               void runPromise(
