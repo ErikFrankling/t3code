@@ -115,7 +115,8 @@ import {
 import { DictationLivePreview } from "../voice-input/DictationLivePreview";
 import { DictationScreen } from "../voice-input/DictationScreen";
 import { useVoiceInputController } from "../voice-input/useVoiceInputController";
-import { registerVoiceModeComposer } from "../voice-mode/voiceMode";
+import { registerVoiceModeComposer, useVoiceMode } from "../voice-mode/voiceMode";
+import { subscribeLinkedDictation, takeLinkedDictation } from "../voice-input/linkedDictation";
 import { resolveVoiceComposerPresentation } from "../voice-input/voiceInputPresentation";
 import type { ExistingThreadSettingsRouteParams } from "./ThreadSettingsSheet";
 import {
@@ -584,6 +585,19 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
   const isSubmissionLocked =
     props.interactionLocked === true || queuedEdit?.saving === true || voiceInput.blocksSubmission;
   const { start: startVoiceInput, stop: stopVoiceInput } = voiceInput;
+  // A tapped voice-reply notification: dictate right away. Voice mode, when
+  // on, already runs the conversation, so it carries on untouched.
+  const voiceModeOpen = useVoiceMode().open;
+  const canStartLinkedDictation =
+    props.draftKey === undefined && voiceInput.isAvailable && voiceInput.state.phase === "idle";
+  useEffect(() => {
+    if (!canStartLinkedDictation) return;
+    const startIfRequested = () => {
+      if (takeLinkedDictation(composerOwnerKey) && !voiceModeOpen) void startVoiceInput();
+    };
+    startIfRequested();
+    return subscribeLinkedDictation(startIfRequested);
+  }, [canStartLinkedDictation, composerOwnerKey, startVoiceInput, voiceModeOpen]);
   useEffect(
     () => registerVoiceModeComposer({ start: startVoiceInput, stop: stopVoiceInput }),
     [startVoiceInput, stopVoiceInput],
