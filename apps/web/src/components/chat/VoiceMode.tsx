@@ -22,6 +22,7 @@ import { Button } from "../ui/button";
 import { Switch } from "../ui/switch";
 import {
   ReadAloudSpeedMenu,
+  playVoiceCue,
   readAloudPlayer,
   setReadAloudEnvironment,
   useReadAloud,
@@ -79,6 +80,7 @@ const useLiveDictation = () =>
 
 export const voiceLoop = new VoiceLoop({
   player: readAloudPlayer,
+  cue: playVoiceCue,
   onSpan: reportVoiceModeSpan,
   listen: async () => {
     if (!dictation) throw new Error("Open a thread to talk to it.");
