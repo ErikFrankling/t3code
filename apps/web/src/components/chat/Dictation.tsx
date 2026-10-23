@@ -39,6 +39,7 @@ import {
 import { indexedDbDictationStorage, memoryDictationStorage } from "./dictationStorage";
 import { publishVoiceDictation, registerVoiceDictation, useVoiceMode } from "./VoiceMode";
 import { Button } from "../ui/button";
+import { DictationCard, DictationTranscriptText } from "./DictationCard";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -590,32 +591,22 @@ export function Dictation({
   const bigLabel = listening ? "Pause" : selected ? "Resume" : "Start";
 
   const transcriptText = (
-    <p
-      aria-live="polite"
-      data-testid="dictation-transcript"
-      className={cn(
-        "whitespace-pre-wrap leading-relaxed",
-        fullScreen ? "mx-auto max-w-3xl px-6 py-8 text-xl md:text-2xl" : "px-4 py-3 text-base",
-      )}
-    >
-      {shownText.refined || shownText.tail ? (
-        <>
-          <span className="text-foreground">{shownText.refined}</span>
-          {shownText.refined && shownText.tail ? " " : ""}
-          <span className="text-muted-foreground">{shownText.tail}</span>
-        </>
-      ) : (
-        <span className="text-muted-foreground">
-          {starting
-            ? "Getting ready…"
-            : listening
-              ? "Speak naturally. Your words appear here."
-              : selected && selected.record.sizes.length > 0
-                ? "The transcript appears here once the speech service has the audio."
-                : "Press Resume or Space to talk."}
-        </span>
-      )}
-    </p>
+    <DictationTranscriptText
+      refined={shownText.refined}
+      tail={shownText.tail}
+      className={
+        fullScreen ? "mx-auto max-w-3xl px-6 py-8 text-xl md:text-2xl" : "px-4 py-3 text-base"
+      }
+      placeholder={
+        starting
+          ? "Getting ready…"
+          : listening
+            ? "Speak naturally. Your words appear here."
+            : selected && selected.record.sizes.length > 0
+              ? "The transcript appears here once the speech service has the audio."
+              : "Press Resume or Space to talk."
+      }
+    />
   );
 
   // The full screen's round Pause/Resume button (the card has a labelled one).
@@ -831,17 +822,10 @@ export function Dictation({
             {deleteDialog}
           </div>
         ) : (
-          <div
-            ref={viewRef}
-            tabIndex={-1}
-            role="region"
-            aria-label="Dictation"
-            data-testid="dictation-view"
-            data-size="compact"
-            className={cn(
-              "flex flex-col rounded-2xl border bg-popover text-popover-foreground outline-none",
-              slot ? "mb-2 shadow-lg" : "fixed z-40 shadow-xl",
-            )}
+          <DictationCard
+            cardRef={viewRef}
+            testId="dictation-view"
+            className={slot ? "mb-2 shadow-lg" : "fixed z-40 shadow-xl"}
             style={
               slot
                 ? { maxHeight: "min(28rem, 50dvh)" }
@@ -859,84 +843,37 @@ export function Dictation({
                       maxHeight: "55dvh",
                     }
             }
+            status={status}
+            listening={listening}
+            headerMiddle={
+              recordingTabs ? (
+                <nav aria-label="Recordings" className="flex gap-1">
+                  {recordingTabs}
+                </nav>
+              ) : null
+            }
+            headerActions={headerActions}
+            body={textArea}
+            problem={problem}
+            onDelete={() => setConfirming(true)}
+            deleteDisabled={!selected}
+            onEdit={() => selected && editRecording(selected.record.id)}
+            editDisabled={!canFinish}
+            hint="Space pause · Enter send · Esc hide"
+            pauseLabel={bigLabel}
+            pauseDisabled={starting || (!listening && selectedState !== "paused" && !!selected)}
+            onPauseResume={() =>
+              listening
+                ? pauseRecording()
+                : selected
+                  ? resumeRecording(selected.record.id)
+                  : void openMicrophone(null)
+            }
+            onSend={() => selected && void sendRecording(selected.record.id)}
+            sendDisabled={!canFinish}
           >
-            <header className="flex items-center gap-1.5 px-3 pt-2.5">
-              <span
-                aria-hidden
-                className={cn(
-                  "size-2 shrink-0 rounded-full",
-                  listening ? "animate-pulse bg-destructive" : "bg-muted-foreground/50",
-                )}
-              />
-              <p
-                role="status"
-                className="min-w-0 truncate text-muted-foreground text-xs tabular-nums"
-              >
-                {status || "Dictation"}
-              </p>
-              <nav aria-label="Recordings" className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
-                {recordingTabs}
-              </nav>
-              {headerActions}
-            </header>
-            {textArea}
-            {problem ? (
-              <p role="alert" className="px-4 pb-1 text-destructive text-xs">
-                {problem}
-              </p>
-            ) : null}
-            <footer className="flex items-center gap-2 border-t px-3 py-2">
-              <Button
-                variant="ghost-destructive"
-                size="sm"
-                aria-label="Delete"
-                title="Delete this recording"
-                disabled={!selected}
-                onClick={() => setConfirming(true)}
-              >
-                <Trash2Icon />
-                <span className="hidden sm:inline">Delete</span>
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!canFinish}
-                onClick={() => selected && editRecording(selected.record.id)}
-              >
-                <PencilIcon />
-                Edit
-              </Button>
-              <span className="hidden flex-1 text-center text-muted-foreground text-xs lg:block">
-                Space pause · Enter send · Esc hide
-              </span>
-              <span className="flex-1 lg:hidden" />
-              {/* Labelled, so recording and paused cannot be mistaken. */}
-              <Button
-                size="lg"
-                variant={listening ? "destructive" : "secondary"}
-                disabled={starting || (!listening && selectedState !== "paused" && !!selected)}
-                onClick={() =>
-                  listening
-                    ? pauseRecording()
-                    : selected
-                      ? resumeRecording(selected.record.id)
-                      : void openMicrophone(null)
-                }
-              >
-                {listening ? <PauseIcon /> : <MicIcon />}
-                {bigLabel}
-              </Button>
-              <Button
-                size="lg"
-                disabled={!canFinish}
-                onClick={() => selected && void sendRecording(selected.record.id)}
-              >
-                <ArrowUpIcon />
-                Send
-              </Button>
-            </footer>
             {deleteDialog}
-          </div>
+          </DictationCard>
         ),
         fullScreen || !slot ? document.body : slot,
       );
