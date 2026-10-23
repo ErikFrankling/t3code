@@ -1,4 +1,5 @@
-import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
+import { Outlet, createFileRoute, redirect, useLocation } from "@tanstack/react-router";
+import { useEffect } from "react";
 
 import { ThreadRouteView } from "../components/ThreadRouteView";
 import { isAppModalPage } from "../components/sidebar/mainAppLocation";
@@ -7,10 +8,17 @@ import { resolveThreadRouteTarget } from "../threadRoutes";
 import { retainThreadFindForRoute } from "../components/chat/threadFindStore";
 import { ThreadLinkPrompt } from "../components/promptLinks/ThreadLinkPrompt";
 import { useShownThreadRouteTarget } from "../hooks/useShownThreadRouteTarget";
+import { rememberRoute } from "../lib/lastRoute";
+import { isElectron } from "../env";
 
 function ChatRouteLayout() {
   // Render both routes here so draft promotion keeps the same ChatView mounted.
   const { shownTarget, modalOpen } = useShownThreadRouteTarget();
+  // The desktop app opens where it was last time (see lib/lastRoute.ts).
+  const pathname = useLocation({ select: (location) => location.pathname });
+  useEffect(() => {
+    if (isElectron) rememberRoute(pathname);
+  }, [pathname]);
   return (
     <>
       {shownTarget?.kind === "server" && !modalOpen ? (
