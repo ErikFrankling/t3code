@@ -27,11 +27,31 @@ if [ "$head" != "$tip" ] && [ "${ALLOW_BEHIND_TIP:-false}" = true ]; then
   # Without Actions (t3-android-release) no newer run will publish, so a
   # commit still on erik/main may go out; the next release catches up.
   git cat-file -e "$tip^{commit}" 2> /dev/null || git fetch --quiet origin "$tip"
-  if ! git merge-base --is-ancestor "$head" "$tip"; then
-    echo "::error::${head::7} is no longer on erik/main (${tip::7})" >&2
-    exit 1
+  if git merge-base --is-ancestor "$head" "$tip"; then
+    echo "${head::7} is behind erik/main (${tip::7}); publishing it anyway." >&2
+  else
+    # erik/main was rewritten (a rebase) while this built. Its work may still
+    # go out if every commit of it is on erik/main, as the same patch or the
+    # same subject; work that was dropped from erik/main never does.
+    # A commit folded into another one during the rebase has neither: then
+    # its change must still be in erik/main's tree (its diff reverts cleanly).
+    on_tip="$(git log --format=%s "$head..$tip")"
+    tip_index="$(mktemp)"
+    GIT_INDEX_FILE="$tip_index" git read-tree "$tip"
+    gone="$(git cherry "$tip" "$head" | sed -n 's/^+ //p' |
+      while read -r sha; do
+        grep -qxF -- "$(git log -1 --format=%s "$sha")" <<< "$on_tip" && continue
+        git diff "$sha^" "$sha" | GIT_INDEX_FILE="$tip_index" git apply --cached --check -R 2> /dev/null && continue
+        echo "$sha"
+      done)"
+    rm -f "$tip_index"
+    if [ -n "$gone" ]; then
+      echo "::error::${head::7} has work that is no longer on erik/main (${tip::7}):" >&2
+      while read -r sha; do git log -1 --format='  %h %s' "$sha" >&2; done <<< "$gone"
+      exit 1
+    fi
+    echo "erik/main was rewritten; all of ${head::7} is still on it (${tip::7}), publishing." >&2
   fi
-  echo "${head::7} is behind erik/main (${tip::7}); publishing it anyway." >&2
 elif [ "$head" != "$tip" ]; then
   echo "::notice::erik/main moved on to ${tip::7}; that run publishes instead of ${head::7}." >&2
   echo "publish=false"
