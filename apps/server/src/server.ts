@@ -49,6 +49,7 @@ import { layerDictationAudioRoute, layerDictationRoute } from "./dictationHttp.t
 import { layerActivityLogRoute } from "./activityLogHttp.ts";
 import { layerReadAloudRoute } from "./readAloudHttp.ts";
 import { layerPushDeviceRoute, layerPushSendRoute } from "./erikPushHttp.ts";
+import { layerVoicePresenceRoutes } from "./voicePresenceHttp.ts";
 import { fixPath } from "./os-jank.ts";
 import * as Ws from "./ws.ts";
 import * as AgentScopeLive from "./process/agentScope.ts";
@@ -916,6 +917,7 @@ const layerMakeRoutes = Layer.mergeAll(
     layerActivityLogRoute,
     layerPushDeviceRoute,
     layerPushSendRoute,
+    layerVoicePresenceRoutes,
     DeviceHubProxy.layer,
     ServerBrowserStream.routeLayer,
     PreviewTunnel.routeLayer,
