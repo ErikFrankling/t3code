@@ -81,7 +81,7 @@ function statusLabel(entry: SpokenEntry): { readonly label: string; readonly cla
   switch (entry.status) {
     case "spoken":
       return {
-        label: `Said ${timeOf(entry.statusAt)}${entry.sink ? ` · ${entry.sink}` : ""}`,
+        label: entry.sink ?? "Said",
         className: "text-foreground-tertiary",
       };
     case "speaking":
@@ -181,7 +181,9 @@ export function SpokenFeed(props: {
               )}
             >
               <View className="flex-row items-center gap-2">
-                <Text className="text-sm font-t3-bold text-foreground">{timeOf(at)}</Text>
+                <Text className="text-sm font-t3-bold text-foreground">
+                  {timeOf(entry.status === "spoken" ? entry.statusAt : at)}
+                </Text>
                 <Text className={cn("min-w-0 flex-1 text-xs", status.className)} numberOfLines={1}>
                   {status.label}
                 </Text>
