@@ -197,8 +197,8 @@ import {
 } from "./ThreadComposer";
 import { focusReporter } from "./activityLog";
 import { ReadAloudDock, ReadAloudPanel, useReadAloudEnvironment } from "./ReadAloudButton";
-import { VoiceModeHost } from "../voice-mode/VoiceModeView";
-import { voiceMode } from "../voice-mode/voiceMode";
+import { VoiceModeCard } from "../voice-mode/VoiceModeView";
+import { useVoiceMode, voiceMode } from "../voice-mode/voiceMode";
 import { ComposerPopoverHost } from "./ComposerPopoverHost";
 import { ThreadFeed, type ThreadFeedHandle, type ThreadFeedHistoryControls } from "./ThreadFeed";
 import { WorkspaceMutationIdProvider } from "./WorkspaceMutationIdProvider";
@@ -946,6 +946,8 @@ function ThreadDetailBody(
   } | null>(null);
   const activeUserInputRequestId = props.activePendingUserInput?.requestId ?? null;
   const questionInFlow = Platform.OS === "android" && activeUserInputRequestId !== null;
+  const voiceModeState = useVoiceMode();
+  const voiceModeOn = voiceModeState.on && voiceModeState.threadId === props.selectedThread.id;
   const composerSlotHidden =
     activeUserInputRequestId !== null || props.creationState?.kind === "failed";
   const pendingMessageEditBlocked =
@@ -1633,7 +1635,9 @@ function ThreadDetailBody(
                       <ReadAloudDock
                         environmentId={props.environmentId}
                         latest={latestReadableAssistantMessage(props.selectedThreadFeed)}
-                        onVoiceMode={voiceMode.open}
+                        onVoiceMode={
+                          voiceModeOn ? undefined : () => voiceMode.start(props.selectedThread.id)
+                        }
                         // The working/agents pill and the scroll-to-end button float
                         // in the same strip above the composer.
                         bottomOffset={
@@ -1644,8 +1648,19 @@ function ThreadDetailBody(
                       />
                     </View>
                   ) : null}
-                  {/* What is read aloud, as text: in the flow, so the chat makes room. */}
-                  {!isProviderSubagent && !composerSlotHidden ? <ReadAloudPanel /> : null}
+                  {/* Voice mode, or what is read aloud, as text: in the flow, so the chat makes room. */}
+                  {!isProviderSubagent && !composerSlotHidden ? (
+                    voiceModeOn ? (
+                      <VoiceModeCard
+                        environmentId={props.environmentId}
+                        threadId={props.selectedThread.id}
+                        reply={latestReadableAssistantMessage(props.selectedThreadFeed)}
+                        working={props.activeWorkStartedAt !== null}
+                      />
+                    ) : (
+                      <ReadAloudPanel />
+                    )
+                  ) : null}
                   <ComposerPanels
                     className="w-full"
                     style={Platform.OS === "android" ? composerPanelsHeightStyle : undefined}
@@ -1842,13 +1857,6 @@ function ThreadDetailBody(
                     </View>
                   ) : (
                     <>
-                      <VoiceModeHost
-                        environmentId={props.environmentId}
-                        threadId={props.selectedThread.id}
-                        title={props.selectedThread.title || "Untitled thread"}
-                        reply={latestReadableAssistantMessage(props.selectedThreadFeed)}
-                        working={props.activeWorkStartedAt !== null}
-                      />
                       <ThreadComposer
                         isDraft={Boolean(props.draftMode)}
                         canOperateThread={props.canOperateThread}
