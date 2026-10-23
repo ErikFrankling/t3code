@@ -92,6 +92,7 @@ import {
 } from "./thread-inspector-content-stack";
 import { threadRouteIsHydrating } from "./thread-route-hydration";
 import { useThreadPromptLink } from "../prompt-links/useThreadPromptLink";
+import { requestLinkedDictation } from "../voice-input/linkedDictation";
 import { ThreadHeader } from "./ThreadHeader";
 import {
   useAndroidWorkspaceBack,
@@ -150,6 +151,8 @@ type ThreadRouteScreenRouteProps = StaticScreenProps<{
   readonly threadId?: string;
   readonly draft?: NewTaskDraftRouteParams;
   readonly prompt?: string | string[];
+  /** `dictate`: start dictating in the composer (a tapped voice-reply notification). */
+  readonly intent?: string | string[];
 }>;
 
 interface ThreadRouteScreenProps extends ThreadRouteScreenRouteProps {
@@ -224,6 +227,12 @@ function LiveThreadRouteController(props: ThreadRouteScreenProps) {
       : scopedThreadKey(selectedThread.environmentId, selectedThread.id);
   const selectedThreadDetailState = useSelectedThreadDetailState();
   useThreadPromptLink(params, routeThreadKey);
+  const intent = firstRouteParam(params.intent);
+  useEffect(() => {
+    if (intent !== "dictate" || routeThreadKey === null) return;
+    navigation.setParams({ intent: undefined });
+    requestLinkedDictation(routeThreadKey);
+  }, [intent, navigation, routeThreadKey]);
 
   if (environmentId === null || threadIdRaw === null) {
     return <OpeningThreadLoadingScreen />;
