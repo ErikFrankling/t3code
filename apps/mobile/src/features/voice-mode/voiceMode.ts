@@ -80,7 +80,8 @@ export const voiceSession = new VoiceSession({
     }
   },
   send: () => composer()?.stop(),
-  discard: () => controller?.cancel(),
+  // Nothing was said: nothing to keep (cancel() would keep it as "saved, not sent").
+  discard: () => controller?.cancelAndDelete(),
   heard: () => {
     const preview = getDictationPreview();
     return Boolean(preview?.draft.trim() || preview?.final.trim());
