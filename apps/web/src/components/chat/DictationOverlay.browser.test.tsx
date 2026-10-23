@@ -49,7 +49,10 @@ const button = (name: string) => {
 function Chat() {
   return (
     <div className="flex h-dvh flex-col bg-background text-foreground">
-      <div data-testid="chat" className="min-h-0 flex-1 overflow-y-auto px-4 py-6">
+      <div
+        data-testid="chat"
+        className="messages-timeline-scroll min-h-0 flex-1 overflow-y-auto px-4 py-6"
+      >
         <div className="mx-auto flex max-w-3xl flex-col gap-4">
           {Array.from({ length: 6 }, (_, index) => (
             <p key={index} className="text-sm leading-relaxed">
@@ -105,8 +108,14 @@ describe("Dictation overlay", () => {
     await indexedDbDictationStorage().putChunk(paused, 0, new Int16Array(16000 * 40));
     await using _screen = await render(<Chat />, { router: false });
     await vi.waitFor(() => button("1 paused recording"));
+    // At the end of the chat when dictation opens: it stays at the end while the card makes room.
+    const timeline = document.querySelector<HTMLElement>('[data-testid="chat"]')!;
+    timeline.scrollTop = timeline.scrollHeight;
     await act(async () => button("1 paused recording").click());
     await vi.waitFor(() => expect(card()?.dataset.size).toBe("compact"));
+    await vi.waitFor(() =>
+      expect(timeline.scrollHeight - timeline.scrollTop - timeline.clientHeight).toBeLessThan(2),
+    );
 
     for (const [width, height, name] of [
       [1280, 800, "desktop"],
