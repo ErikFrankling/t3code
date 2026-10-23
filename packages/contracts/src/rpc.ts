@@ -360,7 +360,7 @@ import {
   AttentionItemDismissResult,
   AttentionItemError,
   AttentionItemListInput,
-  AttentionItemListResult,
+  PersonalAgentHomeState,
   AttentionItemResult,
   AttentionItemSetDoneInput,
 } from "./attention.ts";
@@ -1861,7 +1861,7 @@ const WsScheduledTasksRotateWebhookTokenRpc = Rpc.make(
 
 const WsAttentionItemsSubscribeRpc = Rpc.make(WS_METHODS.attentionItemsSubscribe, {
   payload: AttentionItemListInput,
-  success: AttentionItemListResult,
+  success: PersonalAgentHomeState,
   error: Schema.Union([AttentionItemError, EnvironmentAuthorizationError]),
   stream: true,
 });
