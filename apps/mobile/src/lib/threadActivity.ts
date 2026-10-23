@@ -75,6 +75,7 @@ import {
   compactDynamicToolOutput,
   htmlRenderFromToolItem,
   mcpAppFromToolItem,
+  spokenTextFromToolItem,
 } from "@t3tools/shared/toolOutput";
 import * as DateTime from "effect/DateTime";
 import {
@@ -185,6 +186,14 @@ type RawThreadFeedEntry =
       readonly render: HtmlRenderReference;
     }
   | {
+      readonly type: "spoken";
+      readonly id: string;
+      readonly createdAt: string;
+      readonly runId: RunId | null;
+      /** What the agent said out loud (the speak tool), shown as its own words. */
+      readonly text: string;
+    }
+  | {
       readonly type: "mcp-app";
       readonly id: string;
       readonly createdAt: string;
@@ -202,7 +211,7 @@ export type ThreadFeedEntry = ThreadFeedEntryContent & {
 };
 
 type ThreadFeedEntryContent =
-  | Extract<RawThreadFeedEntry, { type: "message" | "html-render" | "mcp-app" }>
+  | Extract<RawThreadFeedEntry, { type: "message" | "html-render" | "mcp-app" | "spoken" }>
   | {
       readonly type: "activity-group";
       readonly id: string;
@@ -1100,7 +1109,10 @@ function feedEntryFoldRunId(entry: ThreadFeedEntry, runlessKey: RunId | null): R
   if (entry.type === "message") {
     return entry.message.role === "assistant" ? (entry.message.runId ?? runlessKey) : null;
   }
-  return entry.type === "activity-group" || entry.type === "html-render" || entry.type === "mcp-app"
+  return entry.type === "activity-group" ||
+    entry.type === "html-render" ||
+    entry.type === "spoken" ||
+    entry.type === "mcp-app"
     ? (entry.runId ?? runlessKey)
     : null;
 }
@@ -1233,6 +1245,7 @@ function deriveThreadFeedRunFolds(
             entry.id !== terminalAssistantId &&
             !(entry.type === "message" && retainedAnswerIds.has(entry.message.id)) &&
             entry.type !== "html-render" &&
+            entry.type !== "spoken" &&
             entry.type !== "mcp-app" &&
             entry.id !== visibleCompactionId &&
             !(
@@ -2427,6 +2440,23 @@ export function buildThreadFeed(
         createdAt,
         runId: item.runId,
         render,
+      };
+      projectedEntriesCache.set(row, { attemptId, entry });
+      entries.push(entry);
+      entryRows.push(index);
+      continue;
+    }
+    const spoken =
+      item.type === "dynamic_tool" && item.status !== "failed"
+        ? spokenTextFromToolItem(item)
+        : undefined;
+    if (spoken) {
+      const entry: RawThreadFeedEntry = {
+        type: "spoken",
+        id: `spoken:${row.visibility}:${row.sourceThreadId}:${row.sourceItemId}`,
+        createdAt,
+        runId: item.runId,
+        text: spoken,
       };
       projectedEntriesCache.set(row, { attemptId, entry });
       entries.push(entry);
