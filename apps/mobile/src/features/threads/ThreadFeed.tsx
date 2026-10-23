@@ -286,6 +286,7 @@ import type { QueuedThreadMessage } from "../../state/thread-outbox-model";
 import { resolveThreadFeedFixedItemSize } from "./thread-feed-item-size";
 import { htmlRenderFrameHeight } from "@t3tools/shared/htmlRender";
 import { htmlRenderRowHeight, ThreadHtmlRender } from "./HtmlRenderWebView";
+import { SpokenMessage } from "../voice-mode/SpokenMessage";
 import { ThreadMcpApp } from "./McpAppWebView";
 import { assetEnvironment, useAssetUrl, useRefreshAssetUrl } from "../../state/assets";
 import { useAtomQueryRunner } from "../../state/use-atom-query-runner";
@@ -2113,6 +2114,10 @@ function renderFeedEntry(
         providerStartingDriver={entry.providerStartingDriver}
       />
     );
+  }
+
+  if (entry.type === "spoken") {
+    return <SpokenMessage text={entry.text} />;
   }
 
   if (entry.type === "html-render") {
