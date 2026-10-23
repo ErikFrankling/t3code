@@ -30,6 +30,7 @@ import { useOrchestrationCommand } from "../../state/use-orchestration-command";
 import ChatMarkdown from "../ChatMarkdown";
 import { inputSourceFor, useInputDevice } from "../../inputSource";
 import { announceDictationRecording, dictationRecorder } from "../chat/Dictation";
+import { useDesktopDictationSend } from "../chat/desktopDictationSend";
 import {
   microphoneError,
   startDictationCapture,
@@ -249,6 +250,9 @@ export function SpeakReplyWindow({
     // The server holds the turn now and sends it when the transcript is final.
     closeWindow();
   });
+
+  // Enter anywhere on the desktop (Erik's Hyprland bind) sends, like the Send button.
+  useDesktopDictationSend(recording, () => void send());
 
   const cancel = useEffectEvent(() => {
     if (phase === "sending") return;
