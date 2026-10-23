@@ -4,7 +4,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import ChatView from "./ChatView";
-import { TodoPanel } from "./chat/TodoPanel";
+import { isThreadWorking } from "@t3tools/client-runtime/state/thread-inbox";
+import { PersonalAgentHome } from "./personalAgent/PersonalAgentHome";
 import { resolveDraftPromotionNavigationTarget, threadHasStarted } from "./ChatView.logic";
 import { waitForDraftHeroTransition } from "./chat/draftHeroTransition";
 import { SidebarInset } from "./ui/sidebar";
@@ -169,9 +170,9 @@ export function ThreadRouteView({ target }: { target: ThreadRouteTarget }) {
     finalizePromotedDraftThreadByRef(target.threadRef);
   }, [draftThread, serverThreadStarted, target]);
 
-  // The personal agent's chat gets the Needs you list beside it.
+  // The personal agent is not another thread: its chat sits inside its home.
   const serverConfigs = useServerConfigs();
-  const needsYouEnvironmentId =
+  const personalAgentEnvironmentId =
     target.kind === "server" &&
     target.threadRef.threadId === PERSONAL_AGENT_THREAD_ID &&
     serverConfigs.get(target.threadRef.environmentId)?.environment.capabilities.attentionItems ===
@@ -206,11 +207,12 @@ export function ThreadRouteView({ target }: { target: ThreadRouteTarget }) {
 
   return (
     <SidebarInset className="h-svh min-h-0 overflow-hidden overscroll-y-none md:h-dvh">
-      {view !== null && needsYouEnvironmentId !== null ? (
-        <div className="flex h-full min-h-0">
-          <div className="flex min-w-0 flex-1 flex-col">{view}</div>
-          <TodoPanel environmentId={needsYouEnvironmentId} />
-        </div>
+      {view !== null && personalAgentEnvironmentId !== null ? (
+        <PersonalAgentHome
+          environmentId={personalAgentEnvironmentId}
+          working={serverThreadShell !== null && isThreadWorking(serverThreadShell)}
+          chat={view}
+        />
       ) : (
         view
       )}
