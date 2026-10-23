@@ -150,8 +150,8 @@ export function ReadAloudSpeedMenu(props: { readonly speed: number; readonly lar
 const VOICE_LABEL: Record<string, string> = { big: "Higgs", small: "Kokoro" };
 
 /**
- * Sits on top of the composer: a pinned "Read latest" pill, and while
- * something is being read, its subtitles and controls.
+ * Floats on top of the composer while nothing is read: the Voice and "Read
+ * latest" pills. While something is read, `ReadAloudPanel` shows it instead.
  */
 export function ReadAloudDock(props: {
   readonly environmentId: EnvironmentId;
@@ -162,15 +162,6 @@ export function ReadAloudDock(props: {
 }) {
   const state = useReadAloud();
   const start = useStartReadAloud(props.environmentId);
-  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
-  const offsets = useRef<number[]>([]);
-  const current = state.current;
-
-  useEffect(() => {
-    const y = offsets.current[current];
-    if (y !== undefined) scrollRef.current?.scrollTo({ y: Math.max(0, y - 8), animated: true });
-  }, [current]);
-
   if (state.phase === "idle") {
     const latest = props.latest;
     return (
@@ -214,15 +205,30 @@ export function ReadAloudDock(props: {
       </View>
     );
   }
+  return null;
+}
 
+/**
+ * What is being read, as text, with its controls: right above the composer,
+ * in the flow, so the chat makes room and its last message stays visible. It
+ * stays after the reading ends, until closed, so the text can be read again.
+ */
+export function ReadAloudPanel() {
+  const state = useReadAloud();
+  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  const offsets = useRef<number[]>([]);
+  const current = state.current;
+
+  useEffect(() => {
+    const y = offsets.current[current];
+    if (y !== undefined) scrollRef.current?.scrollTo({ y: Math.max(0, y - 8), animated: true });
+  }, [current]);
+
+  if (state.phase === "idle") return null;
   const otherMode: ReadAloudMode = state.mode === "summary" ? "full" : "summary";
 
   return (
-    <View
-      pointerEvents="box-none"
-      className="absolute inset-x-0 mb-2 px-3"
-      style={{ bottom: props.bottomOffset ?? 0 }}
-    >
+    <View className="mb-2 px-3">
       <View className="rounded-2xl border border-border bg-card p-3">
         <ScrollView ref={scrollRef} style={{ maxHeight: 150 }}>
           {state.sentences.length === 0 ? (
@@ -289,11 +295,21 @@ export function ReadAloudDock(props: {
           <Text className="ml-auto text-xs text-foreground-muted">
             {VOICE_LABEL[state.voice] ?? ""}
           </Text>
-          <IconPress
-            label="Stop reading"
-            icon={{ ios: "xmark", android: "close" }}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Stop reading and close"
+            hitSlop={6}
             onPress={() => readAloudPlayer.stop()}
-          />
+            className="flex-row items-center gap-1 rounded-full border border-border px-2.5 py-1"
+          >
+            <SymbolView
+              name={{ ios: "xmark", android: "close" }}
+              size={12}
+              tintColorClassName="accent-foreground"
+              type="monochrome"
+            />
+            <Text className="text-sm text-foreground">Close</Text>
+          </Pressable>
         </View>
       </View>
     </View>

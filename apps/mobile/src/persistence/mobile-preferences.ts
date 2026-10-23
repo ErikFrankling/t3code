@@ -72,6 +72,8 @@ export interface Preferences {
   readonly composerEnterBehavior?: ComposerEnterBehavior;
   readonly followUpBehavior?: FollowUpBehavior;
   readonly microphones?: ReadonlyArray<MicrophoneEntry>;
+  /** Dictation opens full screen instead of as a card over the chat. */
+  readonly dictationFullScreen?: boolean;
   readonly projectGroupingEnabled?: boolean;
   readonly projectGroupingMode?: SidebarProjectGroupingMode;
   readonly planModeEnabled?: boolean;
@@ -145,6 +147,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     composerEnterBehavior?: ComposerEnterBehavior;
     followUpBehavior?: FollowUpBehavior;
     microphones?: ReadonlyArray<MicrophoneEntry>;
+    dictationFullScreen?: boolean;
     projectGroupingEnabled?: boolean;
     projectGroupingMode?: SidebarProjectGroupingMode;
     planModeEnabled?: boolean;
@@ -230,6 +233,9 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   }
   if (parsed.followUpBehavior === "queue" || parsed.followUpBehavior === "steer") {
     preferences.followUpBehavior = parsed.followUpBehavior;
+  }
+  if (typeof parsed.dictationFullScreen === "boolean") {
+    preferences.dictationFullScreen = parsed.dictationFullScreen;
   }
   if (Array.isArray(parsed.microphones)) {
     preferences.microphones = parsed.microphones.flatMap((entry): MicrophoneEntry[] => {
