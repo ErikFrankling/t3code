@@ -110,6 +110,32 @@ device (`adb root; adb shell sendevent /dev/input/event13 1 114 1 ...`; `adb
 shell input keyevent` is injected and never reaches a media session while the
 screen is off).
 
+## Speak reply
+
+When the personal agent speaks a message on the PC, the desktop app can open a
+small always-on-top window, titled exactly `T3 Code — Speak reply`, that shows
+the spoken line and the chat message it is about, and records the answer at
+once without taking keyboard focus:
+
+```sh
+t3 app speak-reply --thread <threadId> --text "…" [--queued-at <epoch ms>]   # or --text-file <path|->
+t3 app speak-reply --send     # send what was said (Enter in the window)
+t3 app speak-reply --cancel   # close it (Esc); the recording waits, paused, in the thread's composer
+t3 app speak-reply --status   # {"open","threadId","phase","recording","heard"}
+```
+
+There is only one window: a new message for the thread you are answering
+keeps the recording going and swaps the text; one for another thread pauses
+the recording (kept in that thread) and starts a new one. Send delivers the
+transcript like a dictated composer send, steering the thread when a run is in
+progress. If nothing is said in the first 30 seconds the empty recording is
+dropped and **Record** starts again. **Open details** raises the main window
+on the thread.
+
+On Android, a push sent with `path: "/threads/<environment>/<thread>/dictate"`
+opens the thread and starts dictating in its composer (unless voice mode is
+running, which carries on).
+
 ## How it works
 
 The host forwards authenticated `POST /api/dictation` speech actions to the

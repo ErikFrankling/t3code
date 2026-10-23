@@ -60,7 +60,11 @@ function fakeGateway() {
 let next = 0;
 
 /** A page: its own recorder over the device's storage. Closing it stops its loops. */
-function page(storage: DictationStorage, gateway: ReturnType<typeof fakeGateway>) {
+function page(
+  storage: DictationStorage,
+  gateway: ReturnType<typeof fakeGateway>,
+  lock: (name: string, hold: () => Promise<void>) => void = (_name, hold) => void hold(),
+) {
   let closed = false;
   const recorder = new DictationRecorder({
     storage,
@@ -71,7 +75,7 @@ function page(storage: DictationStorage, gateway: ReturnType<typeof fakeGateway>
     newId: () => `00000000-0000-4000-8000-${String(++next).padStart(12, "0")}`,
     wait: () =>
       closed ? new Promise(() => undefined) : new Promise((resolve) => setTimeout(resolve, 0)),
-    lock: (_name, hold) => void hold(),
+    lock,
   });
   return {
     recorder,
@@ -270,5 +274,51 @@ describe("durable dictation", () => {
     // The speech service keeps the audio of a cancelled recording.
     expect(gateway.heard(id)).toEqual([1]);
     second.close();
+  });
+
+  it("adopts a recording another window made after load, once that window lets go of it", async () => {
+    const storage = memoryDictationStorage();
+    const gateway = fakeGateway();
+    // Web Locks: one holder per name; later requests wait; a closed page lets go.
+    const held = new Map<string, Promise<void>>();
+    const pageLocks = () => {
+      let release!: () => void;
+      const closed = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const lock = (name: string, hold: () => Promise<void>) => {
+        const run = (held.get(name) ?? Promise.resolve()).then(() =>
+          Promise.race([hold(), closed]),
+        );
+        held.set(
+          name,
+          run.catch(() => undefined),
+        );
+      };
+      return { lock, release };
+    };
+    const mainLocks = pageLocks();
+    const main = page(storage, gateway, mainLocks.lock);
+    await main.recorder.load();
+
+    const speakReplyLocks = pageLocks();
+    const speakReply = page(storage, gateway, speakReplyLocks.lock);
+    const id = await speakReply.recorder.create(recording);
+    await speakReply.recorder.append(id, chunk(1));
+    speakReply.recorder.pause(id);
+    await until(() => speakReply.entry(id)?.upload === "uploaded");
+
+    // Asked twice while the other window still holds it: neither adopts it yet.
+    await main.recorder.rescan();
+    await main.recorder.rescan();
+    expect(main.entry(id)).toBeUndefined();
+
+    speakReply.close();
+    speakReplyLocks.release();
+    await until(() => main.entry(id) !== undefined);
+    expect(main.entry(id)?.record.state).toBe("paused");
+    expect(main.entry(id)?.record.sizes).toHaveLength(1);
+    main.close();
+    mainLocks.release();
   });
 });
