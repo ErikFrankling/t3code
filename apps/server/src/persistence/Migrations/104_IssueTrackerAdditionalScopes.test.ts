@@ -8,12 +8,12 @@ import * as IssueTrackerBindings from "../IssueTrackerBindings.ts";
 import { runMigrations } from "../Migrations.ts";
 
 it.layer(NodeSqliteClient.layer({ filename: ":memory:" }))(
-  "103_IssueTrackerAdditionalScopes",
+  "104_IssueTrackerAdditionalScopes",
   (it) => {
     it.effect("keeps a one-team binding and saves and replaces extra teams", () =>
       Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient;
-        yield* runMigrations({ toMigrationInclusive: 102 });
+        yield* runMigrations({ toMigrationInclusive: 103 });
         yield* sql`INSERT INTO issue_tracker_bindings VALUES ('web', 'linear', 'ENG', '2026-11-21')`;
         yield* runMigrations();
         const bindings = yield* IssueTrackerBindings.IssueTrackerBindingsRepository.pipe(
