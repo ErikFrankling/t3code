@@ -173,6 +173,22 @@ function RootRouteBranch() {
     return <Outlet />;
   }
 
+  // The desktop app's small always-on-top speak-reply window: no app shell and
+  // none of the main window's coordinators (it must not claim `t3 app` requests).
+  if (pathname === "/speak-reply") {
+    return (
+      <ToastProvider>
+        <AnchoredToastProvider>
+          <BrowserChromeThemeSync key={pathname} />
+          <ContrastAppearanceSync />
+          <EnvironmentThemeSync />
+          <FontAppearanceSync />
+          <Outlet />
+        </AnchoredToastProvider>
+      </ToastProvider>
+    );
+  }
+
   // Settings can reopen /welcome mid-session, so it mounts everything the app does except the
   // first-run gate and the event router, whose first navigation would leave the page.
   const appHosts = (
