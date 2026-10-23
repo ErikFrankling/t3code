@@ -10,6 +10,7 @@ import type {
   OrchestrationV2UserMessageInputIntent,
   PlanId,
   ProjectScript as ContractProjectScript,
+  InputSource,
   ProviderInteractionMode,
   RunId,
   RuntimeMode,
@@ -84,6 +85,7 @@ export interface ChatMessage {
   readonly scheduledTaskId?: ScheduledTaskId;
   readonly senderThreadId?: ThreadId;
   readonly idleCompaction?: import("@t3tools/contracts").OrchestrationV2IdleCompaction;
+  readonly inputSource?: InputSource;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly inputIntent?: OrchestrationV2UserMessageInputIntent | undefined;

@@ -143,6 +143,7 @@ import type { useQueuedRunEdit } from "./useQueuedRunEdit";
 import type { useTimelineFollow } from "./useTimelineFollow";
 import type { useUsageLimitsPanel } from "./useUsageLimitsPanel";
 import type { useWorktreeSetup } from "./useWorktreeSetup";
+import { inputSourceFor, useInputDevice } from "../../inputSource";
 
 const ENVIRONMENT_UNAVAILABLE_SEND_TOAST_TRAIL_SIZE = 3;
 
@@ -333,6 +334,7 @@ export function useComposerSend(input: ComposerSendInput) {
   const navigate = useNavigate();
   const clientSettingsHydrated = useClientSettingsHydrated();
   const planModeEnabled = useEnvironmentSettings(environmentId, selectPlanModeEnabled);
+  const inputDevice = useInputDevice();
   const startThreadTurn = useOrchestrationCommand(threadEnvironment.startTurn, {
     reportFailure: false,
   });
@@ -1298,6 +1300,7 @@ export function useComposerSend(input: ComposerSendInput) {
       const startPromise = startThreadTurn({
         environmentId,
         input: {
+          inputSource: inputSourceFor({ device: inputDevice, dictated: dictation !== undefined }),
           ...(dictation
             ? {
                 commandId: CommandId.make(dictation.id),
