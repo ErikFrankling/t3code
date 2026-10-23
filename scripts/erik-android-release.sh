@@ -159,12 +159,6 @@ apk_runtime="$(fingerprint "$apk")"
 [ "$apk_runtime" = "$runtime" ] ||
   echo "warning: APK runtime $apk_runtime differs from the resolved $runtime; JS updates will build APKs until they agree" >&2
 
-if [ -n "${EXTRA_TEST_ABI:-}" ]; then
-  # Same commit, version and key, for an emulator; never published.
-  build_and_sign "$EXTRA_TEST_ABI" "$OUT/t3code-erik-$code-$EXTRA_TEST_ABI.apk"
-fi
-rm "$work/keys/release.jks"
-
 step "Publish APK $name"
 guard_again || { echo "erik/main moved on; nothing published"; exit 0; }
 scripts/erik-updates-release.sh upload "$CHANNEL" "$apk"
@@ -190,3 +184,10 @@ if [ -n "${T3CODE_FCM_SERVICE_ACCOUNT_JSON:-}" ]; then
   step "Ping installed apps"
   node scripts/erik-updates-ping.mjs || echo "warning: release ping failed; apps still poll" >&2
 fi
+
+if [ -n "${EXTRA_TEST_ABI:-}" ]; then
+  # Same commit, version and key, for an emulator; never published. Built
+  # after publishing so it never delays the release.
+  build_and_sign "$EXTRA_TEST_ABI" "$OUT/t3code-erik-$code-$EXTRA_TEST_ABI.apk"
+fi
+rm -f "$work/keys/release.jks"
