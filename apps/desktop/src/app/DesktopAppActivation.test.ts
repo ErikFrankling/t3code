@@ -63,7 +63,7 @@ function startOkServer(target: ReturnType<typeof makeTarget>, userId: number | u
   });
 }
 
-function exchange(address: string, payload: DesktopAppActivationRequest) {
+function exchange(address: string, payload: unknown) {
   return new Promise<DesktopAppActivationResponse>((resolve, reject) => {
     const socket = NodeNet.createConnection(address);
     socket.setEncoding("utf8");
@@ -159,6 +159,53 @@ describe("desktop app control server", () => {
           ok: true,
           requestId: "reclaimed",
         });
+        await NodeFSP.rm(root, { recursive: true, force: true });
+      });
+    }),
+  );
+
+  it.effect("passes speak-reply requests through and rejects malformed ones", () =>
+    Effect.gen(function* () {
+      const platform = yield* HostProcess.Platform;
+      const userId = yield* HostProcess.UserId;
+      yield* Effect.promise(async () => {
+        const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-app-speak-test-"));
+        const target = makeTarget(NodePath.join(root, "userdata"), platform, userId);
+        const handled: string[] = [];
+        const server = await startDesktopAppControlServer({
+          ...target,
+          userId,
+          handle: async (input) => {
+            handled.push(input.type === "speak-reply" ? `speak-reply:${input.action}` : input.type);
+            return {
+              version: 1,
+              requestId: input.requestId,
+              ok: true,
+              action: "status",
+              status: { open: false, threadId: null, phase: null, recording: false, heard: false },
+            };
+          },
+          cancel: () => undefined,
+          onReclaimError: () => undefined,
+        });
+        openServers.push(server);
+
+        const status = await exchange(target.address, {
+          version: 1,
+          requestId: "speak-status",
+          type: "speak-reply",
+          action: "status",
+        });
+        expect(status).toMatchObject({ ok: true, requestId: "speak-status" });
+        const malformed = await exchange(target.address, {
+          version: 1,
+          requestId: "speak-open",
+          type: "speak-reply",
+          action: "open",
+          text: "no thread",
+        });
+        expect(malformed).toMatchObject({ ok: false, code: "invalid-request" });
+        expect(handled).toEqual(["speak-reply:status"]);
         await NodeFSP.rm(root, { recursive: true, force: true });
       });
     }),
