@@ -1,22 +1,26 @@
-import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import {
   AttentionItemId,
   PERSONAL_AGENT_THREAD_ID,
   ProjectId,
   ThreadId,
+  todoSection,
   type OrchestrationV2ThreadShell,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 
+import * as ServerConfig from "../config.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
-import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as AttentionItemService from "./AttentionItemService.ts";
 
-const blocked = ThreadId.make("thread:blocked");
-const filer = ThreadId.make("thread:filer");
+const owner = ThreadId.make("thread:owner");
+// Any fixed time before the far-future blocked_until in the fixtures.
+const NOW = Date.parse("2026-10-23T12:00:00Z");
 
 const shell = (threadId: ThreadId, title: string) =>
   ({
@@ -26,11 +30,15 @@ const shell = (threadId: ThreadId, title: string) =>
     deletedAt: null,
   }) as unknown as OrchestrationV2ThreadShell;
 
+const todoFile = (fields: string, body = "Body text.") => `---\n${fields}\n---\n\n${body}\n`;
+
 const withService = <A, E>(
-  body: (
-    service: AttentionItemService.AttentionItemService["Service"],
-    sent: Ref.Ref<ReadonlyArray<ThreadManagementService.ThreadManagementSendInput>>,
-  ) => Effect.Effect<A, E>,
+  body: (input: {
+    readonly service: AttentionItemService.AttentionItemService["Service"];
+    readonly sent: Ref.Ref<ReadonlyArray<ThreadManagementService.ThreadManagementSendInput>>;
+    readonly todoDir: string;
+  }) => Effect.Effect<A, E, FileSystem.FileSystem | Path.Path>,
+  files: Record<string, string> = {},
 ) =>
   Effect.gen(function* () {
     const sent = yield* Ref.make<ReadonlyArray<ThreadManagementService.ThreadManagementSendInput>>(
@@ -38,168 +46,152 @@ const withService = <A, E>(
     );
     const shells = new Map([
       [PERSONAL_AGENT_THREAD_ID, shell(PERSONAL_AGENT_THREAD_ID, "Personal agent")],
-      [blocked, shell(blocked, "Blocked work")],
+      [owner, shell(owner, "Owner thread")],
     ]);
+    const config = yield* ServerConfig.ServerConfig;
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const todoDir = path.join(config.baseDir, "personal", "todo");
+    yield* fs.makeDirectory(path.join(todoDir, "done"), { recursive: true });
+    for (const [name, text] of Object.entries(files)) {
+      yield* fs.writeFileString(path.join(todoDir, name), text);
+    }
     const layer = AttentionItemService.layer.pipe(
       Layer.provide(
-        Layer.mergeAll(
-          Layer.mock(ThreadManagementService.ThreadManagementService)({
-            getThreadShell: (threadId) => Effect.succeed(shells.get(threadId) ?? null),
-            sendToThread: (input) =>
-              Ref.update(sent, (all) => [...all, input]).pipe(
-                Effect.as({ delivery: "queued" } as never),
-              ),
-          }),
-          NodeCrypto.layer,
-        ),
+        Layer.mock(ThreadManagementService.ThreadManagementService)({
+          getThreadShell: (threadId) => Effect.succeed(shells.get(threadId) ?? null),
+          sendToThread: (input) =>
+            Ref.update(sent, (all) => [...all, input]).pipe(
+              Effect.as({ delivery: "queued" } as never),
+            ),
+        }),
       ),
     );
     return yield* Effect.gen(function* () {
       const service = yield* AttentionItemService.AttentionItemService;
-      return yield* body(service, sent);
+      return yield* body({ service, sent, todoDir });
     }).pipe(Effect.provide(layer));
-  }).pipe(Effect.provide(SqlitePersistence.layerMemory));
+  }).pipe(
+    Effect.scoped,
+    Effect.provide(
+      ServerConfig.layerTest(process.cwd(), { prefix: "t3-todo-" }).pipe(
+        Layer.provideMerge(NodeServices.layer),
+      ),
+    ),
+  );
 
-it.effect("a user tick wakes the personal agent once with what it unblocks", () =>
-  withService((service, sent) =>
-    Effect.gen(function* () {
-      const { item } = yield* service.upsert(
-        {
-          id: AttentionItemId.make("lastpass-login"),
-          title: "Sign in to LastPass in Agent Browser Login",
-          unblocks: [blocked],
-        },
-        { threadId: filer },
-      );
-      assert.strictEqual(item.sourceThreadId, filer);
-      assert.isFalse(item.done);
+it("parses front matter and keeps unknown keys and the body when rendering", () => {
+  const file = AttentionItemService.parseTodoFile(
+    todoFile("title: Buy keys\nstatus: blocked\nblocked_on: erik\ncustom: kept", "## Next\nGo."),
+  );
+  file.doc.set("erik_ticked", "2026-10-23T10:00:00Z");
+  const text = AttentionItemService.renderTodoFile(file);
+  assert.include(text, "custom: kept");
+  assert.include(text, "erik_ticked:");
+  assert.include(text, "## Next\nGo.");
+  assert.strictEqual(AttentionItemService.todoSlug("Buy 2 YubiKeys (5C NFC)!"), "buy-2-yubikeys-5c-nfc");
+});
 
-      yield* service.setDone({ id: item.id, done: true }, { wakePersonalAgent: true });
-      // Ticking an already ticked item changes nothing and sends nothing.
-      yield* service.setDone({ id: item.id, done: true }, { wakePersonalAgent: true });
-
-      const messages = yield* Ref.get(sent);
-      assert.lengthOf(messages, 1);
-      const message = messages[0]!;
-      assert.strictEqual(message.threadId, PERSONAL_AGENT_THREAD_ID);
-      assert.strictEqual(message.mode, "queue");
-      assert.include(message.text, "Sign in to LastPass in Agent Browser Login");
-      assert.include(message.text, "[Blocked work](t3-thread://v1/thread:blocked)");
-    }),
+it.effect("lists the files in sections, needs-you first, and skips the README", () =>
+  withService(
+    ({ service }) =>
+      Effect.gen(function* () {
+        const { items } = yield* service.list();
+        const byId = new Map(items.map((item) => [item.id, item]));
+        assert.isFalse(byId.has(AttentionItemId.make("README")));
+        assert.strictEqual(todoSection(byId.get(AttentionItemId.make("decide"))!, NOW), "needs_you");
+        assert.strictEqual(todoSection(byId.get(AttentionItemId.make("moving"))!, NOW), "moving");
+        assert.strictEqual(todoSection(byId.get(AttentionItemId.make("later"))!, NOW), "waiting");
+        assert.strictEqual(todoSection(byId.get(AttentionItemId.make("rule"))!, NOW), "standing");
+        const moving = byId.get(AttentionItemId.make("moving"))!;
+        assert.strictEqual(moving.owner, owner);
+        assert.strictEqual(moving.repeated, 2);
+        assert.strictEqual(moving.body, "Body text.");
+        assert.strictEqual(items[0]!.id, "moving");
+      }),
+    {
+      "README.md": "# To-do\n",
+      "decide.md": todoFile("title: Decide #180\nstatus: blocked\nblocked_on: decision"),
+      "moving.md": todoFile(`title: Ship it\nstatus: in_flight\nowner: ${owner}\nrepeated: 2`),
+      "later.md": todoFile(
+        "title: Check after the nightly\nstatus: blocked\nblocked_on: time\nblocked_until: 2999-01-01T06:00:00+02:00",
+      ),
+      "rule.md": todoFile("title: Dark mode everywhere\nstatus: standing"),
+    },
   ),
 );
 
-it.effect("an agent resolving an item does not wake the personal agent", () =>
-  withService((service, sent) =>
-    Effect.gen(function* () {
-      const { item } = yield* service.upsert({ title: "Decide: close #180 or talk to Kaan" });
-      yield* service.setDone({ id: item.id, done: true }, { wakePersonalAgent: false });
-      assert.lengthOf(yield* Ref.get(sent), 0);
+it.effect("a user tick records erik_ticked and wakes the personal agent once", () =>
+  withService(
+    ({ service, sent, todoDir }) =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const id = AttentionItemId.make("sign-in");
+        const { item } = yield* service.setDone({ id, done: true }, { wakePersonalAgent: true });
+        assert.isNotNull(item.erikTicked);
+        assert.strictEqual(item.status, "blocked");
+        yield* service.setDone({ id, done: true }, { wakePersonalAgent: true });
+        const messages = yield* Ref.get(sent);
+        assert.lengthOf(messages, 1);
+        assert.strictEqual(messages[0]!.threadId, PERSONAL_AGENT_THREAD_ID);
+        assert.include(messages[0]!.text, "Sign in to LastPass");
+        assert.include(messages[0]!.text, "todo/sign-in.md");
+        const text = yield* fs.readFileString(`${todoDir}/sign-in.md`);
+        assert.include(text, "erik_ticked:");
+        assert.include(text, "Keep me.");
 
-      const reopened = yield* service.setDone(
-        { id: item.id, done: false },
-        { wakePersonalAgent: false },
-      );
-      assert.isFalse(reopened.item.done);
-      assert.isNull(reopened.item.doneAt);
-    }),
+        const unticked = yield* service.setDone({ id, done: false }, { wakePersonalAgent: true });
+        assert.isNull(unticked.item.erikTicked);
+      }),
+    {
+      "sign-in.md": todoFile(
+        "title: Sign in to LastPass\nstatus: blocked\nblocked_on: erik",
+        "Keep me.",
+      ),
+    },
   ),
 );
 
-it.effect("updating an item keeps its done state and unspecified fields", () =>
-  withService((service) =>
+it.effect("the old tools write the same files: upsert, commitment, done with proof", () =>
+  withService(({ service, todoDir }) =>
     Effect.gen(function* () {
-      const id = AttentionItemId.make("kth-mail");
-      yield* service.upsert({
-        id,
-        title: "Answer: KTH mail via Executor, skip or do?",
-        detail: "https://example.com/kth",
-        unblocks: [blocked],
-        priority: "high",
+      const fs = yield* FileSystem.FileSystem;
+      const created = yield* service.upsert(
+        { title: "Buy 2 YubiKeys", detail: "Order at Inet." },
+        { threadId: owner },
+      );
+      assert.strictEqual(created.item.id, "buy-2-yubikeys");
+      assert.strictEqual(todoSection(created.item, NOW), "needs_you");
+      assert.strictEqual(created.item.owner, owner);
+
+      const commitment = yield* service.upsertCommitment({
+        id: AttentionItemId.make("ship-list"),
+        title: "Ship the one list",
+        state: "in_progress",
+        ownerThreadId: owner,
+        proofRequired: "Screenshots",
+        repeated: true,
       });
-      yield* service.setDone({ id, done: true }, { wakePersonalAgent: false });
-      const { item } = yield* service.upsert({ id, title: "Answer: KTH mail, skip or do?" });
-      assert.strictEqual(item.title, "Answer: KTH mail, skip or do?");
-      assert.strictEqual(item.detail, "https://example.com/kth");
-      assert.deepStrictEqual(item.unblocks, [blocked]);
-      assert.strictEqual(item.priority, "high");
-      assert.isTrue(item.done);
-    }),
-  ),
-);
+      assert.strictEqual(commitment.item.status, "in_flight");
+      assert.strictEqual(commitment.item.repeated, 1);
 
-it.effect("lists open items by priority before done ones, and dismiss removes", () =>
-  withService((service) =>
-    Effect.gen(function* () {
-      const low = yield* service.upsert({ title: "Low", priority: "low" });
-      const high = yield* service.upsert({ title: "High", priority: "high" });
-      const normal = yield* service.upsert({ title: "Normal" });
-      yield* service.setDone({ id: high.item.id, done: true }, { wakePersonalAgent: false });
-      assert.deepStrictEqual(
-        (yield* service.list()).items.map((item) => item.title),
-        ["Normal", "Low", "High"],
+      const bare = yield* Effect.flip(
+        service.resolveCommitment({ id: AttentionItemId.make("ship-list"), state: "done" }),
       );
-      yield* service.dismiss({ id: low.item.id });
-      assert.deepStrictEqual(
-        (yield* service.list()).items.map((item) => item.id),
-        [normal.item.id, high.item.id],
-      );
-    }),
-  ),
-);
-
-it.effect("a commitment closes only with proof and never through a user tick", () =>
-  withService((service, sent) =>
-    Effect.gen(function* () {
-      const id = AttentionItemId.make("composer-grows");
-      const { item } = yield* service.upsertCommitment({
-        id,
-        title: "Android composer grows to 6 lines",
-        ownerThreadId: blocked,
-        proofRequired: "Dark-theme screenshots at phone width",
-        askedAt: "2026-10-21",
-      });
-      assert.strictEqual(item.kind, "in_flight");
-      assert.strictEqual(item.state, "open");
-      assert.strictEqual(item.ownerThreadId, blocked);
-
-      const tick = yield* Effect.flip(
-        service.setDone({ id, done: true }, { wakePersonalAgent: true }),
-      );
-      assert.include(tick.message, "proof");
-      const bare = yield* Effect.flip(service.resolveCommitment({ id, state: "done" }));
       assert.include(bare.message, "proof");
-
-      // A repeat request marks it repeated and keeps the other fields.
-      const repeated = yield* service.upsertCommitment({ id, title: item.title, repeated: true });
-      assert.isTrue(repeated.item.repeated);
-      assert.strictEqual(repeated.item.proofRequired, "Dark-theme screenshots at phone width");
-
       const closed = yield* service.resolveCommitment({
-        id,
+        id: AttentionItemId.make("ship-list"),
         state: "done",
-        proof: "/home/erikf/shots/composer-6.png",
+        proof: "/tmp/shot.png",
       });
       assert.isTrue(closed.item.done);
-      assert.strictEqual(closed.item.state, "done");
-      assert.strictEqual(closed.item.proof, "/home/erikf/shots/composer-6.png");
-      assert.lengthOf(yield* Ref.get(sent), 0);
-    }),
-  ),
-);
+      assert.isFalse(yield* fs.exists(`${todoDir}/ship-list.md`));
+      assert.include(yield* fs.readFileString(`${todoDir}/done/ship-list.md`), "## Proof\n/tmp/shot.png");
 
-it.effect("needs-you and in-flight ids do not cross over", () =>
-  withService((service) =>
-    Effect.gen(function* () {
-      const needs = yield* service.upsert({ title: "Sign in" });
-      const commitment = yield* service.upsertCommitment({ title: "Ship it" });
-      yield* Effect.flip(service.upsertCommitment({ id: needs.item.id, title: "Ship it" }));
-      yield* Effect.flip(service.upsert({ id: commitment.item.id, title: "Sign in" }));
-      yield* Effect.flip(service.resolveCommitment({ id: needs.item.id, state: "in_progress" }));
-      assert.deepStrictEqual((yield* service.list()).items.map((item) => item.kind).toSorted(), [
-        "in_flight",
-        "needs_you",
-      ]);
+      const unsafe = yield* Effect.flip(
+        service.setDone({ id: AttentionItemId.make("../x"), done: true }, { wakePersonalAgent: true }),
+      );
+      assert.include(unsafe.message, "not a valid");
     }),
   ),
 );
