@@ -607,7 +607,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
   const { start: startVoiceInput, stop: stopVoiceInput } = voiceInput;
   // A tapped voice-reply notification: dictate right away. Voice mode, when
   // on, already runs the conversation, so it carries on untouched.
-  const voiceModeOpen = useVoiceMode().open;
+  const voiceModeOpen = useVoiceMode().on;
   const canStartLinkedDictation =
     props.draftKey === undefined && voiceInput.isAvailable && voiceInput.state.phase === "idle";
   useEffect(() => {
@@ -619,8 +619,12 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     return subscribeLinkedDictation(startIfRequested);
   }, [canStartLinkedDictation, composerOwnerKey, startVoiceInput, voiceModeOpen]);
   useEffect(
-    () => registerVoiceModeComposer({ start: startVoiceInput, stop: stopVoiceInput }),
-    [startVoiceInput, stopVoiceInput],
+    () =>
+      registerVoiceModeComposer(props.selectedThread.id, {
+        start: startVoiceInput,
+        stop: stopVoiceInput,
+      }),
+    [props.selectedThread.id, startVoiceInput, stopVoiceInput],
   );
   const voicePresentation = resolveVoiceComposerPresentation(
     voiceInput.state,
