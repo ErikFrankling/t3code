@@ -5,8 +5,9 @@ import {
   findLinkedRoute,
   findStackRoute,
   restoreDraftLinkState,
-  shouldHandleAppLink,
   updateLinkedRoute,
+  rewriteDictateLink,
+  shouldHandleAppLink,
 } from "./appLinking";
 
 describe("shouldHandleAppLink", () => {
@@ -177,5 +178,22 @@ describe("findStackRoute", () => {
     ]);
     expect(findStackRoute(root, "NewTaskProject")?.routeKey).toBe("second");
     expect(findStackRoute(root, "Thread")).toBeUndefined();
+  });
+});
+
+describe("rewriteDictateLink", () => {
+  it("turns the dictate segment into the intent param", () => {
+    expect(rewriteDictateLink("threads/env-1/thread-1/dictate")).toBe(
+      "threads/env-1/thread-1?intent=dictate",
+    );
+    expect(rewriteDictateLink("/threads/env-1/thread-1/dictate/")).toBe(
+      "/threads/env-1/thread-1?intent=dictate",
+    );
+  });
+
+  it("leaves other links alone", () => {
+    expect(rewriteDictateLink("threads/env-1/thread-1")).toBe("threads/env-1/thread-1");
+    expect(rewriteDictateLink("threads/env-1/dictate")).toBe("threads/env-1/dictate");
+    expect(rewriteDictateLink("new/draft?prompt=x")).toBe("new/draft?prompt=x");
   });
 });
