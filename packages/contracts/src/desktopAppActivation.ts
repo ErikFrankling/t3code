@@ -145,16 +145,58 @@ export const DesktopSpeakReplyResponse = Schema.Union([
 ]);
 export type DesktopSpeakReplyResponse = typeof DesktopSpeakReplyResponse.Type;
 
+/**
+ * Dictation in any desktop window (the chat's card or the speak-reply window).
+ * A global hotkey sends the one that is recording without focusing T3 Code
+ * (`t3 app dictation --send`); `status` tells whether any window records.
+ */
+export const DesktopDictationRequest = Schema.Struct({
+  version: Schema.Literal(DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION),
+  requestId: TrimmedNonEmptyString,
+  type: Schema.Literal("dictation"),
+  action: Schema.Literals(["send", "status"]),
+});
+export type DesktopDictationRequest = typeof DesktopDictationRequest.Type;
+
+export const DesktopDictationStatus = Schema.Struct({
+  /** Some window has its microphone open (paused does not count). */
+  recording: Schema.Boolean,
+});
+export type DesktopDictationStatus = typeof DesktopDictationStatus.Type;
+
+export const DesktopDictationErrorCode = Schema.Literals(["no-recording"]);
+export type DesktopDictationErrorCode = typeof DesktopDictationErrorCode.Type;
+
+export const DesktopDictationResponse = Schema.Union([
+  Schema.Struct({
+    version: Schema.Literal(DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION),
+    requestId: TrimmedNonEmptyString,
+    ok: Schema.Literal(true),
+    action: Schema.Literals(["send", "status"]),
+    dictation: DesktopDictationStatus,
+  }),
+  Schema.Struct({
+    version: Schema.Literal(DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION),
+    requestId: TrimmedNonEmptyString,
+    ok: Schema.Literal(false),
+    code: DesktopDictationErrorCode,
+    message: TrimmedNonEmptyString,
+  }),
+]);
+export type DesktopDictationResponse = typeof DesktopDictationResponse.Type;
+
 /** Everything the desktop app control socket accepts. */
 export const DesktopAppControlRequest = Schema.Union([
   DesktopAppActivationRequest,
   DesktopSpeakReplyRequest,
+  DesktopDictationRequest,
 ]);
 export type DesktopAppControlRequest = typeof DesktopAppControlRequest.Type;
 
 export const DesktopAppControlResponse = Schema.Union([
   DesktopAppActivationResponse,
   DesktopSpeakReplyResponse,
+  DesktopDictationResponse,
 ]);
 export type DesktopAppControlResponse = typeof DesktopAppControlResponse.Type;
 
