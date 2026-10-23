@@ -5,11 +5,11 @@ import * as SqlClient from "effect/sql/SqlClient";
 
 import { runMigrations } from "../Migrations.ts";
 
-it.layer(NodeSqliteClient.layer({ filename: ":memory:" }))("116_ForkHistoryMembership", (it) => {
+it.layer(NodeSqliteClient.layer({ filename: ":memory:" }))("117_ForkHistoryMembership", (it) => {
   it.effect("preserves historical boundary runs when earlier lifecycle evidence was pruned", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
-      yield* runMigrations({ toMigrationInclusive: 96 });
+      yield* runMigrations({ toMigrationInclusive: 97 });
       const forkedAt = "2026-11-10T12:02:00.000Z";
       const rewoundAt = "2026-11-10T12:03:00.000Z";
       for (const [id, status, ordinal] of [

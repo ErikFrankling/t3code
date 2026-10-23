@@ -11,6 +11,8 @@ export type VoiceLoopPhase = "off" | "cue" | "listening" | "sending" | "waiting"
 export type VoiceLoopReply = { readonly key: string; readonly text: string };
 
 export type VoiceLoopThread = {
+  /** The thread being talked to, for the span reported when the loop ends. */
+  readonly threadId?: string;
   /** The latest finished assistant message. */
   readonly reply: VoiceLoopReply | null;
   /** The agent is still on its turn (intermediate messages are not read). */
@@ -22,12 +24,22 @@ export type VoiceLoopSnapshot = {
   readonly error: string | null;
 };
 
+export type VoiceLoopSpan = {
+  readonly threadId: string | null;
+  readonly startedAt: number;
+  readonly endedAt: number;
+};
+
 export type VoiceLoopDependencies = {
   readonly player: ReadAloudPlayer;
   /** Starts dictation into the thread's composer. */
   readonly listen: () => Promise<void> | void;
   /** Ends dictation and sends what was said. */
   readonly send: () => Promise<void> | void;
+  /** Called when the loop turns off, with how long it was on. */
+  readonly onSpan?: (span: VoiceLoopSpan) => void;
+  /** Milliseconds since the epoch. */
+  readonly now?: () => number;
 };
 
 export const VOICE_LOOP_CUE = "Recording started.";
@@ -58,9 +70,25 @@ export class VoiceLoop {
     return () => this.#listeners.delete(listener);
   };
 
+  // When the loop came on and the thread it talked to, for `onSpan`.
+  #on: { startedAt: number; threadId: string | null } | null = null;
+
   #set(patch: Partial<VoiceLoopSnapshot>) {
+    const wasOff = this.#state.phase === "off";
     this.#state = { ...this.#state, ...patch };
+    this.#trackSpan(wasOff);
     for (const listener of this.#listeners) listener();
+  }
+
+  #trackSpan(wasOff: boolean) {
+    const now = (this.#deps.now ?? Date.now)();
+    const isOff = this.#state.phase === "off";
+    if (wasOff && !isOff) this.#on = { startedAt: now, threadId: this.#thread.threadId ?? null };
+    else if (!wasOff && isOff && this.#on) {
+      const { startedAt, threadId } = this.#on;
+      this.#on = null;
+      this.#deps.onSpan?.({ threadId: this.#thread.threadId ?? threadId, startedAt, endedAt: now });
+    }
   }
 
   get active(): boolean {
@@ -97,6 +125,7 @@ export class VoiceLoop {
   /** What the thread shows now; called whenever it changes. */
   update(thread: VoiceLoopThread) {
     this.#thread = thread;
+    if (this.#on) this.#on.threadId = thread.threadId ?? this.#on.threadId;
     if (this.#state.phase === "waiting") this.#readReply(this.#run);
   }
 

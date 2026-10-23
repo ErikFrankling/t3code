@@ -4,6 +4,7 @@ import { getRecordingPermissionsAsync, requestRecordingPermissionsAsync } from "
 import { useSyncExternalStore } from "react";
 
 import { voiceCall } from "../../native/voiceCall";
+import { reportVoiceModeSpan } from "../threads/activityLog";
 import { readAloudPlayer, releaseReadAloudAudio } from "../threads/readAloudPlayback";
 
 /**
@@ -35,6 +36,7 @@ export function registerVoiceModeController(next: VoiceInputController): void {
 
 export const voiceLoop = new VoiceLoop({
   player: readAloudPlayer,
+  onSpan: reportVoiceModeSpan,
   listen: async () => {
     if (!composer) throw new Error("Open a thread to talk to it.");
     await composer.start();

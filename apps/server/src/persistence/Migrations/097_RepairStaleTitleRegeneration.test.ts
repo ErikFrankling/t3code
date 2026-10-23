@@ -13,11 +13,11 @@ const decodeThreadPayload = Schema.decodeUnknownEffect(
   Schema.fromJsonString(OrchestrationV2AppThreadJson),
 );
 
-layer("096_RepairStaleTitleRegeneration", (it) => {
+layer("097_RepairStaleTitleRegeneration", (it) => {
   it.effect("clears title markers that no pending or running title job will complete", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
-      yield* runMigrations({ toMigrationInclusive: 95 });
+      yield* runMigrations({ toMigrationInclusive: 96 });
 
       const insertThread = (id: string, titleRegeneration: unknown, parentThreadId?: string) => {
         const payload = {
@@ -93,7 +93,7 @@ layer("096_RepairStaleTitleRegeneration", (it) => {
       `;
       const before = new Map((yield* rows).map((row) => [row.thread_id, row.payload_json]));
 
-      yield* runMigrations({ toMigrationInclusive: 96 });
+      yield* runMigrations({ toMigrationInclusive: 97 });
       const after = new Map((yield* rows).map((row) => [row.thread_id, row.payload_json]));
       for (const id of ["parent", "queued-parent", "running-job", "absent"]) {
         assert.strictEqual(after.get(id), before.get(id));
