@@ -18,40 +18,48 @@ export const AttentionItemPriority = Schema.Literals(["high", "normal", "low"]).
 export type AttentionItemPriority = typeof AttentionItemPriority.Type;
 
 /**
- * needs_you: something only the user can do, ticked by the user.
- * in_flight: work the personal agent has committed to and owns, closed only by
- * the agent and only with proof.
+ * The personal agent's to-do list, one markdown file per item in
+ * `<baseDir>/personal/todo/` (finished ones in `todo/done/`). The files are the
+ * only source; T3 Code shows them as one list.
  */
-export const AttentionItemKind = Schema.Literals(["needs_you", "in_flight"]);
-export type AttentionItemKind = typeof AttentionItemKind.Type;
+export const TodoStatus = Schema.Literals([
+  "actionable",
+  "in_flight",
+  "blocked",
+  "standing",
+  "done",
+]).annotate({
+  description:
+    "actionable: the agent can move it now. in_flight: a thread (owner) works on it. blocked: waits on blocked_on. standing: a permanent rule or goal. done: finished, with proof in the body.",
+});
+export type TodoStatus = typeof TodoStatus.Type;
 
-export const CommitmentState = Schema.Literals(["open", "in_progress", "waiting", "done"]).annotate(
-  {
-    description:
-      "open: not started. in_progress: a thread is working on it. waiting: blocked on the user. done: finished and proven.",
-  },
-);
+/** Kept for the commitment tools' input; mapped onto TodoStatus. */
+export const CommitmentState = Schema.Literals(["open", "in_progress", "waiting", "done"]).annotate({
+  description:
+    "open: not started. in_progress: a thread is working on it. waiting: blocked on the user. done: finished and proven.",
+});
 export type CommitmentState = typeof CommitmentState.Type;
 
 export const AttentionItem = Schema.Struct({
+  /** The file name without `.md`. */
   id: AttentionItemId,
-  kind: AttentionItemKind,
-  title: TrimmedNonEmptyString,
-  detail: Schema.NullOr(Schema.String),
-  unblocks: ForwardCompatibleArray(ThreadId),
-  sourceThreadId: Schema.NullOr(ThreadId),
-  priority: AttentionItemPriority,
-  createdAt: IsoDateTime,
-  updatedAt: IsoDateTime,
+  title: Schema.String,
+  status: TodoStatus,
+  /** erik | decision | time | external, when blocked. */
+  blockedOn: Schema.NullOr(Schema.String),
+  blockedUntil: Schema.NullOr(Schema.String),
+  /** When the user asked, as written in the file (usually YYYY-MM-DD). */
+  asked: Schema.NullOr(Schema.String),
+  owner: Schema.NullOr(ThreadId),
+  repeated: Schema.Number,
+  /** The markdown after the front matter. */
+  body: Schema.String,
+  /** Set when the user ticked it; the personal agent verifies and changes the status. */
+  erikTicked: Schema.NullOr(Schema.String),
+  /** In `todo/done/`. */
   done: Schema.Boolean,
-  doneAt: Schema.NullOr(IsoDateTime),
-  /** In-flight items only; needs-you items mirror done. */
-  state: CommitmentState,
-  ownerThreadId: Schema.NullOr(ThreadId),
-  proofRequired: Schema.NullOr(Schema.String),
-  proof: Schema.NullOr(Schema.String),
-  askedAt: Schema.NullOr(Schema.String),
-  repeated: Schema.Boolean,
+  updatedAt: IsoDateTime,
 });
 export type AttentionItem = typeof AttentionItem.Type;
 
@@ -150,17 +158,90 @@ export class AttentionItemError extends Schema.TaggedError<AttentionItemError>()
 ) {}
 
 /**
- * Open items first; in flight, repeated requests lead. Then by priority, then
- * oldest first so nothing ages out of view.
+ * Where an item shows in the one list, top to bottom:
+ * needs_you (blocked on the user or a decision), moving (in flight or
+ * actionable, including blocked items whose blocked_until has passed),
+ * waiting (blocked on time or someone else), standing, done.
+ */
+export type TodoSection = "needs_you" | "moving" | "waiting" | "standing" | "done";
+export const TODO_SECTIONS: ReadonlyArray<TodoSection> = [
+  "needs_you",
+  "moving",
+  "waiting",
+  "standing",
+  "done",
+];
+
+export function todoSection(item: AttentionItem, now: number): TodoSection {
+  if (item.done || item.status === "done") return "done";
+  if (item.status === "standing") return "standing";
+  if (item.status !== "blocked") return "moving";
+  if (item.blockedOn === "erik" || item.blockedOn === "decision") return "needs_you";
+  const until = item.blockedUntil === null ? Number.NaN : Date.parse(item.blockedUntil);
+  return !Number.isNaN(until) && until <= now ? "moving" : "waiting";
+}
+
+/** True when the item waits on the user, so it gets a checkbox. */
+export function todoNeedsUser(item: AttentionItem, now: number): boolean {
+  return todoSection(item, now) === "needs_you";
+}
+
+/**
+ * Repeated requests first, then in flight before actionable, then oldest asked
+ * first so nothing ages out of view. Done items: most recently finished first.
  */
 export function compareAttentionItems(left: AttentionItem, right: AttentionItem): number {
   if (left.done !== right.done) return left.done ? 1 : -1;
-  if (!left.done && left.repeated !== right.repeated) return left.repeated ? -1 : 1;
-  if (left.done && right.done) return (right.doneAt ?? "").localeCompare(left.doneAt ?? "");
-  const rank = { high: 0, normal: 1, low: 2 } as const;
+  if (left.done) return right.updatedAt.localeCompare(left.updatedAt);
+  if (left.repeated !== right.repeated) return right.repeated - left.repeated;
+  const rank = { in_flight: 0, actionable: 1, blocked: 2, standing: 3, done: 4 } as const;
   return (
-    rank[left.priority] - rank[right.priority] ||
-    left.createdAt.localeCompare(right.createdAt) ||
+    rank[left.status] - rank[right.status] ||
+    (left.asked ?? "9999").localeCompare(right.asked ?? "9999") ||
     left.id.localeCompare(right.id)
   );
+}
+
+export type TodoChipTone = "attention" | "active" | "waiting" | "muted" | "done";
+
+/** The short state chip on a row. */
+export function todoChip(
+  item: AttentionItem,
+  now: number,
+): { readonly label: string; readonly tone: TodoChipTone } {
+  const section = todoSection(item, now);
+  if (section === "done") return { label: "Done", tone: "done" };
+  if (section === "standing") return { label: "Standing", tone: "muted" };
+  if (section === "needs_you") {
+    if (item.erikTicked !== null) return { label: "Ticked, checking", tone: "active" };
+    return { label: item.blockedOn === "decision" ? "Decide" : "Needs you", tone: "attention" };
+  }
+  if (section === "waiting") {
+    if (item.blockedUntil !== null) {
+      const until = Date.parse(item.blockedUntil);
+      if (!Number.isNaN(until)) {
+        const day = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(
+          until,
+        );
+        return { label: `Until ${day}`, tone: "waiting" };
+      }
+    }
+    return {
+      label: item.blockedOn === "time" ? "Waiting" : "Waiting on others",
+      tone: "waiting",
+    };
+  }
+  return item.status === "in_flight"
+    ? { label: "In progress", tone: "active" }
+    : { label: "Up next", tone: "active" };
+}
+
+/** How long ago the user asked, such as "today", "3d" or "2mo". */
+export function todoAge(item: AttentionItem, now: number): string | null {
+  const asked = item.asked === null ? Number.NaN : Date.parse(item.asked);
+  if (Number.isNaN(asked)) return null;
+  const days = Math.floor((now - asked) / 86_400_000);
+  if (days < 1) return "today";
+  if (days < 60) return `${days}d`;
+  return `${Math.floor(days / 30)}mo`;
 }
