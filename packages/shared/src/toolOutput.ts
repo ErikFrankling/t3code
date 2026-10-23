@@ -194,6 +194,20 @@ export function mcpAppFromToolItem(item: {
   return app !== undefined && item.toolName === `${app.server}.${app.tool}` ? app : undefined;
 }
 
+/**
+ * What the personal agent said out loud: the `text` of a call to the `speak`
+ * MCP server's `speak` tool (Erik's dotfiles). Shown in the chat as the
+ * agent's own words, so a spoken line can be read again after it was heard.
+ */
+export function spokenTextFromToolItem(item: {
+  readonly toolName: string | null | undefined;
+  readonly input?: unknown;
+}): string | undefined {
+  if (item.toolName !== "mcp__speak__speak" && item.toolName !== "speak.speak") return undefined;
+  const text = Predicate.isObject(item.input) ? (item.input as { text?: unknown }).text : undefined;
+  return typeof text === "string" && text.trim() ? text.trim() : undefined;
+}
+
 /** Some providers report completion even when command output describes a failure. */
 export function toolOutputIndicatesFailure(text: string): boolean {
   return (
