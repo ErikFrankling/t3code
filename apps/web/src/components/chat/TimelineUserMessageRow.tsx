@@ -5,6 +5,7 @@ import type { MarkdownExtensions } from "~/markdown/wordsHast";
 import { T, useGT, useMessages, Var } from "gt-react";
 import { findRevealRef } from "./markdownFindContext";
 import {
+  describeInputSource,
   type EnvironmentId,
   type MessageId,
   type ScheduledTaskId,
@@ -857,6 +858,11 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
         >
           <T>Open thread</T>
         </InlineButton>
+      ) : null}
+      {row.message.inputSource ? (
+        <span className="text-muted-foreground text-xs">
+          {describeInputSource(row.message.inputSource)}
+        </span>
       ) : null}
       <SharedTooltipTrigger
         render={<p className="text-muted-foreground text-xs tabular-nums" />}

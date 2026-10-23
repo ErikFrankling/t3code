@@ -70,6 +70,7 @@ import {
   AuthFilesystemReadScope,
   idleCompactionOf,
   isOrchestrationV2WorkActive,
+  describeInputSource,
   type OrchestrationMessageContext,
   ThreadId,
   type ChatAttachment,
@@ -2281,7 +2282,11 @@ function renderFeedEntry(
     const presentation = resolveUserMessagePresentation(message);
     const renderedText = presentation.text;
     const styles = isUser ? markdownStyles.user : markdownStyles.assistant;
-    const timestampLabel = props.formatMessageTime(isUser ? message.createdAt : message.updatedAt);
+    const timeLabel = props.formatMessageTime(isUser ? message.createdAt : message.updatedAt);
+    const timestampLabel =
+      isUser && message.inputSource
+        ? `${timeLabel} · ${describeInputSource(message.inputSource)}`
+        : timeLabel;
     const attachments = message.attachments ?? [];
     const hasReviewCommentContext = presentation.text.includes("<review_comment");
     // Android does not reposition children after maxWidth clamps bubbles; definite width prevents wide-block overlap.
