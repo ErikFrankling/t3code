@@ -127,6 +127,10 @@
       "types": "./src/activityLog.ts",
       "default": "./src/activityLog.ts"
     },
+    "./voice-session": {
+      "types": "./src/voiceSession.ts",
+      "default": "./src/voiceSession.ts"
+    },
     "./voice-loop": {
       "types": "./src/voiceLoop.ts",
       "default": "./src/voiceLoop.ts"
