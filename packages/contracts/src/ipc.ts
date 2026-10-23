@@ -1128,6 +1128,13 @@ export interface DesktopBridge {
     /** Raises the main window and opens an app or web link there. */
     openInMain: (url: string) => Promise<void>;
   };
+  /** Every window with dictation reports it, so a global hotkey can send it; see `t3 app dictation`. */
+  dictation?: {
+    /** True while this window's microphone is open; false when paused, sent or gone. */
+    reportRecording: (recording: boolean) => Promise<void>;
+    /** `t3 app dictation --send` picked this window: send its recording. */
+    onSendRequest: (listener: () => void) => () => void;
+  };
   preview: DesktopPreviewBridge;
 }
 
