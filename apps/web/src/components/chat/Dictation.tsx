@@ -55,6 +55,10 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 const decodeDictationState = Schema.decodeUnknownSync(DictationState);
 // Four hours, as the speech service keeps.
 const MAX_SAMPLES = 16000 * 60 * 60 * 4;
+// A microphone left open by mistake records the room for hours (2026-10-23: four
+// hours of a YouTube ad). When the speech service has heard no new words for
+// this long, the recording pauses itself; Resume carries on.
+const QUIET_PAUSE_MS = 3 * 60_000;
 
 export function dictationFetch(
   environmentId: EnvironmentId,
@@ -296,6 +300,7 @@ export function Dictation({
   const handoff = useStableCallback(onSend);
   const mounted = useRef(true);
   const capture = useRef<{ id: string; stop: () => void; flush: () => void } | null>(null);
+  const opening = useRef<Promise<string | null> | null>(null);
   const startError = useRef("");
   const textPanel = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
@@ -372,8 +377,17 @@ export function Dictation({
   }, [viewVisible]);
 
   /** Opens the microphone and feeds `id` (a new recording when `id` is null). */
-  async function openMicrophone(id: string | null): Promise<string | null> {
-    if (capture.current) return capture.current.id;
+  function openMicrophone(id: string | null): Promise<string | null> {
+    if (capture.current) return Promise.resolve(capture.current.id);
+    // One start at a time: a second Space or click while the first waits for the
+    // microphone would open a second one that nothing ever closes.
+    opening.current ??= startMicrophone(id).finally(() => {
+      opening.current = null;
+    });
+    return opening.current;
+  }
+
+  async function startMicrophone(id: string | null): Promise<string | null> {
     setStarting(true);
     setMicError("");
     let media: MediaStream | undefined;
@@ -407,7 +421,23 @@ export function Dictation({
         if (pending.length) void engine.append(recording, new Int16Array(pending));
         pending = [];
       };
+      const capturedMedia = media;
+      const capturedContext = context;
+      const own = {
+        id: recording,
+        flush,
+        stop: () => {
+          processor.onaudioprocess = null;
+          processor.disconnect();
+          source.disconnect();
+          capturedMedia.getTracks().forEach((track) => track.stop());
+          void capturedContext.close();
+          flush();
+        },
+      };
       processor.onaudioprocess = (event) => {
+        // A microphone this composer no longer tracks closes itself.
+        if (capture.current !== own) return own.stop();
         if (count >= MAX_SAMPLES) return;
         const input = event.inputBuffer.getChannelData(0);
         if (mounted.current)
@@ -422,20 +452,7 @@ export function Dictation({
       };
       source.connect(processor);
       processor.connect(context.destination);
-      const capturedMedia = media;
-      const capturedContext = context;
-      capture.current = {
-        id: recording,
-        flush,
-        stop: () => {
-          processor.onaudioprocess = null;
-          processor.disconnect();
-          source.disconnect();
-          capturedMedia.getTracks().forEach((track) => track.stop());
-          void capturedContext.close();
-          flush();
-        },
-      };
+      capture.current = own;
       setMicId(recording);
       setSelectedId(recording);
       return recording;
@@ -461,9 +478,9 @@ export function Dictation({
     return running.id;
   }
 
-  function pauseRecording() {
+  function pauseRecording(notice = "") {
     const id = closeMicrophone();
-    if (id) engine.pause(id);
+    if (id) engine.pause(id, notice);
   }
 
   function resumeRecording(id: string) {
@@ -526,6 +543,18 @@ export function Dictation({
     });
   });
   useEffect(() => () => publishVoiceDictation({ recording: false, draft: "", final: "" }), []);
+
+  // Pauses a recording nobody speaks into (voice mode ends its own turns).
+  const heardText = micEntry?.record.server?.draft ?? "";
+  const pauseWhenQuiet = useEffectEvent(() => {
+    if (capture.current?.id === micId && !voice.open)
+      pauseRecording("Paused: nothing was said for 3 minutes. Resume to carry on.");
+  });
+  useEffect(() => {
+    if (!micId) return;
+    const timer = setTimeout(pauseWhenQuiet, QUIET_PAUSE_MS);
+    return () => clearTimeout(timer);
+  }, [micId, heardText]);
 
   const selectedState = selected?.record.state;
   const listening = selected !== null && selected.record.id === micId;

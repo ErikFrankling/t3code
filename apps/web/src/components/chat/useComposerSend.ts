@@ -381,6 +381,18 @@ export function useComposerSend(input: ComposerSendInput) {
     respondingRequestIdsRef.current = respondingRequestIds;
   }, [pendingApprovals, respondingRequestIds]);
 
+  /** The chat cannot take a message right now (a reconnect, a revert, a loading thread). */
+  const sendUnavailable = () =>
+    !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope) ||
+    isRevertingCheckpoint ||
+    !clientSettingsHydrated ||
+    threadDetailLoading ||
+    readPendingEnvironmentChange() !== null ||
+    feedbackUploadsInFlightRef.current.has(routeThreadKey);
+  /** Unavailable, or still sending another message. */
+  const sendBlocked = () =>
+    sendUnavailable() || (isSendBusy && !sendQueuesBehindSetup) || sendInFlightRef.current;
+
   const onSend = async (
     e?: { preventDefault: () => void },
     dispatchMode: ComposerDispatchMode = "auto",
@@ -440,15 +452,7 @@ export function useComposerSend(input: ComposerSendInput) {
         }),
       );
     };
-    if (
-      !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope) ||
-      !activeThread ||
-      isRevertingCheckpoint ||
-      !clientSettingsHydrated ||
-      threadDetailLoading ||
-      readPendingEnvironmentChange() !== null ||
-      feedbackUploadsInFlightRef.current.has(routeThreadKey)
-    ) {
+    if (!activeThread || sendUnavailable()) {
       notifyDirectAnnotationAttached();
       return;
     }
@@ -1373,6 +1377,10 @@ export function useComposerSend(input: ComposerSendInput) {
             checkoutPullRequestUrl,
           );
         }
+        // The server holds a dictated turn durably and sends it once the transcript
+        // exists, which can take a while or end in "no speech". The composer is free
+        // meanwhile; only the bubble waits (removed if the recording comes back).
+        if (dictation && !sendQueuesBehindSetup) resetLocalDispatch();
         setKeepFullHistory(routeThreadKey, false);
         if (freshArm !== undefined) disarmFreshSession(routeThreadKey, freshArm);
         clearUsageLimitsFor(routeThreadKey);
@@ -1532,5 +1540,5 @@ export function useComposerSend(input: ComposerSendInput) {
     });
     if (ready) return onSendLatest(...args);
   };
-  return { onSend: onSendWithRouting };
+  return { onSend: onSendWithRouting, sendBlocked };
 }
