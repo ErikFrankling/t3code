@@ -53,13 +53,28 @@ export type ReadAloudSnapshot = {
   readonly speed: number;
 };
 
+/** One message's listening, reported when it ends (finished, stopped or replaced). */
+export type ReadAloudPlayed = {
+  readonly key: string;
+  readonly startedAt: number;
+  readonly endedAt: number;
+  /** Time spent playing; pauses and loading do not count. */
+  readonly seconds: number;
+};
+
 export type ReadAloudDependencies = {
   readonly request: (body: ReadAloudRequest) => Promise<ReadAloudState>;
   readonly audio: ReadAloudAudio;
   readonly pollMs?: number;
   readonly speed?: number;
   readonly onSpeedChange?: (speed: number) => void;
+  readonly onPlayed?: (played: ReadAloudPlayed) => void;
+  /** Milliseconds since the epoch. */
+  readonly now?: () => number;
 };
+
+/** Anything shorter is a mis-tap, not listening. */
+const MIN_PLAYED_SECONDS = 1;
 
 export const READ_ALOUD_SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3] as const;
 
@@ -136,8 +151,39 @@ export class ReadAloudPlayer {
   };
 
   #set(patch: Partial<ReadAloudSnapshot>) {
-    this.#state = { ...this.#state, ...patch };
+    const before = this.#state;
+    this.#state = { ...before, ...patch };
+    this.#track(before, this.#state);
     for (const listener of this.#listeners) listener();
+  }
+
+  // Playing time of the message being read, summed over its play/pause spans.
+  #heard: { startedAt: number; ms: number; since: number | null } | null = null;
+
+  #track(before: ReadAloudSnapshot, after: ReadAloudSnapshot) {
+    const onPlayed = this.#deps.onPlayed;
+    if (!onPlayed) return;
+    const now = (this.#deps.now ?? Date.now)();
+    const heard = this.#heard;
+    if (heard && before.phase === "playing" && after.phase !== "playing" && heard.since !== null) {
+      heard.ms += now - heard.since;
+      heard.since = null;
+    }
+    if (
+      heard &&
+      before.key !== null &&
+      (after.key !== before.key || ["idle", "done", "error"].includes(after.phase))
+    ) {
+      this.#heard = null;
+      const seconds = heard.ms / 1000;
+      if (seconds >= MIN_PLAYED_SECONDS) {
+        onPlayed({ key: before.key, startedAt: heard.startedAt, endedAt: now, seconds });
+      }
+    }
+    if (after.phase === "playing" && after.key !== null) {
+      this.#heard ??= { startedAt: now, ms: 0, since: null };
+      this.#heard.since ??= now;
+    }
   }
 
   /** Reads a message from the top; replaces whatever was playing. */

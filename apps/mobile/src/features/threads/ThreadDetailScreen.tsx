@@ -166,7 +166,8 @@ import {
   THREAD_COMPOSER_BOTTOM_GUTTER,
   ThreadComposer,
 } from "./ThreadComposer";
-import { ReadAloudDock, ReadAloudPanel } from "./ReadAloudButton";
+import { focusReporter } from "./activityLog";
+import { ReadAloudDock, ReadAloudPanel, useReadAloudEnvironment } from "./ReadAloudButton";
 import { VoiceModeHost } from "../voice-mode/VoiceModeView";
 import { voiceMode } from "../voice-mode/voiceMode";
 import { ComposerPopoverHost } from "./ComposerPopoverHost";
@@ -525,6 +526,20 @@ export const ThreadDetailScreen = function ThreadDetailScreen(props: ThreadDetai
       subscription.remove();
     };
   }, []);
+  // Attention, for the time tracker: this thread, while the app is in front.
+  const selectReadAloudEnvironment = useReadAloudEnvironment(props.environmentId);
+  const focusedThreadId = props.draftMode ? null : props.selectedThread.id;
+  useEffect(() => {
+    selectReadAloudEnvironment();
+    const sync = (state: string | null | undefined) =>
+      focusReporter.focus(state === "active" ? focusedThreadId : null);
+    sync(AppState.currentState);
+    const subscription = AppState.addEventListener("change", sync);
+    return () => {
+      subscription.remove();
+      focusReporter.focus(null);
+    };
+  }, [focusedThreadId]);
   useEffect(() => {
     setKeyboardStateSuspect(false);
   }, [isKeyboardVisible, liveKeyboardHeight]);
@@ -1703,6 +1718,7 @@ export const ThreadDetailScreen = function ThreadDetailScreen(props: ThreadDetai
                       {props.draftMode?.controls}
                       <VoiceModeHost
                         environmentId={props.environmentId}
+                        threadId={props.selectedThread.id}
                         title={props.selectedThread.title || "Untitled thread"}
                         reply={latestReadableAssistantMessage(props.selectedThreadFeed)}
                         working={props.activeWorkStartedAt !== null}
