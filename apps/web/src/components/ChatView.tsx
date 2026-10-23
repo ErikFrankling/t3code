@@ -24,6 +24,7 @@ import { useThreadLifecycle } from "./chat/useThreadLifecycle";
 import { useRightPanelActions } from "./chat/useRightPanelActions";
 import { type TerminalLaunchContext, useChatTerminalActions } from "./chat/useChatTerminalActions";
 import { useComposerSend } from "./chat/useComposerSend";
+import { dictationRecorder } from "./chat/Dictation";
 import { useComposerResume } from "./chat/useComposerResume";
 import { useImplementPlanInNewThread } from "./chat/useProposedPlanSend";
 import { ThreadFind, ThreadFindCanvas } from "./chat/ThreadFindProvider";
@@ -377,6 +378,8 @@ const EMPTY_PROVIDER_MODELS: ServerProvider["models"] = [];
 const EMPTY_USAGE_LIMIT_SOURCES: UsageLimitSourceSnapshots = [];
 import type { CodexArtifactTemplate } from "@t3tools/shared/codexArtifactTemplates";
 
+// How long a dictated message waits for a busy chat before it reports a problem.
+const DICTATION_SEND_WAIT_MS = 2 * 60_000;
 const EMPTY_FEEDBACK_SUBMISSIONS: ReadonlyArray<CodexFeedbackSubmission> = [];
 const EMPTY_PROVIDER_SKILLS: ServerProvider["skills"] = [];
 const EMPTY_AUTO_UPDATE_ENVIRONMENTS: ReadonlyArray<EnvironmentPresentation> = [];
@@ -2806,7 +2809,7 @@ export default function ChatView(props: ChatViewProps) {
     activeEnvironmentUnavailable,
     defaultRuntimeMode,
   });
-  const { onSend } = useComposerSend({
+  const { onSend, sendBlocked } = useComposerSend({
     environmentId,
     routeThreadKey,
     currentRouteThreadKeyRef,
@@ -2931,14 +2934,34 @@ export default function ChatView(props: ChatViewProps) {
       .some((id) => id !== "" && !previousIds.has(id));
     if (hasNewMessage && timelineLiveFollowEnabled) scrollToEnd(true);
   }, [routeThreadKey, pendingGuestMessageKey, timelineLiveFollowEnabled, scrollToEnd]);
+  const sendBlockedStable = useStableCallback(sendBlocked);
   const onComposerDictationSendStable = useStableCallback(
     async (id: string, draft: string, uploaded: Promise<void>) => {
+      // A busy chat (another send settling, a reconnect) takes a recording a
+      // little later; it never refuses one. A running agent is no reason to
+      // wait: the turn queues behind it on the server.
+      for (const giveUpAt = Date.now() + DICTATION_SEND_WAIT_MS; sendBlockedStable();) {
+        if (Date.now() > giveUpAt) break;
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
       if (!(await onSend(undefined, "auto", "foreground", undefined, { id, draft, uploaded }))) {
         throw new Error(
           "The recording is saved, but this chat could not accept the message. Retry sending.",
         );
       }
     },
+  );
+  // A dictated message that came back unsent (no speech) is not "Processing" any
+  // more; the recording reappears in the dictation card instead.
+  useEffect(
+    () =>
+      dictationRecorder().onReturned((serverId) =>
+        setOptimisticUserMessages((existing) => {
+          const next = existing.filter((message) => message.id !== serverId);
+          return next.length === existing.length ? existing : next;
+        }),
+      ),
+    [setOptimisticUserMessages],
   );
   const queuedRunsControl =
     isServerThread && activeThread ? (
