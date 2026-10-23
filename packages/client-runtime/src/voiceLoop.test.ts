@@ -1,12 +1,16 @@
 // @effect-diagnostics globalTimers:off -- Plain promises, like readAloud.test.ts.
 import { describe, expect, it } from "vite-plus/test";
 
-import type { ReadAloudPlayer, ReadAloudSnapshot } from "./readAloud.ts";
+import type { ReadAloudPlayer, ReadAloudSnapshot, ReadAloudTake } from "./readAloud.ts";
 import { VOICE_LOOP_CUE, VoiceLoop } from "./voiceLoop.ts";
 
-/** Stands in for the read-aloud player: each start() plays until finish(). */
+/**
+ * Stands in for the read-aloud player: each start() plays until finish(). A
+ * message that played to the end can be taken and replayed (kept audio).
+ */
 function fakePlayer() {
   const started: { key: string; text: string; mode: string }[] = [];
+  const replayed: string[] = [];
   const listeners = new Set<() => void>();
   let state = { phase: "idle", key: null } as unknown as ReadAloudSnapshot;
   const set = (patch: Partial<ReadAloudSnapshot>) => {
@@ -24,8 +28,14 @@ function fakePlayer() {
       set({ key, phase: "loading" });
     },
     stop: () => set({ key: null, phase: "idle" }),
+    take: () =>
+      state.key && state.phase === "done" ? ({ key: state.key } as ReadAloudTake) : null,
+    replay: (take: ReadAloudTake) => {
+      replayed.push(take.key);
+      set({ key: take.key, phase: "loading" });
+    },
   } as unknown as ReadAloudPlayer;
-  return { player, started, finish: () => set({ phase: "done" }), set };
+  return { player, started, replayed, finish: () => set({ phase: "done" }), set };
 }
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -139,5 +149,93 @@ describe("VoiceLoop waiting", () => {
     finish();
     await tick();
     expect(calls).toEqual(["listen", "send", "listen"]);
+  });
+});
+
+describe("VoiceLoop replay (volume up)", () => {
+  /** A loop that read the reply "r1" to the end and is now saying the cue. */
+  async function afterReply() {
+    const harness = setup();
+    harness.loop.update({ reply: null, working: false });
+    harness.loop.start();
+    harness.finish();
+    await tick();
+    harness.loop.endTurn();
+    await tick();
+    harness.loop.update({ reply: { key: "r1", text: "It works." }, working: false });
+    harness.finish();
+    await tick();
+    expect(harness.loop.getSnapshot().phase).toBe("cue");
+    return harness;
+  }
+
+  it("plays the last reply again from the phone's kept audio, then listens", async () => {
+    const { loop, started, replayed, finish, calls } = await afterReply();
+    const requested = started.length;
+    loop.replay();
+    expect(loop.getSnapshot().phase).toBe("reading");
+    expect(replayed).toEqual(["r1"]);
+    // No new summary is asked for.
+    expect(started).toHaveLength(requested);
+    finish();
+    await tick();
+    expect(loop.getSnapshot().phase).toBe("cue");
+    finish();
+    await tick();
+    expect(calls.at(-1)).toBe("listen");
+    expect(loop.getSnapshot().phase).toBe("listening");
+  });
+
+  it("restarts the reply while it is being read", async () => {
+    const { loop, replayed, finish } = await afterReply();
+    loop.replay();
+    loop.replay();
+    expect(replayed).toEqual(["r1", "r1"]);
+    finish();
+    await tick();
+    expect(loop.getSnapshot().phase).toBe("cue");
+  });
+
+  it("does nothing while you talk, so a press never costs your words", async () => {
+    const { loop, replayed, finish, calls } = await afterReply();
+    finish();
+    await tick();
+    expect(loop.getSnapshot().phase).toBe("listening");
+    loop.replay();
+    expect(loop.getSnapshot().phase).toBe("listening");
+    expect(replayed).toEqual([]);
+    expect(calls.filter((call) => call === "send")).toHaveLength(1);
+  });
+
+  it("while waiting, replays and then reads the answer that came meanwhile", async () => {
+    const { loop, replayed, started, finish } = await afterReply();
+    finish();
+    await tick();
+    loop.endTurn();
+    await tick();
+    expect(loop.getSnapshot().phase).toBe("waiting");
+    loop.replay();
+    expect(replayed).toEqual(["r1"]);
+    loop.update({ reply: { key: "r2", text: "Next answer." }, working: false });
+    expect(loop.getSnapshot().phase).toBe("reading");
+    finish();
+    await tick();
+    expect(started.at(-1)).toEqual({ key: "r2", text: "Next answer.", mode: "summary" });
+    expect(loop.getSnapshot().phase).toBe("reading");
+  });
+
+  it("keeps a reply only until the next one", async () => {
+    const { loop, replayed, started, finish } = await afterReply();
+    finish();
+    await tick();
+    loop.endTurn();
+    await tick();
+    loop.update({ reply: { key: "r2", text: "Next answer." }, working: false });
+    // Skipped before it finished: nothing kept for r2 yet, so it is asked for again.
+    loop.endTurn();
+    await tick();
+    loop.replay();
+    expect(replayed).toEqual([]);
+    expect(started.at(-1)).toEqual({ key: "r2", text: "Next answer.", mode: "summary" });
   });
 });
