@@ -632,7 +632,12 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     voiceInput.state,
     voiceInput.elapsedSeconds,
   );
-  const isVoiceInputPresented = voicePresentation.statusLabel !== null;
+  // Voice mode's card is the one place a voice-mode turn shows (and is sent or
+  // discarded): the composer's own recording controls stay away meanwhile. A
+  // failed recording still shows here, with Retry and Save.
+  const voiceModeTurn =
+    inVoiceCall && voiceInput.state.phase !== "idle" && voiceInput.state.phase !== "error";
+  const isVoiceInputPresented = voicePresentation.statusLabel !== null && !voiceModeTurn;
   const isExpanded = isFocused || settingsSheetPresentation.keepsComposerExpanded;
   const { layout, setComposerEditing } = useAdaptiveWorkspaceLayout();
   const floatingSidebarComposer = useAndroidFloatingTabs() && layout.usesSplitView;
