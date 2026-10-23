@@ -246,3 +246,35 @@ describe("ReadAloudPlayer preload", () => {
     player.stop();
   });
 });
+
+describe("ReadAloudPlayer take and replay", () => {
+  it("plays a finished message again from its kept audio, without asking the server", async () => {
+    const server = fakeServer([
+      [
+        { text: "One.", audio: "a1" },
+        { text: "Two.", audio: "a2" },
+      ],
+    ]);
+    const sound = fakeAudio();
+    const player = new ReadAloudPlayer({ request: server.request, audio: sound.audio, pollMs: 0 });
+    player.start("reply", "Long reply");
+    await until(() => sound.played.length === 1);
+    await sound.endClip();
+    await sound.endClip();
+    await until(() => player.getSnapshot().phase === "done");
+    const take = player.take();
+    expect(take).toMatchObject({ key: "reply", sentences: ["One.", "Two."] });
+
+    // Something else plays in between (voice mode's "Recording started.").
+    player.stop();
+    const requests = server.requests.length;
+    player.replay(take!);
+    await until(() => sound.played.length === 3);
+    expect(player.getSnapshot()).toMatchObject({ key: "reply", phase: "playing", current: 0 });
+    await sound.endClip();
+    await sound.endClip();
+    await until(() => player.getSnapshot().phase === "done");
+    expect(sound.played.map((entry) => entry.clip)).toEqual(["a1", "a2", "a1", "a2"]);
+    expect(server.requests).toHaveLength(requests);
+  });
+});

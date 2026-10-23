@@ -91,6 +91,18 @@ const idle = (speed: number): ReadAloudSnapshot => ({
 
 type Chunk = { readonly audio: string; readonly span: number };
 
+/** A message as it was read: its sentences and their audio (see `ReadAloudPlayer.take`). */
+export type ReadAloudTake = {
+  readonly key: string;
+  readonly mode: ReadAloudMode;
+  readonly text: string;
+  readonly sentences: readonly string[];
+  readonly voice: string;
+  readonly jobId: string | null;
+  readonly jobSpeed: number;
+  readonly chunks: ReadonlyMap<number, Chunk>;
+};
+
 export class ReadAloudPlayer {
   #deps: ReadAloudDependencies;
   #state: ReadAloudSnapshot;
@@ -138,6 +150,49 @@ export class ReadAloudPlayer {
     this.#complete = false;
     this.#set({ ...idle(this.#state.speed), phase: "loading", key, mode });
     void this.#fetch(session, text, mode);
+    void this.#playLoop(session);
+  }
+
+  /**
+   * The message read last, with every sentence's audio, once it has all
+   * arrived: `replay` plays it again from the phone, without asking the server
+   * for a new summary. Null while nothing complete is loaded.
+   */
+  take(): ReadAloudTake | null {
+    const { key, mode, sentences, voice } = this.#state;
+    if (key === null || !this.#complete || this.#state.phase === "error") return null;
+    if (this.#chunks.size === 0 || this.#covered < sentences.length) return null;
+    return {
+      key,
+      mode,
+      text: this.#text,
+      sentences,
+      voice,
+      jobId: this.#jobId,
+      jobSpeed: this.#jobSpeed,
+      chunks: new Map(this.#chunks),
+    };
+  }
+
+  /** Plays a taken message from the top; replaces whatever was playing. */
+  replay(take: ReadAloudTake) {
+    this.#deps.audio.stop();
+    const session = ++this.#session;
+    this.#text = take.text;
+    this.#jobId = take.jobId;
+    this.#jobSpeed = take.jobSpeed;
+    this.#chunks = new Map(take.chunks);
+    this.#covered = take.sentences.length;
+    this.#complete = true;
+    this.#awaitingNext = null;
+    this.#set({
+      ...idle(this.#state.speed),
+      phase: "loading",
+      key: take.key,
+      mode: take.mode,
+      sentences: take.sentences,
+      voice: take.voice,
+    });
     void this.#playLoop(session);
   }
 
