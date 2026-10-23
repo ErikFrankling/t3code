@@ -2,6 +2,7 @@ import { InlineAudioPreview } from "../files/InlineAudioPreview";
 import { filePreviewKind } from "@t3tools/shared/filePreview";
 import { findRevealRef } from "./markdownFindContext";
 import {
+  describeInputSource,
   type EnvironmentId,
   type MessageId,
   type ScheduledTaskId,
@@ -650,6 +651,11 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
               <InlineButton onClick={() => ctx.onOpenThread(senderThreadId)} tone="muted">
                 Open thread
               </InlineButton>
+            ) : null}
+            {row.message.inputSource ? (
+              <span className="text-muted-foreground text-xs">
+                {describeInputSource(row.message.inputSource)}
+              </span>
             ) : null}
             <Tooltip>
               <TooltipTrigger render={<p className="text-muted-foreground text-xs tabular-nums" />}>
