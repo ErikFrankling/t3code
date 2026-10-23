@@ -20,6 +20,7 @@ import * as Effect from "effect/Effect";
 import * as Deferred from "effect/Deferred";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as TestClock from "effect/testing/TestClock";
 import * as ServerSettings from "../serverSettings.ts";
 import { restartContinuationRun, continueRestartedRun } from "./RestartContinuation.ts";
 import { continuationStartRetryDelayMs } from "./RestartBackgroundNote.ts";
@@ -925,6 +926,7 @@ it.effect("continues a cut run past queued follow-ups, which stay held", () =>
 
 it.effect("continues a resumed queued run that ran after an earlier continuation", () =>
   Effect.gen(function* () {
+    yield* TestClock.setTime(DateTime.toEpochMillis(now));
     const finishedContinuation = {
       id: RunId.make("run:earlier-continuation"),
       ordinal: 3,
@@ -1324,5 +1326,37 @@ it.effect("skips restart discovery when no project enables continuation", () =>
     );
     yield* recovery.prepareForShutdown;
     yield* recovery.prepareForShutdown;
+  }),
+);
+
+it.effect("continues past a run whose clock ran ahead after a hard reboot", () =>
+  Effect.gen(function* () {
+    yield* TestClock.setTime(DateTime.toEpochMillis(now));
+    // An older run (lower ordinal) ended while the clock was two hours ahead.
+    const skewed = {
+      id: RunId.make("run:skewed"),
+      ordinal: 1,
+      providerInstanceId: instanceId,
+      providerThreadId,
+      status: "cancelled",
+      startedAt: DateTime.makeUnsafe("2026-10-03T13:55:00.000Z"),
+      completedAt: DateTime.makeUnsafe("2026-10-03T13:56:00.000Z"),
+    };
+    const cut = cutMidTurn({ ordinal: 2, completedAt: now });
+    const texts = yield* continuationTexts({
+      ...cut,
+      runs: [skewed, ...cut.runs],
+    } as unknown as OrchestrationV2ThreadProjection);
+    assert.deepEqual(texts, ["Continue where you left off."]);
+  }),
+);
+
+it.effect("does not continue a run started more than six hours before the restart", () =>
+  Effect.gen(function* () {
+    yield* TestClock.setTime(DateTime.toEpochMillis(now));
+    const texts = yield* continuationTexts(
+      cutMidTurn({ startedAt: DateTime.makeUnsafe("2026-10-03T05:00:00.000Z") }),
+    );
+    assert.deepEqual(texts, []);
   }),
 );
