@@ -85,19 +85,32 @@ to lend it the GPU. The client's speed multiplies the voice's own speed.
 
 ## Voice mode
 
-**Voice** next to **Read latest** opens the thread full screen as speech: the
-live transcript while you talk, the subtitles while a reply is read, one big
-button. With **Loop** on it reads each finished reply (not the messages in
-between), says "Recording started", dictates until you end the turn, sends,
-and waits for the next reply. The big button, or Space on web and desktop,
-ends your turn, skips the reading, or starts talking again while it waits.
-`packages/client-runtime/src/voiceLoop.ts` is the loop; each client supplies
-dictation (`VoiceMode.tsx` on web, `features/voice-mode/` on Android).
+On web and desktop, **Voice** next to **Read latest** opens the thread full
+screen as speech; with **Loop** on it reads each finished reply, says
+"Recording started", dictates until you end the turn, sends, and waits for the
+next reply (`packages/client-runtime/src/voiceLoop.ts`, `VoiceMode.tsx`).
 
-On Android the loop is a "call" that keeps going with the screen off
+On Android, **Voice** turns on voice mode for the thread: "you may speak to me
+now". It is a card right above the message box, so the chat stays readable,
+scrollable and tappable; only **Stop** ends it. The agent speaks when it has
+something to say, then the microphone opens for your answer (the cue is said
+over the open microphone, so your first words are kept); if you say nothing
+for 30 seconds the recording is dropped. You can also talk any time: the
+card's button, volume down, or an earbud tap; volume up reads the last message
+again. Sending never asks for an immediate spoken answer. What the agent said
+stays in the chat as a **Said aloud** message, with the sentence being read in
+bold. On the personal agent, what is said is the agent's `speak` tool: while
+voice mode is on the phone long-polls `POST /api/voice-presence`, the PC's
+speak daemon checks `GET /api/voice-presence` and hands the message over
+(`POST /api/voice-presence/say`) instead of playing it on the PC
+(`apps/server/src/voicePresence.ts`). On other threads each reply that
+finishes is read as a spoken summary. Without voice mode the phone never
+speaks unprompted. `packages/client-runtime/src/voiceSession.ts` is the logic.
+
+On Android voice mode is a "call" that keeps going with the screen off
 (`apps/mobile/modules/t3-voice-call`): a foreground service of type microphone
 and media playback, started from the open app and kept until you hang up (the
-notification's **Hang up**, or Loop off), so each turn may record and play from
+notification's **Hang up**, or **Stop**), so each turn may record and play from
 the background. It records with its own MediaRecorder (from a Bluetooth
 headset's microphone when one is connected), keeps React Native's timers
 running with a headless JS task, and holds a wake lock. Its media session takes
