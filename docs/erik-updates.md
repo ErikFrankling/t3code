@@ -62,6 +62,19 @@ carries anything but the ping. Without the ping (no Google Play services, or
 FCM deprioritising data-only messages) the 15-minute WorkManager poll still
 applies, and an open app checks every minute.
 
+## When GitHub Actions is unavailable
+
+The release is one script, `scripts/erik-android-release.sh`, which the workflow
+runs. When Actions is down (e.g. "HTTP 422: Actions has been disabled for this
+repository"), run it on the homelab from the PC with `t3-android-release`
+(dotfiles, `modules/home-manager/t3-android-release`): it takes the same
+secrets from sops, clones `erik/main` on the agent worker through `heavy`, and
+publishes exactly what the workflow would (JS update or APK, `index.json`, the
+`android-v…` release for Obtainium, the FCM ping). Publishing only needs the
+GitHub API, not Actions. `--apk` forces an APK; `--test-abi x86_64` also builds
+an unpublished x86_64 copy of the same release for an emulator check. Never run
+it while a workflow run is in progress.
+
 ## Runtime versions
 
 A JS update only reaches APKs with the same runtime version, Expo's native

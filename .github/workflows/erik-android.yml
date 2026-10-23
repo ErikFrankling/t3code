@@ -7,6 +7,9 @@ name: Erik Android APK
 # and the app installs that itself. Both go through index.json on the rolling
 # `android-ota` release; the APK is also published as a normal release.
 #
+# The release itself is scripts/erik-android-release.sh, which `t3-android-release`
+# (dotfiles) also runs on the homelab when GitHub Actions is unavailable.
+#
 # Releases come only from erik/main, and scripts/erik-updates-guard.sh refuses
 # any build that lacks a commit already shipped. Test on the emulator with
 # local builds (docs/erik-updates.md), never by running this on a branch.
@@ -41,18 +44,6 @@ jobs:
       actions: write
       contents: write
     env:
-      APP_VARIANT: preview
-      CHANNEL: android-ota
-      # Updates come only from Erik's server and must carry the fork's
-      # signature (apps/mobile/certs), so upstream's EAS updates never load.
-      T3CODE_MOBILE_UPDATES_URL: https://t3-updates.erikfrankling.duckdns.org/manifest
-      T3CODE_MOBILE_SELF_UPDATE_URL: https://github.com/${{ github.repository }}/releases/download/android-ota/index.json
-      EXPO_NO_GIT_STATUS: "1"
-      EXPO_NO_TELEMETRY: "1"
-      NODE_OPTIONS: --max-old-space-size=8192
-      # Native push (FCM) through the fork's own Firebase project; the file is
-      # written from a secret below and is not in git. See apps/server/src/erikPush.ts.
-      T3CODE_ANDROID_GOOGLE_SERVICES_FILE: ./google-services.json
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
     steps:
@@ -70,15 +61,6 @@ jobs:
           # The guard compares this commit with everything already shipped.
           fetch-depth: 0
 
-      - name: Firebase config
-        env:
-          GOOGLE_SERVICES_JSON: ${{ secrets.T3CODE_ANDROID_GOOGLE_SERVICES_JSON }}
-        run: |
-          # Without it the APK builds fine but can never receive push: fail instead.
-          [ -n "$GOOGLE_SERVICES_JSON" ] || { echo "T3CODE_ANDROID_GOOGLE_SERVICES_JSON is not set" >&2; exit 1; }
-          printf '%s\n' "$GOOGLE_SERVICES_JSON" > apps/mobile/google-services.json
-          jq -e '.client[].client_info.android_client_info.package_name == "com.t3tools.t3code.preview"' apps/mobile/google-services.json > /dev/null
-
       - name: Setup Vite+
         uses: voidzero-dev/setup-vp@v1
         with:
@@ -88,73 +70,13 @@ jobs:
             args:
               - --filter=@t3tools/mobile...
 
-      - id: plan
-        name: Plan
-        env:
-          ACCEPT_DROPPED_COMMITS: ${{ inputs.accept_dropped_commits }}
-        run: |
-          scripts/erik-updates-release.sh ensure "$CHANNEL"
-          scripts/erik-updates-release.sh fetch "$CHANNEL" "$RUNNER_TEMP/index.json"
-          runtime="$(cd apps/mobile && npx expo-updates runtimeversion:resolve --platform android 2> /dev/null | jq -r .runtimeVersion)"
-          installed="$(jq -r '.apk.runtimeVersion // ""' "$RUNNER_TEMP/index.json")"
-          echo "runtime $runtime, newest APK runtime ${installed:-none}"
-          # Fails the run if this commit lacks shipped work; skips it if erik/main
-          # has moved on.
-          decision="$(scripts/erik-updates-guard.sh "$RUNNER_TEMP/index.json")"
-          if [ "$decision" != publish=true ]; then
-            echo "kind=none" >> "$GITHUB_OUTPUT"
-          elif [ -n "$runtime" ] && [ "$runtime" = "$installed" ] && [ "${{ inputs.apk }}" != "true" ]; then
-            echo "kind=ota" >> "$GITHUB_OUTPUT"
-          else
-            echo "kind=apk" >> "$GITHUB_OUTPUT"
-          fi
-          echo "runtime=$runtime" >> "$GITHUB_OUTPUT"
-          base="$(sed -nE 's/.*T3CODE_MOBILE_VERSION \?\? "([^"]+)".*/\1/p' apps/mobile/app.config.ts | head -1)"
-          # Android only installs an update with a higher versionCode.
-          echo "code=$(( $(date +%s) / 60 ))" >> "$GITHUB_OUTPUT"
-          echo "name=${base}-erik.$(date -u +%Y%m%d%H%M).${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
-
-      # ---- JS update ----
-
-      - name: Export JS update
-        if: steps.plan.outputs.kind == 'ota'
-        working-directory: apps/mobile
-        run: |
-          npx expo export --platform android --output-dir "$RUNNER_TEMP/dist"
-          npx expo config --type public --json 2> /dev/null > "$RUNNER_TEMP/expo-config.json"
-          jq -e '.updates.url == env.T3CODE_MOBILE_UPDATES_URL' "$RUNNER_TEMP/expo-config.json"
-
-      - name: Publish JS update
-        if: steps.plan.outputs.kind == 'ota'
-        env:
-          ACCEPT_DROPPED_COMMITS: ${{ inputs.accept_dropped_commits }}
-          ERIK_UPDATES_PRIVATE_KEY: ${{ secrets.ERIK_UPDATES_PRIVATE_KEY }}
-        run: |
-          # Again right before publishing: erik/main may have moved meanwhile.
-          decision="$(scripts/erik-updates-guard.sh "$RUNNER_TEMP/index.json")"
-          [ "$decision" = publish=true ] || exit 0
-          key="$RUNNER_TEMP/updates-key.pem"
-          printf '%s\n' "$ERIK_UPDATES_PRIVATE_KEY" > "$key"
-          node scripts/erik-updates.mjs ota --dist "$RUNNER_TEMP/dist" \
-            --config "$RUNNER_TEMP/expo-config.json" --runtime "${{ steps.plan.outputs.runtime }}" \
-            --key "$key" --base-url "https://github.com/$GH_REPO/releases/download/$CHANNEL" \
-            --index "$RUNNER_TEMP/index.json" --blobs "$RUNNER_TEMP/blobs" --commit "$GITHUB_SHA"
-          rm "$key"
-          scripts/erik-updates-release.sh upload "$CHANNEL" "$RUNNER_TEMP"/blobs/*
-          scripts/erik-updates-release.sh index "$CHANNEL" "$RUNNER_TEMP/index.json"
-          scripts/erik-updates-release.sh prune "$CHANNEL" "$RUNNER_TEMP/index.json"
-
-      # ---- APK ----
-
       - name: Setup Java
-        if: steps.plan.outputs.kind == 'apk'
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Cache Gradle
-        if: steps.plan.outputs.kind == 'apk'
         uses: actions/cache@v4
         with:
           path: |
@@ -163,89 +85,15 @@ jobs:
           key: gradle-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: gradle-${{ runner.os }}-
 
-      - name: Prebuild
-        if: steps.plan.outputs.kind == 'apk'
-        working-directory: apps/mobile
-        run: |
-          npx expo prebuild --clean --platform android --no-install
-          manifest=android/app/src/main/AndroidManifest.xml
-          grep -qF "android:name=\"expo.modules.updates.EXPO_UPDATE_URL\" android:value=\"$T3CODE_MOBILE_UPDATES_URL\"" "$manifest"
-          grep -q 'expo.modules.updates.CODE_SIGNING_CERTIFICATE' "$manifest"
-
-      - name: Build
-        if: steps.plan.outputs.kind == 'apk'
-        working-directory: apps/mobile/android
+      - name: Release
         env:
-          VERSION_CODE: ${{ steps.plan.outputs.code }}
-          VERSION_NAME: ${{ steps.plan.outputs.name }}
-        run: |
-          sed -i -E "s/versionCode [0-9]+/versionCode $VERSION_CODE/; s/versionName \"[^\"]*\"/versionName \"$VERSION_NAME\"/" app/build.gradle
-          grep -nE 'versionCode|versionName' app/build.gradle
-          ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
-
-      - name: Sign
-        if: steps.plan.outputs.kind == 'apk'
-        env:
+          FORCE_APK: ${{ inputs.apk }}
+          ACCEPT_DROPPED_COMMITS: ${{ inputs.accept_dropped_commits }}
+          GOOGLE_SERVICES_JSON: ${{ secrets.T3CODE_ANDROID_GOOGLE_SERVICES_JSON }}
+          ERIK_UPDATES_PRIVATE_KEY: ${{ secrets.ERIK_UPDATES_PRIVATE_KEY }}
           ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-        run: |
-          build_tools="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
-          echo "$ANDROID_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
-          "$build_tools/zipalign" -f -p 4 \
-            apps/mobile/android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/aligned.apk"
-          "$build_tools/apksigner" sign --ks "$RUNNER_TEMP/release.jks" \
-            --ks-pass env:ANDROID_KEYSTORE_PASSWORD --ks-key-alias "$ANDROID_KEY_ALIAS" \
-            --out "$RUNNER_TEMP/t3code-erik.apk" "$RUNNER_TEMP/aligned.apk"
-          "$build_tools/apksigner" verify "$RUNNER_TEMP/t3code-erik.apk"
-          # Without it the microphone button records nothing (an upstream
-          # plugin option once removed it).
-          "$build_tools/aapt2" dump permissions "$RUNNER_TEMP/t3code-erik.apk" | grep -q RECORD_AUDIO
-          # Without these the app cannot install its own updates.
-          "$build_tools/aapt2" dump permissions "$RUNNER_TEMP/t3code-erik.apk" | grep -q REQUEST_INSTALL_PACKAGES
-          "$build_tools/aapt2" dump permissions "$RUNNER_TEMP/t3code-erik.apk" | grep -q UPDATE_PACKAGES_WITHOUT_USER_ACTION
-          rm "$RUNNER_TEMP/release.jks"
-
-      - name: Publish APK
-        if: steps.plan.outputs.kind == 'apk'
-        env:
-          ACCEPT_DROPPED_COMMITS: ${{ inputs.accept_dropped_commits }}
-          VERSION_CODE: ${{ steps.plan.outputs.code }}
-          VERSION_NAME: ${{ steps.plan.outputs.name }}
-        run: |
-          decision="$(scripts/erik-updates-guard.sh "$RUNNER_TEMP/index.json")"
-          [ "$decision" = publish=true ] || exit 0
-          apk="$RUNNER_TEMP/t3code-erik-$VERSION_CODE.apk"
-          mv "$RUNNER_TEMP/t3code-erik.apk" "$apk"
-          # The runtime version the app will report; JS updates must match it.
-          runtime="$(unzip -p "$apk" assets/fingerprint)"
-          [ "$runtime" = "${{ steps.plan.outputs.runtime }}" ] ||
-            echo "::warning::APK runtime $runtime differs from the resolved ${{ steps.plan.outputs.runtime }}"
-          scripts/erik-updates-release.sh upload "$CHANNEL" "$apk"
-          node scripts/erik-updates.mjs apk --apk "$apk" --version-code "$VERSION_CODE" \
-            --version-name "$VERSION_NAME" --runtime "$runtime" --commit "$GITHUB_SHA" \
-            --url "https://github.com/$GH_REPO/releases/download/$CHANNEL/$(basename "$apk")" \
-            --index "$RUNNER_TEMP/index.json"
-          scripts/erik-updates-release.sh index "$CHANNEL" "$RUNNER_TEMP/index.json"
-          scripts/erik-updates-release.sh prune "$CHANNEL" "$RUNNER_TEMP/index.json"
-
-          [ "$CHANNEL" = android-ota ] || exit 0
-          # Also a normal release, for history and for a fresh install.
-          tag="android-v$VERSION_NAME"
-          cp "$apk" "$RUNNER_TEMP/t3code-erik.apk"
-          gh release create "$tag" "$RUNNER_TEMP/t3code-erik.apk" \
-            --target "$GITHUB_SHA" --title "Android $VERSION_NAME" --latest \
-            --notes "Android build of erik/main at ${GITHUB_SHA::7}. Installed apps update themselves; see docs/erik-updates.md."
-          # Keep the five newest builds.
-          gh release list --limit 100 --json tagName,createdAt \
-            --jq '[.[] | select(.tagName | startswith("android-v"))] | sort_by(.createdAt) | reverse | .[5:] | .[].tagName' |
-            while read -r old; do gh release delete "$old" --cleanup-tag --yes; done
-
-      # Installed apps would notice within 15 minutes; this makes it seconds.
-      # A content-free FCM ping to the erik-updates topic (scripts/erik-updates-ping.mjs).
-      - name: Ping installed apps
-        if: steps.plan.outputs.kind == 'apk'
-        continue-on-error: true
-        env:
           T3CODE_FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.T3CODE_FCM_SERVICE_ACCOUNT_JSON }}
-        run: node scripts/erik-updates-ping.mjs
+          NODE_OPTIONS: --max-old-space-size=8192
+        run: scripts/erik-android-release.sh
