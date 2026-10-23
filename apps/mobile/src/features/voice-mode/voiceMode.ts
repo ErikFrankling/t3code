@@ -5,7 +5,7 @@ import { useSyncExternalStore } from "react";
 
 import { voiceCall } from "../../native/voiceCall";
 import { reportVoiceModeSpan } from "../threads/activityLog";
-import { readAloudPlayer, releaseReadAloudAudio } from "../threads/readAloudPlayback";
+import { playVoiceCue, readAloudPlayer, releaseReadAloudAudio } from "../threads/readAloudPlayback";
 
 /**
  * Voice mode on the phone: the full-screen view and its loop. With the loop on,
@@ -36,6 +36,7 @@ export function registerVoiceModeController(next: VoiceInputController): void {
 
 export const voiceLoop = new VoiceLoop({
   player: readAloudPlayer,
+  cue: playVoiceCue,
   onSpan: reportVoiceModeSpan,
   listen: async () => {
     if (!composer) throw new Error("Open a thread to talk to it.");
