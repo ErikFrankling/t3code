@@ -30,6 +30,8 @@ const TONE_CLASS: Record<TodoChipTone, string> = {
   done: "bg-success/12 text-success-foreground",
 };
 
+const NEEDS_YOU_CAP = 5;
+
 const SECTION_TITLE: Record<TodoSection, string> = {
   needs_you: "Needs you",
   moving: "Moving",
@@ -162,6 +164,7 @@ export function TodoList({
   );
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(new Set());
   const [showFolded, setShowFolded] = useState(false);
+  const [showAllNeedsYou, setShowAllNeedsYou] = useState(false);
   // The minute is UTC without a zone suffix.
   const now = Date.parse(`${useNowMinute()}:00Z`);
 
@@ -185,6 +188,9 @@ export function TodoList({
   const sectionList = (section: TodoSection, separated = true) => {
     const rows = bySection.get(section) ?? [];
     if (rows.length === 0) return null;
+    // A long Needs you list would push everything else out of reach.
+    const capped = section === "needs_you" && !showAllNeedsYou && rows.length > NEEDS_YOU_CAP;
+    const visible = capped ? rows.slice(0, NEEDS_YOU_CAP) : rows;
     return (
       <ThreadDetailsSection
         key={section}
@@ -193,7 +199,7 @@ export function TodoList({
         separated={separated}
       >
         <ul className="flex flex-col gap-0.5">
-          {rows.map((item) => (
+          {visible.map((item) => (
             <TodoRow
               key={item.id}
               environmentId={environmentId}
@@ -205,6 +211,15 @@ export function TodoList({
             />
           ))}
         </ul>
+        {section === "needs_you" && rows.length > NEEDS_YOU_CAP ? (
+          <button
+            type="button"
+            onClick={() => setShowAllNeedsYou((current) => !current)}
+            className="mt-1 w-full rounded-md px-1.5 py-1 text-left text-xs font-medium text-warning-foreground hover:bg-muted/60"
+          >
+            {capped ? `Show ${rows.length - NEEDS_YOU_CAP} more` : "Show fewer"}
+          </button>
+        ) : null}
       </ThreadDetailsSection>
     );
   };
