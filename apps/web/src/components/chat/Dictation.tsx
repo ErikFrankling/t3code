@@ -40,6 +40,7 @@ import { indexedDbDictationStorage, memoryDictationStorage } from "./dictationSt
 import { publishVoiceDictation, registerVoiceDictation, useVoiceMode } from "./VoiceMode";
 import { Button } from "../ui/button";
 import { DictationCard, DictationTranscriptText } from "./DictationCard";
+import { useDesktopDictationSend } from "./desktopDictationSend";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -532,6 +533,12 @@ export function Dictation({
     selected !== null &&
     (selectedState === "recording" || selectedState === "paused") &&
     selected.record.sizes.length > 0;
+
+  // Plain Enter anywhere on the desktop sends while this records (Erik never types
+  // while dictating): the desktop app binds it through `t3 app dictation --send`.
+  useDesktopDictationSend(listening, () => {
+    if (selected && canFinish) void sendRecording(selected.record.id);
+  });
 
   const onKey = useEffectEvent((event: KeyboardEvent) => {
     // Small, the card shares the page: its keys only act while it has focus
