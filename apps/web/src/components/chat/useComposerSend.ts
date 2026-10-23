@@ -488,7 +488,6 @@ export function useComposerSend(input: ComposerSendInput) {
       return;
     }
     const sendCtx = composerRef.current?.getSendContext();
-<<<<<<< HEAD
     // `/side` beats an open question and a plan follow-up, which would send the text to main.
     const sideChatCommand =
       sendCtx && !directAnnotation && !queuedRunEdit.isEditing
@@ -540,11 +539,7 @@ export function useComposerSend(input: ComposerSendInput) {
       return;
     }
     if (answeringQuestion) {
-      if (directAnnotation) {
-=======
-    if (activePendingProgress && sendCtx?.answeringPendingUserInput !== false) {
       if (directAnnotation || dictation) {
->>>>>>> 6da054ec8c (feat: local dictation with durable server-side delivery)
         notifyDirectAnnotationAttached();
         return;
       }
