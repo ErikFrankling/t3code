@@ -19,6 +19,9 @@ import type { PreviewForwardedShortcut } from "./keybindings.ts";
 import type {
   DesktopAppActivationRequest,
   DesktopAppActivationResponse,
+  DesktopSpeakReplyCommand,
+  DesktopSpeakReplyContent,
+  DesktopSpeakReplyPageState,
 } from "./desktopAppActivation.ts";
 
 export interface ContextMenuItem<T extends string = string> {
@@ -1121,6 +1124,16 @@ export interface DesktopBridge {
     setReady: (ready: boolean) => Promise<void>;
     complete: (response: DesktopAppActivationResponse) => Promise<void>;
     onRequest: (listener: (request: DesktopAppActivationRequest) => void) => () => void;
+  };
+  /** Only the speak-reply window acts on these; see `t3 app speak-reply`. */
+  speakReply?: {
+    close: () => Promise<void>;
+    onCommand: (listener: (command: DesktopSpeakReplyCommand) => void) => () => void;
+    /** A newer message for the open window (the window is reused, never stacked). */
+    onContent: (listener: (content: DesktopSpeakReplyContent) => void) => () => void;
+    reportState: (state: DesktopSpeakReplyPageState) => Promise<void>;
+    /** Raises the main window and opens an app or web link there. */
+    openInMain: (url: string) => Promise<void>;
   };
   preview?: DesktopPreviewBridge;
 }

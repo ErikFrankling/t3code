@@ -330,3 +330,129 @@ describe("t3 app", () => {
       ),
   );
 });
+
+describe("t3 app speak-reply", () => {
+  const status = {
+    open: true,
+    threadId: "thread-1",
+    phase: "recording",
+    recording: true,
+    heard: false,
+  };
+  const speakReplyDesktop = (baseDir: string) =>
+    fakeDesktop({
+      baseDir,
+      reply: (request) => {
+        const speak = request as unknown as { requestId: string; action: string };
+        return { version: 1, requestId: speak.requestId, ok: true, action: speak.action, status };
+      },
+    });
+
+  it.effect("opens with the message, then sends, cancels and reports status", () =>
+    withTempDirectory("t3-speak-reply-test-", (root) =>
+      Effect.gen(function* () {
+        const baseDir = NodePath.join(root, "t3-home");
+        const desktop = yield* speakReplyDesktop(baseDir);
+        const textFile = NodePath.join(root, "line.txt");
+        yield* Effect.promise(() => NodeFSP.writeFile(textFile, "  Approve the deploy?\n"));
+        const env = { T3CODE_HOME: baseDir };
+
+        yield* runCli(
+          [
+            "app",
+            "speak-reply",
+            "--thread",
+            "thread-1",
+            "--text",
+            "Look at these",
+            "--queued-at",
+            "1700000000123",
+          ],
+          env,
+        );
+        yield* runCli(["app", "speak-reply", "--thread", "thread-1", "--text-file", textFile], env);
+        yield* runCli(["app", "speak-reply", "--send"], env);
+        yield* runCli(["app", "speak-reply", "--cancel"], env);
+        yield* runCli(["app", "speak-reply", "--status"], env);
+
+        expect(
+          desktop.received.map((request) => {
+            const {
+              requestId: _requestId,
+              version: _version,
+              ...rest
+            } = request as unknown as Record<string, unknown>;
+            return rest;
+          }),
+        ).toEqual([
+          {
+            type: "speak-reply",
+            action: "open",
+            threadId: "thread-1",
+            text: "Look at these",
+            queuedAt: 1700000000123,
+          },
+          {
+            type: "speak-reply",
+            action: "open",
+            threadId: "thread-1",
+            text: "Approve the deploy?",
+          },
+          { type: "speak-reply", action: "send" },
+          { type: "speak-reply", action: "cancel" },
+          { type: "speak-reply", action: "status" },
+        ]);
+      }).pipe(Effect.scoped),
+    ),
+  );
+
+  it.effect("rejects ambiguous use before contacting the desktop app", () =>
+    withTempDirectory("t3-speak-reply-usage-", (root) =>
+      Effect.gen(function* () {
+        const baseDir = NodePath.join(root, "t3-home");
+        const desktop = yield* speakReplyDesktop(baseDir);
+        const env = { T3CODE_HOME: baseDir };
+        for (const args of [
+          [],
+          ["--send", "--cancel"],
+          ["--thread", "thread-1"],
+          ["--thread", "thread-1", "--text", "   "],
+        ]) {
+          const error = yield* runCli(["app", "speak-reply", ...args], env).pipe(Effect.flip);
+          expect(error).toMatchObject({ _tag: "DesktopSpeakReplyUsageError" });
+        }
+        expect(desktop.received).toHaveLength(0);
+      }).pipe(Effect.scoped),
+    ),
+  );
+
+  it.effect("fails clearly when no desktop app is running or no window is open", () =>
+    withTempDirectory("t3-speak-reply-none-", (root) =>
+      Effect.gen(function* () {
+        const baseDir = NodePath.join(root, "t3-home");
+        const unreachable = yield* runCli(["app", "speak-reply", "--send"], {
+          T3CODE_HOME: baseDir,
+        }).pipe(Effect.flip);
+        expect(unreachable).toMatchObject({ _tag: "DesktopAppUnreachableError" });
+
+        yield* fakeDesktop({
+          baseDir,
+          reply: (request) => ({
+            version: 1,
+            requestId: request.requestId,
+            ok: false,
+            code: "no-speak-reply-window",
+            message: "No speak-reply window is open.",
+          }),
+        });
+        const closed = yield* runCli(["app", "speak-reply", "--send"], {
+          T3CODE_HOME: baseDir,
+        }).pipe(Effect.flip);
+        expect(closed).toMatchObject({
+          _tag: "DesktopSpeakReplyFailedError",
+          code: "no-speak-reply-window",
+        });
+      }).pipe(Effect.scoped),
+    ),
+  );
+});
