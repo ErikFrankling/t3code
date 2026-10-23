@@ -169,6 +169,23 @@ export function VoiceModeCard(props: {
       <View className="mt-2.5 flex-row items-center gap-2">
         {hint ? <Text className="flex-1 text-sm text-foreground-muted">{hint}</Text> : null}
         {!hint ? <View className="flex-1" /> : null}
+        {talking ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Discard what you said"
+            onPress={voiceMode.discard}
+            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+            className="h-11 flex-row items-center justify-center gap-1.5 rounded-full bg-subtle-strong px-4"
+          >
+            <SymbolView
+              name={{ ios: "xmark", android: "close" }}
+              size={18}
+              tintColorClassName="accent-foreground"
+              type="monochrome"
+            />
+            <Text className="text-base font-t3-medium text-foreground">Discard</Text>
+          </Pressable>
+        ) : null}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={big.label}
