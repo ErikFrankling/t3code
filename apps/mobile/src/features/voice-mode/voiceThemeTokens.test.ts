@@ -12,6 +12,7 @@ import { describe, expect, it } from "vite-plus/test";
 const src = NodePath.join(import.meta.dirname, "../..");
 const SURFACES = [
   "features/voice-mode/VoiceModeView.tsx",
+  "features/voice-mode/SpokenMessage.tsx",
   "features/threads/ReadAloudButton.tsx",
   "features/voice-input/ComposerDictationControl.tsx",
   "features/voice-input/DictationLivePreview.tsx",

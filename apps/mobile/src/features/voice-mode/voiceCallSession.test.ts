@@ -89,9 +89,17 @@ vi.mock("expo-file-system", () => ({
     }
   },
 }));
+// What the agent has to say, handed to the phone.s presence poll.
+const presenceQueue: { id: string; text: string }[] = [];
 // The server's read-aloud: every sentence of the text is ready at once.
 vi.mock("expo/fetch", () => ({
-  fetch: async (_url: string, init: { body: string }) => {
+  fetch: async (url: string, init: { body: string }) => {
+    if (url.includes("/api/voice-presence")) {
+      const { waitMs } = JSON.parse(init.body) as { waitMs: number };
+      if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, 2));
+      const utterances = waitMs > 0 ? presenceQueue.splice(0) : [];
+      return { ok: true, json: async () => ({ utterances }) };
+    }
     const body = JSON.parse(init.body) as { text?: string; id?: string };
     const text = body.text ?? "";
     return {
@@ -107,7 +115,7 @@ vi.mock("expo/fetch", () => ({
   },
 }));
 
-const { voiceMode, voiceLoop, registerVoiceModeComposer, registerVoiceModeController } =
+const { voiceMode, voiceSession, registerVoiceModeComposer, registerVoiceModeController } =
   await import("./voiceMode");
 const { readAloudPlayer, setReadAloudConnection } = await import("../threads/readAloudPlayback");
 const { configureVoiceRecordingAudio, releaseVoiceRecordingAudio } =
@@ -115,7 +123,8 @@ const { configureVoiceRecordingAudio, releaseVoiceRecordingAudio } =
 
 const until = async (check: () => boolean, what: string) => {
   for (let i = 0; i < 2000 && !check(); i++) await new Promise((resolve) => setTimeout(resolve, 1));
-  if (!check()) throw new Error(`Timed out waiting for ${what} (${voiceLoop.getSnapshot().phase})`);
+  if (!check())
+    throw new Error(`Timed out waiting for ${what} (${voiceSession.getSnapshot().phase})`);
 };
 
 let turn = 0;
@@ -126,7 +135,7 @@ beforeEach(() => {
   setReadAloudConnection({ httpBaseUrl: "http://pc:3773", httpAuthorization: null } as never);
   // Dictation into the composer, as the voice input controller does it: the
   // recording's audio setup, the recorder, and sending.
-  registerVoiceModeComposer({
+  registerVoiceModeComposer("thread-1", {
     start: async () => {
       await configureVoiceRecordingAudio();
       native.prepareRecording();
@@ -136,15 +145,8 @@ beforeEach(() => {
       await native.stopRecording();
       await releaseVoiceRecordingAudio();
       turn++;
-      // The agent answers after a moment.
-      setTimeout(
-        () =>
-          voiceLoop.update({
-            reply: { key: `reply-${turn}`, text: `Reply ${turn}.` },
-            working: false,
-          }),
-        2,
-      );
+      // The agent has something to say a moment later.
+      setTimeout(() => presenceQueue.push({ id: `say-${turn}`, text: `Reply ${turn}.` }), 2);
     },
   });
   registerVoiceModeController({
@@ -158,13 +160,15 @@ beforeEach(() => {
 
 describe("voice mode's call", () => {
   it("switches into communication mode once, keeps it through every turn, and out once at the end", async () => {
-    voiceMode.open();
-    voiceMode.setLoop(true);
-    await until(() => voiceLoop.getSnapshot().phase === "listening", "the first turn");
+    voiceMode.start("thread-1");
+    await until(() => voiceSession.getSnapshot().phase === "idle", "voice mode to come on");
+    // Erik talks first, unprompted.
+    voiceSession.talk();
+    await until(() => voiceSession.getSnapshot().phase === "listening", "the first turn");
 
     for (let round = 1; round <= 3; round++) {
-      // A volume key ends the turn; the reply is read, then the next turn starts.
-      voiceLoop.endTurn();
+      // A volume key sends; the agent speaks when it has something, then the next turn opens.
+      voiceSession.endTurn();
       await until(() => log.includes(`play job:Reply ${round}.:0`), `reply ${round} to be read`);
       if (round === 2) {
         // Paused and resumed while a reply is read.
@@ -172,12 +176,12 @@ describe("voice mode's call", () => {
         readAloudPlayer.togglePause();
       }
       await until(
-        () => voiceLoop.getSnapshot().phase === "listening" && recording.on,
+        () => voiceSession.getSnapshot().phase === "listening" && recording.on,
         `turn ${round + 1}`,
       );
     }
 
-    voiceMode.close();
+    voiceMode.stop();
     await until(() => log.includes("call stop"), "the call to end");
 
     const touchesAudio = (entry: string) =>
