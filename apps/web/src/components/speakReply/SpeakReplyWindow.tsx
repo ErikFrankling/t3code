@@ -12,7 +12,7 @@ import {
   type EnvironmentId,
   type ThreadId,
 } from "@t3tools/contracts";
-import { ArrowUpIcon, ExternalLinkIcon, MicIcon, XIcon } from "lucide-react";
+import { ExternalLinkIcon, XIcon } from "lucide-react";
 import {
   type MouseEvent,
   useEffect,
@@ -23,13 +23,13 @@ import {
 } from "react";
 
 import { observeResize } from "../../lib/observeResize";
-import { cn } from "../../lib/utils";
 import { useProject, useThreadShell, useThreadVisibleTurnItems } from "../../state/entities";
 import { threadEnvironment } from "../../state/threads";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
 import ChatMarkdown from "../ChatMarkdown";
 import { inputSourceFor, useInputDevice } from "../../inputSource";
 import { announceDictationRecording, dictationRecorder } from "../chat/Dictation";
+import { DictationCard, DictationTranscriptText } from "../chat/DictationCard";
 import { useDesktopDictationSend } from "../chat/desktopDictationSend";
 import {
   microphoneError,
@@ -109,7 +109,7 @@ export function SpeakReplyWindow({
 
   const [phase, setPhase] = useState<DesktopSpeakReplyPhase>("starting");
   const [problem, setProblem] = useState("");
-  const [level, setLevel] = useState(0);
+  const [, setLevel] = useState(0);
   const [recordingId, setRecordingId] = useState<string | null>(null);
   const capture = useRef<DictationCapture | null>(null);
   const mounted = useRef(true);
@@ -134,14 +134,15 @@ export function SpeakReplyWindow({
     return running?.id ?? null;
   };
 
-  const startRecording = useEffectEvent(async () => {
+  // A paused recording resumes under its own id; otherwise a new one starts.
+  const startRecording = useEffectEvent(async (resumeId: string | null = null) => {
     if (capture.current) return;
     setPhase("starting");
     setProblem("");
     try {
       const started = await startDictationCapture({
         engine,
-        id: null,
+        id: resumeId,
         target,
         environmentId,
         project: thread?.worktreePath ?? project?.workspaceRoot ?? "",
@@ -233,8 +234,20 @@ export function SpeakReplyWindow({
     }
   };
 
-  const send = useEffectEvent(async () => {
+  const pause = useEffectEvent(() => {
     if (phase !== "recording" || !recordingId) return;
+    stopMicrophone();
+    engine.pause(recordingId);
+    setPhase("paused");
+  });
+  const pauseOrResume = () => {
+    if (phase === "recording") pause();
+    else if (phase === "paused" && recordingId) void startRecording(recordingId);
+    else if (phase === "silent" || phase === "error") void startRecording();
+  };
+
+  const send = useEffectEvent(async () => {
+    if ((phase !== "recording" && phase !== "paused") || !recordingId) return;
     stopMicrophone();
     setPhase("sending");
     const id = recordingId;
@@ -267,6 +280,7 @@ export function SpeakReplyWindow({
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") cancel();
       else if (event.key === "Enter" && !event.shiftKey) void send();
+      else if (event.key === " ") pauseOrResume();
       else return;
       event.preventDefault();
     };
@@ -307,115 +321,88 @@ export function SpeakReplyWindow({
   const live = server?.draft.trim() ?? "";
   const tail = refined ? live.split(/\s+/).slice(refined.split(/\s+/).length).join(" ") : live;
 
-  return (
-    <div
-      data-testid="speak-reply"
-      className="flex h-dvh flex-col overflow-hidden bg-background text-foreground"
-    >
-      <header className="drag-region flex shrink-0 items-center gap-2 border-b px-3 py-1.5">
-        <span
-          aria-hidden
-          className={cn(
-            "size-2.5 shrink-0 rounded-full",
-            recording ? "bg-destructive" : "bg-muted-foreground/40",
-          )}
-          style={
-            recording
-              ? {
-                  boxShadow: `0 0 0 ${2 + level * 6}px color-mix(in srgb, var(--destructive) ${20 + Math.round(level * 30)}%, transparent)`,
-                }
-              : undefined
-          }
-        />
-        <p role="status" className="min-w-0 flex-1 truncate font-medium text-sm">
-          {phase === "starting"
-            ? "Starting the microphone…"
-            : recording
-              ? `Recording now · ${duration(seconds)}`
-              : phase === "sending"
-                ? "Sending…"
-                : phase === "silent"
-                  ? "Stopped: nothing was said"
-                  : "Not recording"}
-        </p>
-        <Button variant="ghost" size="xs" onClick={openDetails}>
-          <ExternalLinkIcon />
-          Open details
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label="Cancel (Esc); the recording stays in the thread"
-          onClick={cancel}
-        >
-          <XIcon />
-        </Button>
-      </header>
+  const status =
+    phase === "starting"
+      ? "Starting the microphone…"
+      : recording
+        ? `Recording now · ${duration(seconds)}`
+        : phase === "paused"
+          ? `Paused · ${duration(seconds)}`
+          : phase === "sending"
+            ? "Sending…"
+            : phase === "silent"
+              ? "Stopped: nothing was said"
+              : "Not recording";
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2" onClickCapture={onPreviewClick}>
-        <p className="whitespace-pre-wrap font-medium text-sm leading-snug">{text}</p>
-        {details ? (
+  // The same card the composer dictates in (DictationCard), filling this window.
+  return (
+    <div className="h-dvh bg-background">
+      <DictationCard
+        fill
+        testId="speak-reply"
+        className="rounded-none border-0"
+        status={status}
+        listening={recording}
+        headerActions={
+          <>
+            <Button variant="ghost" size="xs" className="drag-none" onClick={openDetails}>
+              <ExternalLinkIcon />
+              Open details
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label="Cancel (Esc); the recording stays in the thread"
+              onClick={cancel}
+            >
+              <XIcon />
+            </Button>
+          </>
+        }
+        message={
+          <div onClickCapture={onPreviewClick}>
+            <p className="whitespace-pre-wrap font-medium text-foreground leading-snug">{text}</p>
+            {details ? (
+              <div data-testid="speak-reply-details" className="mt-2 border-t pt-2 text-xs">
+                <ChatMarkdown
+                  text={details.text}
+                  cwd={thread?.worktreePath ?? project?.workspaceRoot}
+                  threadRef={threadRef}
+                  environmentId={environmentId}
+                />
+              </div>
+            ) : null}
+          </div>
+        }
+        body={
           <div
-            data-testid="speak-reply-details"
-            className="mt-2 border-t pt-2 text-muted-foreground text-xs"
+            ref={transcriptPanel}
+            data-testid="speak-reply-transcript"
+            className="min-h-0 flex-1 overflow-y-auto px-4 py-2 text-sm"
           >
-            <ChatMarkdown
-              text={details.text}
-              cwd={thread?.worktreePath ?? project?.workspaceRoot}
-              threadRef={threadRef}
-              environmentId={environmentId}
+            <DictationTranscriptText
+              refined={refined}
+              tail={tail}
+              placeholder={
+                recording
+                  ? "Speak; your words appear here."
+                  : phase === "silent"
+                    ? "Press Record to answer."
+                    : phase === "paused"
+                      ? "Paused: Resume to go on, or Send what you said."
+                      : ""
+              }
             />
           </div>
-        ) : null}
-      </div>
-
-      <div
-        ref={transcriptPanel}
-        className="max-h-16 shrink-0 overflow-y-auto border-t px-3 py-1.5"
-        aria-live="polite"
-      >
-        <p data-testid="speak-reply-transcript" className="text-sm leading-snug">
-          {refined || tail ? (
-            <>
-              <span>{refined}</span>
-              {refined && tail ? " " : ""}
-              <span className="text-muted-foreground">{tail}</span>
-            </>
-          ) : (
-            <span className="text-muted-foreground">
-              {recording
-                ? "Speak; your words appear here."
-                : phase === "silent"
-                  ? "Press Record to answer."
-                  : ""}
-            </span>
-          )}
-        </p>
-        {problem ? (
-          <p role="alert" className="text-destructive text-xs">
-            {problem}
-          </p>
-        ) : null}
-      </div>
-
-      <footer className="flex shrink-0 items-center justify-end gap-2 border-t px-3 py-2">
-        <Button variant="ghost" size="sm" onClick={cancel} disabled={phase === "sending"}>
-          Cancel
-          <kbd className="text-muted-foreground text-xs">Esc</kbd>
-        </Button>
-        {phase === "silent" || phase === "error" ? (
-          <Button size="sm" onClick={() => void startRecording()}>
-            <MicIcon />
-            Record
-          </Button>
-        ) : (
-          <Button size="sm" onClick={() => void send()} disabled={!recording || seconds === 0}>
-            <ArrowUpIcon />
-            Send
-            <kbd className="text-xs opacity-70">Enter</kbd>
-          </Button>
-        )}
-      </footer>
+        }
+        {...(problem ? { problem } : {})}
+        pauseLabel={recording ? "Pause" : phase === "paused" ? "Resume" : "Record"}
+        onPauseResume={pauseOrResume}
+        pauseDisabled={phase === "starting" || phase === "sending"}
+        onSend={() => void send()}
+        sendDisabled={(phase !== "recording" && phase !== "paused") || seconds === 0}
+        hint="Enter send · Space pause · Esc close"
+      />
     </div>
   );
 }
