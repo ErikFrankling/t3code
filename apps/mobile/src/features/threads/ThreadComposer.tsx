@@ -527,7 +527,12 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     voiceInput.elapsedSeconds,
     messages,
   );
-  const isVoiceInputPresented = voicePresentation.statusKind === "active";
+  // Voice mode's card is the one place a voice-mode turn shows (and is sent or
+  // discarded): the composer's own recording controls stay away meanwhile. A
+  // failed recording still shows here, with Retry and Save.
+  const voiceModeTurn =
+    inVoiceCall && voiceInput.state.phase !== "idle" && voiceInput.state.phase !== "error";
+  const isVoiceInputPresented = voicePresentation.statusKind === "active" && !voiceModeTurn;
   const isExpanded = isFocused || settingsSheetPresentation.keepsComposerExpanded;
   const { usesLargeControls, paddingVertical: surfacePaddingVertical } = useComposerChrome();
   const [compactRowWidth, setCompactRowWidth] = useState(0);
