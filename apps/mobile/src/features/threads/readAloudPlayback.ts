@@ -182,3 +182,8 @@ export function setReadAloudConnection(next: PreparedConnection | null) {
   connection = next;
   setActivityConnection(next);
 }
+
+/** The connection read-aloud uses; voice mode's presence polls go over it too. */
+export function readAloudConnection(): PreparedConnection | null {
+  return connection;
+}
