@@ -366,6 +366,9 @@ export const make = Effect.gen(function* () {
       const continuing = shared === true && scope.supportsOomPolicy;
       const owned = threadId !== undefined && !continuing;
       if (threadId !== undefined) yield* track(scope.systemctl, threadId, owned ? unit : undefined);
+      // The journal keeps this, so resource history per scope (process
+      // metrics, below) can be traced back to the thread that started it.
+      yield* Effect.logInfo("Agent scope started", { unit, threadId: threadId ?? null, shared });
       const systemdScope: AgentSystemdScope = {
         systemdRun: scope.systemdRun,
         runtimeDir: scope.runtimeDir,
