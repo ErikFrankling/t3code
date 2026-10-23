@@ -903,6 +903,19 @@ export class VoiceInputController {
     errorCode?: VoiceInputErrorCode,
   ): Promise<void> {
     this.invalidateOperation();
+    if (!this.keepRecordings && !error) {
+      // Deleted before going idle: Android offers any recording file it still
+      // finds once dictation is idle as "saved, not sent".
+      this.setState({ phase: "transcribing", error: null, errorAction: null });
+      try {
+        await this.dependencies.recorder.stop();
+      } catch {
+      } finally {
+        await this.releaseResources();
+      }
+      this.setState(IDLE_STATE);
+      return;
+    }
     this.setState(
       error
         ? errorCode === undefined
