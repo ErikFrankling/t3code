@@ -44,6 +44,7 @@ import {
   startFanoutThread,
 } from "./chatViewSend";
 import type { useLocalDispatchState } from "./useLocalDispatchState";
+import { inputSourceFor, useInputDevice } from "../../inputSource";
 
 interface MultipleModelSendInput {
   readonly environmentId: EnvironmentId;
@@ -79,6 +80,7 @@ export function useMultipleModelSend(input: MultipleModelSendInput) {
     setThreadError,
   } = input;
   const navigate = useNavigate();
+  const inputDevice = useInputDevice();
   const startThreadTurn = useOrchestrationCommand(threadEnvironment.startTurn, {
     reportFailure: false,
   });
@@ -172,6 +174,7 @@ export function useMultipleModelSend(input: MultipleModelSendInput) {
                 environmentId,
                 input: {
                   threadId: targetThreadId,
+                  inputSource: inputSourceFor({ device: inputDevice, dictated: false }),
                   message: {
                     messageId: newMessageId(),
                     role: "user",
