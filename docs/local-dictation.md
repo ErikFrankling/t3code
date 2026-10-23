@@ -173,3 +173,16 @@ logging transcript text.
 without that exact value, normal upstream authentication applies. The mode uses
 a persisted administrative session so websocket tickets remain functional, and
 accepts any pairing code so the mobile app can connect.
+
+## Input source header
+
+Every message a user sends from a client carries `inputSource`: the device
+(`phone`, `pc desktop`, `laptop desktop`, `pc web`, ...), an optional entry
+point (`speak reply window`) and the method (`typed`, `dictation`,
+`voice mode`). The server puts `[pc desktop · dictation]` on its own line before
+the text it hands the provider, so the agent knows a transcript may contain
+recognition errors and which device is talking. The stored message text never
+holds the header; chats show it beside the timestamp. A message that starts with
+`/` gets no header, because providers only run a slash command at the start.
+The web client knows the machine only from the desktop app or a localhost
+browser; a browser on another machine is plain `web`.

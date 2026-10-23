@@ -9,6 +9,7 @@ import {
   CommandId,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   EnvironmentId,
+  InputSourceMethod,
   IsoDateTime,
   MessageId,
   ModelSelection,
@@ -62,6 +63,7 @@ export const QueuedThreadMessageSchema = Schema.Struct({
   interactionMode: Schema.optional(ProviderInteractionMode),
   creation: Schema.optional(QueuedThreadCreationSchema),
   dictation: Schema.optional(Schema.Struct({ id: Schema.String, draft: Schema.String })),
+  inputMethod: Schema.optional(InputSourceMethod),
   createdAt: IsoDateTime,
 });
 
@@ -102,6 +104,8 @@ export interface QueuedThreadMessage {
    * replaces with the final transcript before it sends the message.
    */
   readonly dictation?: { readonly id: string; readonly draft: string };
+  /** Captured at enqueue time: voice mode is over by the time a dictated message drains. */
+  readonly inputMethod?: InputSourceMethod;
   readonly createdAt: string;
 }
 
