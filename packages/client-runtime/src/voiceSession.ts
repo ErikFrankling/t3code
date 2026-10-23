@@ -162,6 +162,18 @@ export class VoiceSession {
     void this.#speak(++this.#run, utterance, false);
   }
 
+  /** Erik throws his turn away: nothing is sent, the agent may speak again. */
+  discardTurn() {
+    const phase = this.#state.phase;
+    if (phase !== "listening" && phase !== "cue") return;
+    this.#run++;
+    this.#clearSilence();
+    this.#stopCue();
+    this.#deps.discard();
+    this.#set({ phase: "idle" });
+    this.#next();
+  }
+
   /** The dictation was sent some other way (the composer's own button). */
   sent() {
     const phase = this.#state.phase;

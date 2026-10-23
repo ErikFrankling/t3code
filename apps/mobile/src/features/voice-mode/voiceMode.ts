@@ -259,6 +259,8 @@ export const voiceMode = {
   stop,
   /** The card's big button: talk, send, or talk over what is being said. */
   press: () => voiceSession.endTurn(),
+  /** Throws the turn away; nothing is sent. */
+  discard: () => voiceSession.discardTurn(),
 };
 
 export function useVoiceMode(): VoiceModeState {

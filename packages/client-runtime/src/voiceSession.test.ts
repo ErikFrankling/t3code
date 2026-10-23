@@ -134,6 +134,18 @@ describe("VoiceSession", () => {
     expect(fake.session.getSnapshot().phase).toBe("listening");
   });
 
+  it("a discarded turn sends nothing, and what waited is said next", async () => {
+    const fake = setup();
+    fake.session.start();
+    fake.session.talk();
+    await finishAll(fake);
+    fake.session.say({ key: "u1", text: "Meanwhile, the build passed." });
+    fake.session.discardTurn();
+    expect(fake.calls).toEqual(["listen", "discard"]);
+    expect(fake.session.getSnapshot().phase).toBe("speaking");
+    expect(fake.started.at(-1)?.key).toBe("u1");
+  });
+
   it("talking over the agent skips the rest of its message", async () => {
     const fake = setup();
     fake.session.start();
