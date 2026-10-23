@@ -9,8 +9,9 @@ import { readAloudPlayer, releaseReadAloudAudio } from "../threads/readAloudPlay
 /**
  * Voice mode on the phone: the full-screen view and its loop. With the loop on,
  * a "call" runs (see `native/voiceCall.ts`), so it goes on with the screen off:
- * a volume key or an earbud tap ends your turn and sends it, or skips the
- * reading, and the notification's Hang up ends the call.
+ * volume down or an earbud tap ends your turn and sends it, or skips the
+ * reading and starts your turn; volume up plays the last reply again from the
+ * top; and the notification's Hang up ends the call.
  */
 type Composer = {
   readonly start: () => Promise<void>;
@@ -92,13 +93,14 @@ function setLoop(on: boolean) {
   }
 }
 
-// Volume keys are the turn button while you talk or wait for the reply; while
-// it is read they set the volume.
+// The volume keys are voice mode's buttons for the whole call (the call's
+// volume stays where it was): down ends your turn or skips the reading, up
+// replays the last reply.
 let loopPhase = voiceLoop.getSnapshot().phase;
 voiceLoop.subscribe(() => {
   const phase = voiceLoop.getSnapshot().phase;
   if (phase === "listening") releaseReadAloudAudio();
-  voiceCall.setListening(phase === "listening" || phase === "waiting");
+  voiceCall.setListening(phase !== "off");
   // The loop stops itself when dictation fails; the call ends with it.
   if (phase === "off" && loopPhase !== "off" && state.loop) setLoop(false);
   loopPhase = phase;
@@ -106,6 +108,7 @@ voiceLoop.subscribe(() => {
 
 voiceCall.onEvent((event) => {
   if (event.type === "hangUp") setLoop(false);
+  else if (event.type === "volume" && event.direction === "up") voiceLoop.replay();
   else if (event.type === "volume" || event.type === "button") voiceLoop.endTurn();
 });
 
