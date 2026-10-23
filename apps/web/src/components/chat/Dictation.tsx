@@ -162,6 +162,69 @@ function useComposerAnchor(trigger: RefObject<HTMLElement | null>, active: boole
   return active ? anchor : null;
 }
 
+/**
+ * Keeps the chat at its end while the card appears and grows, when it was at
+ * its end: the chat makes room for the card, and without this the newest words
+ * of the last reply would slide behind it until scrolled.
+ */
+function chatTimeline() {
+  return document.querySelector<HTMLElement>(".messages-timeline-scroll");
+}
+
+const distanceFromEnd = (timeline: HTMLElement) =>
+  timeline.scrollHeight - timeline.scrollTop - timeline.clientHeight;
+
+/** Whether the chat was at its end when dictation opened, read before the card takes room. */
+function useChatAtEndWhenOpened(opened: boolean) {
+  const atEnd = useRef(false);
+  useLayoutEffect(() => {
+    const timeline = chatTimeline();
+    if (opened && timeline) atEnd.current = distanceFromEnd(timeline) < 80;
+  }, [opened]);
+  return atEnd;
+}
+
+function useKeepChatAtEnd(
+  card: RefObject<HTMLElement | null>,
+  active: boolean,
+  wasAtEnd: RefObject<boolean>,
+) {
+  useLayoutEffect(() => {
+    const element = card.current;
+    const timeline = chatTimeline();
+    if (!active || !element || !timeline) return;
+    const distance = () => distanceFromEnd(timeline);
+    let atEnd = wasAtEnd.current;
+    let lastTop = timeline.scrollTop;
+    // Only scrolling up lets go of the end; the chat shrinking to make room
+    // also fires scroll events, which must not.
+    const onScroll = () => {
+      if (timeline.scrollTop < lastTop - 1) atEnd = false;
+      else if (distance() < 80) atEnd = true;
+      lastTop = timeline.scrollTop;
+    };
+    timeline.addEventListener("scroll", onScroll, { passive: true });
+    let frame = 0;
+    const pin = () => {
+      if (!atEnd) return;
+      cancelAnimationFrame(frame);
+      // The room is made a frame or two later, when the composer overlay is measured.
+      let frames = 0;
+      const step = () => {
+        timeline.scrollTop = timeline.scrollHeight;
+        if (++frames < 6) frame = requestAnimationFrame(step);
+      };
+      frame = requestAnimationFrame(step);
+    };
+    const stop = observeResize(element, pin);
+    return () => {
+      stop();
+      cancelAnimationFrame(frame);
+      timeline.removeEventListener("scroll", onScroll);
+    };
+  }, [card, active, wasAtEnd]);
+}
+
 /** The composer stack's place for the small card, when the app provides one. */
 function useDictationSlot(trigger: RefObject<HTMLElement | null>, active: boolean) {
   const [slot, setSlot] = useState<HTMLElement | null>(null);
@@ -271,10 +334,13 @@ export function Dictation({
 
   const shownText = transcript(selected?.record.server ?? null);
   const viewVisible = open && !voice.open;
+  // Read first: the card takes room in the chat once it moves into the slot.
+  const chatWasAtEnd = useChatAtEndWhenOpened(viewVisible && !fullScreen);
   // In the app the card sits in the composer stack, in the flow (see ChatView);
   // elsewhere it floats right above the message box.
   const slot = useDictationSlot(triggerRef, viewVisible && !fullScreen);
   const anchor = useComposerAnchor(triggerRef, viewVisible && !fullScreen && !slot);
+  useKeepChatAtEnd(viewRef, slot !== null, chatWasAtEnd);
   useEffect(() => {
     const unfinished = () =>
       engine
