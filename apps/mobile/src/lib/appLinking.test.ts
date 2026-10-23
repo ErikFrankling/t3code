@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { shouldHandleAppLink, restoreDraftLinkState } from "./appLinking";
+import { rewriteDictateLink, shouldHandleAppLink, restoreDraftLinkState } from "./appLinking";
 
 describe("shouldHandleAppLink", () => {
   it.each(["t3code://", "t3code:///", "t3code-dev://", "t3code-preview://"])(
@@ -63,5 +63,22 @@ describe("draft deep links", () => {
     expect(restoreDraftLinkState(state, "/threads/env-1/thread-1")).toBe(state);
     expect(restoreDraftLinkState(state, "/new")).toBe(state);
     expect(restoreDraftLinkState(undefined, "/new/draft")).toBeUndefined();
+  });
+});
+
+describe("rewriteDictateLink", () => {
+  it("turns the dictate segment into the intent param", () => {
+    expect(rewriteDictateLink("threads/env-1/thread-1/dictate")).toBe(
+      "threads/env-1/thread-1?intent=dictate",
+    );
+    expect(rewriteDictateLink("/threads/env-1/thread-1/dictate/")).toBe(
+      "/threads/env-1/thread-1?intent=dictate",
+    );
+  });
+
+  it("leaves other links alone", () => {
+    expect(rewriteDictateLink("threads/env-1/thread-1")).toBe("threads/env-1/thread-1");
+    expect(rewriteDictateLink("threads/env-1/dictate")).toBe("threads/env-1/dictate");
+    expect(rewriteDictateLink("new/draft?prompt=x")).toBe("new/draft?prompt=x");
   });
 });
