@@ -7,7 +7,7 @@ import {
   type SpeakReplyPageState,
 } from "../components/speakReply/SpeakReplyWindow";
 import { Spinner } from "../components/ui/spinner";
-import { usePrimaryEnvironment } from "../state/environments";
+import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 
 export const SPEAK_REPLY_WINDOW_TITLE = "T3 Code — Speak reply";
 
@@ -30,7 +30,15 @@ const asText = (value: unknown) =>
 
 function SpeakReplyRoute() {
   const search = Route.useSearch();
-  const environment = usePrimaryEnvironment();
+  // A desktop app that is only a client of a remote server has no primary
+  // environment; its server is a saved one.
+  const primaryId = usePrimaryEnvironmentId();
+  const { environments } = useEnvironments();
+  const environment =
+    environments.find((entry) => entry.environmentId === primaryId) ??
+    environments.find((entry) => entry.connection.phase === "connected") ??
+    environments[0] ??
+    null;
   // Opened at: a missing queuedAt means "the latest message now".
   const [openedAt] = useState(() => Date.now());
   const [content, setContent] = useState<Content>({
@@ -104,7 +112,10 @@ export const Route = createFileRoute("/speak-reply")({
     };
   },
   beforeLoad: async ({ context }) => {
-    if (context.authGateState.status !== "authenticated") {
+    if (
+      context.authGateState.status !== "authenticated" &&
+      context.authGateState.status !== "hosted-static"
+    ) {
       throw redirect({ to: "/pair", replace: true });
     }
   },
