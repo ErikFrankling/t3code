@@ -210,7 +210,7 @@ import {
   ThreadComposer,
   type ThreadComposerProps,
 } from "./ThreadComposer";
-import { ReadAloudDock } from "./ReadAloudButton";
+import { ReadAloudDock, ReadAloudPanel } from "./ReadAloudButton";
 import { VoiceModeHost } from "../voice-mode/VoiceModeView";
 import { voiceMode } from "../voice-mode/voiceMode";
 import { ComposerPopoverHost } from "./ComposerPopoverHost";
@@ -1758,6 +1758,8 @@ function ThreadDetailBody(
                       />
                     </View>
                   ) : null}
+                  {/* What is read aloud, as text: in the flow, so the chat makes room. */}
+                  {!isProviderSubagent && !composerSlotHidden ? <ReadAloudPanel /> : null}
                   <ComposerPanels
                     className="w-full"
                     style={Platform.OS === "android" ? composerPanelsHeightStyle : undefined}
