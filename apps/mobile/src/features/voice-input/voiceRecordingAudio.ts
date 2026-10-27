@@ -3,6 +3,8 @@ import {
   activateAudioSession,
   releaseAudioSession,
 } from "../../lib/audioSession";
+import { Platform } from "react-native";
+
 import { voiceCall } from "../../native/voiceCall";
 
 let recordingToken: ReturnType<typeof acquireAudioSession> | null = null;
@@ -14,7 +16,9 @@ export async function configureVoiceRecordingAudio(): Promise<void> {
   const token = acquireAudioSession("recording");
   recordingToken = token;
   try {
-    await activateAudioSession(token);
+    // Locking the phone or a screen on top (a sign-in, a call) never stops a
+    // dictation: expo-audio records on in a foreground service.
+    await activateAudioSession(token, false, Platform.OS === "android");
   } catch (error) {
     await releaseAudioSession(token).catch(() => {});
     throw error;

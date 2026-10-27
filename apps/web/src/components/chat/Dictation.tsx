@@ -218,7 +218,8 @@ function useKeepChatAtEnd(
       let frames = 0;
       const step = () => {
         timeline.scrollTop = timeline.scrollHeight;
-        if (++frames < 6) frame = requestAnimationFrame(step);
+        frames += 1;
+        if (frames < 6) frame = requestAnimationFrame(step);
       };
       frame = requestAnimationFrame(step);
     };
@@ -264,6 +265,108 @@ function uploadStatus(entry: DictationEntry) {
 }
 
 /** A component instance belongs to exactly one composer target (React key). */
+type CaptureDeps = {
+  readonly engine: ReturnType<typeof dictationRecorder>;
+  readonly target: string;
+  readonly environmentId: EnvironmentId;
+  readonly project: string | null;
+  readonly threadId: string | null;
+  readonly mounted: { current: boolean };
+  readonly capture: { current: { id: string; stop: () => void; flush: () => void } | null };
+  readonly startError: { current: string };
+  readonly setStarting: (starting: boolean) => void;
+  readonly setMicError: (message: string) => void;
+  readonly setLevel: (level: number) => void;
+  readonly setMicId: (id: string | null) => void;
+  readonly setSelectedId: (id: string | null) => void;
+  readonly pauseRecording: () => void;
+};
+
+/**
+ * Opens the microphone and feeds recording `id` (a new one when null). Outside
+ * the component: React Compiler cannot compile try/finally or throw inside try.
+ */
+async function startCapture(id: string | null, deps: CaptureDeps): Promise<string | null> {
+  deps.setStarting(true);
+  deps.setMicError("");
+  let media: MediaStream | undefined;
+  let context: AudioContext | undefined;
+  try {
+    if (!navigator.mediaDevices?.getUserMedia)
+      throw new Error("Microphone access requires HTTPS or localhost.");
+    media = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, echoCancellation: true },
+    });
+    context = new AudioContext({ sampleRate: 16000 });
+    if (context.sampleRate !== 16000) throw new Error("This browser cannot capture at 16 kHz.");
+    await context.resume();
+    if (!deps.mounted.current) throw new Error("Composer changed while starting the microphone.");
+    // The recording exists on this device before the first sample arrives.
+    const recording =
+      id ??
+      (await deps.engine.create({
+        target: deps.target,
+        environmentId: deps.environmentId,
+        project: deps.project ?? "",
+        threadId: deps.threadId,
+      }));
+    if (id) deps.engine.resume(id);
+    const source = context.createMediaStreamSource(media);
+    const processor = context.createScriptProcessor(4096, 1, 1);
+    let pending: number[] = [];
+    const stored = deps.engine.getSnapshot().find((entry) => entry.record.id === recording);
+    let count = stored ? recordingSeconds(stored.record) * 16000 : 0;
+    const flush = () => {
+      if (pending.length) void deps.engine.append(recording, new Int16Array(pending));
+      pending = [];
+    };
+    const capturedMedia = media;
+    const capturedContext = context;
+    const own = {
+      id: recording,
+      flush,
+      stop: () => {
+        processor.onaudioprocess = null;
+        processor.disconnect();
+        source.disconnect();
+        capturedMedia.getTracks().forEach((track) => track.stop());
+        void capturedContext.close();
+        flush();
+      },
+    };
+    processor.onaudioprocess = (event) => {
+      // A microphone this composer no longer tracks closes itself.
+      if (deps.capture.current !== own) return own.stop();
+      if (count >= MAX_SAMPLES) return;
+      const input = event.inputBuffer.getChannelData(0);
+      if (deps.mounted.current)
+        deps.setLevel(
+          Math.min(1, Math.sqrt(input.reduce((sum, x) => sum + x * x, 0) / input.length) * 8),
+        );
+      for (const sample of input.subarray(0, MAX_SAMPLES - count))
+        pending.push(Math.max(-32768, Math.min(32767, Math.round(sample * 32767))));
+      count += input.length;
+      if (pending.length >= 16000) flush();
+      if (count >= MAX_SAMPLES) deps.pauseRecording();
+    };
+    source.connect(processor);
+    processor.connect(context.destination);
+    deps.capture.current = own;
+    deps.setMicId(recording);
+    deps.setSelectedId(recording);
+    return recording;
+  } catch (cause) {
+    media?.getTracks().forEach((track) => track.stop());
+    if (context && context.state !== "closed") void context.close();
+    const message = microphoneError(cause);
+    deps.startError.current = message;
+    if (deps.mounted.current) deps.setMicError(message);
+    return null;
+  } finally {
+    if (deps.mounted.current) deps.setStarting(false);
+  }
+}
+
 export function Dictation({
   environmentId,
   target,
@@ -376,98 +479,6 @@ export function Dictation({
     if (viewVisible) viewRef.current?.focus();
   }, [viewVisible]);
 
-  /** Opens the microphone and feeds `id` (a new recording when `id` is null). */
-  function openMicrophone(id: string | null): Promise<string | null> {
-    if (capture.current) return Promise.resolve(capture.current.id);
-    // One start at a time: a second Space or click while the first waits for the
-    // microphone would open a second one that nothing ever closes.
-    opening.current ??= startMicrophone(id).finally(() => {
-      opening.current = null;
-    });
-    return opening.current;
-  }
-
-  async function startMicrophone(id: string | null): Promise<string | null> {
-    setStarting(true);
-    setMicError("");
-    let media: MediaStream | undefined;
-    let context: AudioContext | undefined;
-    try {
-      if (!navigator.mediaDevices?.getUserMedia)
-        throw new Error("Microphone access requires HTTPS or localhost.");
-      media = await navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 1, echoCancellation: true },
-      });
-      context = new AudioContext({ sampleRate: 16000 });
-      if (context.sampleRate !== 16000) throw new Error("This browser cannot capture at 16 kHz.");
-      await context.resume();
-      if (!mounted.current) throw new Error("Composer changed while starting the microphone.");
-      // The recording exists on this device before the first sample arrives.
-      const recording =
-        id ??
-        (await engine.create({
-          target,
-          environmentId,
-          project: project ?? "",
-          threadId,
-        }));
-      if (id) engine.resume(id);
-      const source = context.createMediaStreamSource(media);
-      const processor = context.createScriptProcessor(4096, 1, 1);
-      let pending: number[] = [];
-      const stored = engine.getSnapshot().find((entry) => entry.record.id === recording);
-      let count = stored ? recordingSeconds(stored.record) * 16000 : 0;
-      const flush = () => {
-        if (pending.length) void engine.append(recording, new Int16Array(pending));
-        pending = [];
-      };
-      const capturedMedia = media;
-      const capturedContext = context;
-      const own = {
-        id: recording,
-        flush,
-        stop: () => {
-          processor.onaudioprocess = null;
-          processor.disconnect();
-          source.disconnect();
-          capturedMedia.getTracks().forEach((track) => track.stop());
-          void capturedContext.close();
-          flush();
-        },
-      };
-      processor.onaudioprocess = (event) => {
-        // A microphone this composer no longer tracks closes itself.
-        if (capture.current !== own) return own.stop();
-        if (count >= MAX_SAMPLES) return;
-        const input = event.inputBuffer.getChannelData(0);
-        if (mounted.current)
-          setLevel(
-            Math.min(1, Math.sqrt(input.reduce((sum, x) => sum + x * x, 0) / input.length) * 8),
-          );
-        for (const sample of input.subarray(0, MAX_SAMPLES - count))
-          pending.push(Math.max(-32768, Math.min(32767, Math.round(sample * 32767))));
-        count += input.length;
-        if (pending.length >= 16000) flush();
-        if (count >= MAX_SAMPLES) pauseRecording();
-      };
-      source.connect(processor);
-      processor.connect(context.destination);
-      capture.current = own;
-      setMicId(recording);
-      setSelectedId(recording);
-      return recording;
-    } catch (cause) {
-      media?.getTracks().forEach((track) => track.stop());
-      if (context && context.state !== "closed") void context.close();
-      const message = microphoneError(cause);
-      startError.current = message;
-      if (mounted.current) setMicError(message);
-      return null;
-    } finally {
-      if (mounted.current) setStarting(false);
-    }
-  }
-
   function closeMicrophone() {
     const running = capture.current;
     if (!running) return null;
@@ -481,6 +492,38 @@ export function Dictation({
   function pauseRecording(notice = "") {
     const id = closeMicrophone();
     if (id) engine.pause(id, notice);
+  }
+
+  /** Opens the microphone and feeds `id` (a new recording when `id` is null). */
+  function openMicrophone(id: string | null): Promise<string | null> {
+    if (capture.current) return Promise.resolve(capture.current.id);
+    // One start at a time: a second Space or click while the first waits for the
+    // microphone would open a second one that nothing ever closes.
+    if (opening.current === null) {
+      opening.current = startMicrophone(id).finally(() => {
+        opening.current = null;
+      });
+    }
+    return opening.current;
+  }
+
+  function startMicrophone(id: string | null): Promise<string | null> {
+    return startCapture(id, {
+      engine,
+      target,
+      environmentId,
+      project,
+      threadId,
+      mounted,
+      capture,
+      startError,
+      setStarting,
+      setMicError,
+      setLevel,
+      setMicId,
+      setSelectedId,
+      pauseRecording: () => pauseRecording(),
+    });
   }
 
   function resumeRecording(id: string) {
