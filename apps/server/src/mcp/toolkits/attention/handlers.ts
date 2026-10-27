@@ -34,19 +34,17 @@ const make = Effect.gen(function* () {
     attention_item_resolve: McpToolAccess.writesWithCapability((input) =>
       Effect.gen(function* () {
         if (input.action === "dismiss") {
-          yield* service.dismiss({ id: input.id }).pipe(Effect.mapError(toFailure));
+          yield* service.dismiss({ id: input.id });
           return { id: input.id, item: null };
         }
-        const { item } = yield* service
-          .setDone(
-            { id: input.id, done: input.action === "done" },
-            // Only the user's tick wakes the personal agent; an agent
-            // resolving an item already knows about it.
-            { wakePersonalAgent: false },
-          )
-          .pipe(Effect.mapError(toFailure));
+        const { item } = yield* service.setDone(
+          { id: input.id, done: input.action === "done" },
+          // Only the user's tick wakes the personal agent; an agent
+          // resolving an item already knows about it.
+          { wakePersonalAgent: false },
+        );
         return { id: input.id, item };
-      }),
+      }).pipe(Effect.mapError(toFailure)),
     ),
     attention_item_list: McpToolAccess.reads(() =>
       Effect.flatMap(Clock.currentTimeMillis, (now) =>

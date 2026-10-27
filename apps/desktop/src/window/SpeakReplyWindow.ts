@@ -221,17 +221,21 @@ export const make = Effect.gen(function* () {
           ),
         ),
     ),
-    closeFrom: (senderId) =>
+    closeFrom: Effect.fn("SpeakReplyWindow.closeFrom")((senderId) =>
       Effect.sync(() => {
         const window = live();
         if (window !== null && window.webContents.id === senderId) window.close();
       }),
-    reportFrom: (senderId, state) =>
+    ),
+    reportFrom: Effect.fn("SpeakReplyWindow.reportFrom")((senderId, state) =>
       Effect.sync(() => {
         const window = live();
         if (window !== null && window.webContents.id === senderId) pageState = state;
       }),
-    isWindow: (senderId) => Effect.sync(() => live()?.webContents.id === senderId),
+    ),
+    isWindow: Effect.fn("SpeakReplyWindow.isWindow")((senderId) =>
+      Effect.sync(() => live()?.webContents.id === senderId),
+    ),
   });
 });
 

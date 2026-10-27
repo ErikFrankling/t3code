@@ -89,7 +89,10 @@ it("parses front matter and keeps unknown keys and the body when rendering", () 
   assert.include(text, "custom: kept");
   assert.include(text, "erik_ticked:");
   assert.include(text, "## Next\nGo.");
-  assert.strictEqual(AttentionItemService.todoSlug("Buy 2 YubiKeys (5C NFC)!"), "buy-2-yubikeys-5c-nfc");
+  assert.strictEqual(
+    AttentionItemService.todoSlug("Buy 2 YubiKeys (5C NFC)!"),
+    "buy-2-yubikeys-5c-nfc",
+  );
 });
 
 it.effect("lists the files in sections, needs-you first, and skips the README", () =>
@@ -99,7 +102,10 @@ it.effect("lists the files in sections, needs-you first, and skips the README", 
         const { items } = yield* service.list();
         const byId = new Map(items.map((item) => [item.id, item]));
         assert.isFalse(byId.has(AttentionItemId.make("README")));
-        assert.strictEqual(todoSection(byId.get(AttentionItemId.make("decide"))!, NOW), "needs_you");
+        assert.strictEqual(
+          todoSection(byId.get(AttentionItemId.make("decide"))!, NOW),
+          "needs_you",
+        );
         assert.strictEqual(todoSection(byId.get(AttentionItemId.make("moving"))!, NOW), "moving");
         assert.strictEqual(todoSection(byId.get(AttentionItemId.make("later"))!, NOW), "waiting");
         assert.strictEqual(todoSection(byId.get(AttentionItemId.make("rule"))!, NOW), "standing");
@@ -186,10 +192,16 @@ it.effect("the old tools write the same files: upsert, commitment, done with pro
       });
       assert.isTrue(closed.item.done);
       assert.isFalse(yield* fs.exists(`${todoDir}/ship-list.md`));
-      assert.include(yield* fs.readFileString(`${todoDir}/done/ship-list.md`), "## Proof\n/tmp/shot.png");
+      assert.include(
+        yield* fs.readFileString(`${todoDir}/done/ship-list.md`),
+        "## Proof\n/tmp/shot.png",
+      );
 
       const unsafe = yield* Effect.flip(
-        service.setDone({ id: AttentionItemId.make("../x"), done: true }, { wakePersonalAgent: true }),
+        service.setDone(
+          { id: AttentionItemId.make("../x"), done: true },
+          { wakePersonalAgent: true },
+        ),
       );
       assert.include(unsafe.message, "not a valid");
     }),
