@@ -1027,11 +1027,21 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
    * the switch or hit the limit the thread left behind.
    */
   const followThreadAccount = Effect.fn("Orchestrator.followThreadAccount")(function* (
-    projection: Pick<OrchestrationV2ThreadProjection, "thread">,
+    projection: Pick<OrchestrationV2ThreadProjection, "thread" | "runs">,
+    queuedRun: Pick<OrchestrationV2Run, "ordinal">,
     selection: ModelSelection,
   ) {
     const threadInstanceId = projection.thread.modelSelection.instanceId;
     if (selection.instanceId === threadInstanceId) return selection;
+    // Only a message queued for the account the thread was on then follows; one
+    // queued for another account on purpose is an account switch and starts there.
+    const before = projection.runs
+      .filter((run) => run.ordinal < queuedRun.ordinal && run.status !== "queued")
+      .toSorted((a, b) => a.ordinal - b.ordinal)
+      .at(-1);
+    if (before !== undefined && before.providerInstanceId !== selection.instanceId) {
+      return selection;
+    }
     const getMetadata = providerAdapters.getMetadata;
     if (getMetadata === undefined) return selection;
     const queued = yield* Effect.option(getMetadata(selection.instanceId));
@@ -1644,6 +1654,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         projection,
         yield* followThreadAccount(
           projection,
+          storedQueuedRun,
           queuedRunModelSelection(projection, storedQueuedRun),
         ),
       );
