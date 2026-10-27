@@ -1009,12 +1009,12 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
           installedBaseDir !== undefined &&
           path.resolve(installedBaseDir) === path.resolve(input.baseDir)
         : problems.length === 0 &&
-        normalizeUnit(unit) === normalizeUnit(detectedManager.render(plan)) &&
-        runtimeEntryExists &&
-        Option.isSome(runtimeSentinel) &&
-        runtimeSentinel.value.trim() === input.cliVersion &&
-        state?.activeVersion === input.cliVersion &&
-        state?.update?.status !== "pending",
+          normalizeUnit(unit) === normalizeUnit(detectedManager.render(plan)) &&
+          runtimeEntryExists &&
+          Option.isSome(runtimeSentinel) &&
+          runtimeSentinel.value.trim() === input.cliVersion &&
+          state?.activeVersion === input.cliVersion &&
+          state?.update?.status !== "pending",
       unitPath,
       logPath,
     };
