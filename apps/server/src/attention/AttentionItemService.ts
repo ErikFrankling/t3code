@@ -217,7 +217,10 @@ export const layer = Layer.effect(
     const mtimeIso = (file: string) =>
       fs.stat(file).pipe(
         Effect.map((info) =>
-          Option.match(info.mtime, { onNone: () => EPOCH_ISO, onSome: (mtime) => mtime.toISOString() }),
+          Option.match(info.mtime, {
+            onNone: () => EPOCH_ISO,
+            onSome: (mtime) => mtime.toISOString(),
+          }),
         ),
         Effect.orElseSucceed(() => EPOCH_ISO),
       );
@@ -236,7 +239,7 @@ export const layer = Layer.effect(
       // One unreadable file must not hide the rest of the list.
       (effect, _dir, name) =>
         effect.pipe(
-          Effect.map(Option.some),
+          Effect.asSome,
           Effect.catchCause((cause) =>
             Effect.logWarning("Skipping an unreadable to-do file.", { name, cause }).pipe(
               Effect.as(Option.none<AttentionItem>()),
@@ -250,7 +253,8 @@ export const layer = Layer.effect(
         Effect.orElseSucceed(() => [] as ReadonlyArray<string>),
         Effect.map((names) =>
           names.filter(
-            (name) => name.endsWith(".md") && name !== "README.md" && SAFE_ID.test(name.slice(0, -3)),
+            (name) =>
+              name.endsWith(".md") && name !== "README.md" && SAFE_ID.test(name.slice(0, -3)),
           ),
         ),
         Effect.flatMap((names) =>
@@ -434,40 +438,47 @@ export const layer = Layer.effect(
     const setDone: AttentionItemService["Service"]["setDone"] = Effect.fn(
       "AttentionItemService.setDone",
     )(function* (input, options) {
-        const id = yield* checkId(input.id);
-        const result = yield* writeLock.withPermits(1)(
-          Effect.gen(function* () {
-            const current = yield* loadItem(id);
-            const { doc } = current.parsed;
-            if (options.wakePersonalAgent) {
-              // The user's tick only records itself; the agent changes the status.
-              if (input.done) {
-                if (scalar(doc, "erik_ticked") !== null) return { item: yield* toItem(id), ticked: null };
-                const tickedAt = yield* nowIso;
-                doc.set("erik_ticked", tickedAt);
-                const saved = yield* save(id, { doc, body: current.parsed.body }, current.file);
-                return { ...saved, ticked: tickedAt };
-              }
-              doc.delete("erik_ticked");
-              return { ...(yield* save(id, { doc, body: current.parsed.body }, current.file)), ticked: null };
-            }
+      const id = yield* checkId(input.id);
+      const result = yield* writeLock.withPermits(1)(
+        Effect.gen(function* () {
+          const current = yield* loadItem(id);
+          const { doc } = current.parsed;
+          if (options.wakePersonalAgent) {
+            // The user's tick only records itself; the agent changes the status.
             if (input.done) {
-              doc.set("status", "done");
-            } else {
-              doc.set("status", "blocked");
-              doc.set("blocked_on", "erik");
-              doc.delete("erik_ticked");
+              if (scalar(doc, "erik_ticked") !== null)
+                return { item: yield* toItem(id), ticked: null };
+              const tickedAt = yield* nowIso;
+              doc.set("erik_ticked", tickedAt);
+              const saved = yield* save(id, { doc, body: current.parsed.body }, current.file);
+              return { ...saved, ticked: tickedAt };
             }
-            return { ...(yield* save(id, { doc, body: current.parsed.body }, current.file)), ticked: null };
-          }),
+            doc.delete("erik_ticked");
+            return {
+              ...(yield* save(id, { doc, body: current.parsed.body }, current.file)),
+              ticked: null,
+            };
+          }
+          if (input.done) {
+            doc.set("status", "done");
+          } else {
+            doc.set("status", "blocked");
+            doc.set("blocked_on", "erik");
+            doc.delete("erik_ticked");
+          }
+          return {
+            ...(yield* save(id, { doc, body: current.parsed.body }, current.file)),
+            ticked: null,
+          };
+        }),
+      );
+      if (result.ticked !== null) {
+        // The tick is saved either way; a failed wake is surfaced, not rolled back.
+        yield* wakePersonalAgent(result.item, result.ticked).pipe(
+          Effect.mapError(fail("Saved, but the personal agent could not be told.", id)),
         );
-        if (result.ticked !== null) {
-          // The tick is saved either way; a failed wake is surfaced, not rolled back.
-          yield* wakePersonalAgent(result.item, result.ticked).pipe(
-            Effect.mapError(fail("Saved, but the personal agent could not be told.", id)),
-          );
-        }
-        return { item: result.item };
+      }
+      return { item: result.item };
     });
 
     const dismiss: AttentionItemService["Service"]["dismiss"] = (input) =>
@@ -487,9 +498,7 @@ export const layer = Layer.effect(
       writeLock.withPermits(1)(
         Effect.gen(function* () {
           if (input.state === "done") {
-            return yield* Effect.fail(
-              itemError("Close a commitment with commitment_resolve and its proof."),
-            );
+            return yield* itemError("Close a commitment with commitment_resolve and its proof.");
           }
           const id = yield* checkId(input.id ?? todoSlug(input.title));
           const status = input.state === undefined ? undefined : COMMITMENT_STATUS[input.state];
@@ -519,7 +528,8 @@ export const layer = Layer.effect(
           doc.set("title", input.title);
           if (status !== undefined) {
             doc.set("status", status);
-            if (status === "blocked" && scalar(doc, "blocked_on") === null) doc.set("blocked_on", "erik");
+            if (status === "blocked" && scalar(doc, "blocked_on") === null)
+              doc.set("blocked_on", "erik");
             if (status !== "blocked") doc.delete("blocked_on");
           }
           if (input.ownerThreadId !== undefined) {
@@ -549,18 +559,17 @@ export const layer = Layer.effect(
           let body = current.parsed.body;
           if (input.state === "done") {
             if (proof === null && !/^## Proof\s*$/m.test(body)) {
-              return yield* Effect.fail(
-                itemError(
-                  "Done needs proof: screenshot paths, a log excerpt or a link you checked yourself.",
-                  { itemId: id },
-                ),
+              return yield* itemError(
+                "Done needs proof: screenshot paths, a log excerpt or a link you checked yourself.",
+                { itemId: id },
               );
             }
           }
           if (proof !== null) body = `${body.trimEnd()}\n\n## Proof\n${proof}`;
           const status = COMMITMENT_STATUS[input.state];
           doc.set("status", status);
-          if (status === "blocked" && scalar(doc, "blocked_on") === null) doc.set("blocked_on", "erik");
+          if (status === "blocked" && scalar(doc, "blocked_on") === null)
+            doc.set("blocked_on", "erik");
           if (status !== "blocked") doc.delete("blocked_on");
           return yield* save(id, { doc, body }, current.file);
         }),

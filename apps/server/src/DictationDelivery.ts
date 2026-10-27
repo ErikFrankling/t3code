@@ -22,6 +22,7 @@ import * as ThreadManagementService from "./orchestration-v2/ThreadManagementSer
 import * as ThreadMessageIntake from "./orchestration-v2/ThreadMessageIntake.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 import * as ServerSettings from "./serverSettings.ts";
+import * as DocumentText from "./provider/DocumentText.ts";
 
 export const speechServiceUrl = () =>
   process.env.T3CODE_STT_URL ?? "http://127.0.0.1:8781/dictation";
@@ -104,6 +105,7 @@ export const layer = Layer.effect(
       | FileSystem.FileSystem
       | ServerConfig.ServerConfig
       | ServerSettings.ServerSettingsService
+      | DocumentText.DocumentText
     >();
     const run = Effect.runPromiseWith(yield* Effect.context<never>());
     const queue = new DictationDeliveryQueue({

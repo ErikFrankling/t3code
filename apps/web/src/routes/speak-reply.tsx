@@ -11,7 +11,7 @@ import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments"
 
 export const SPEAK_REPLY_WINDOW_TITLE = "T3 Code — Speak reply";
 
-interface SpeakReplySearch {
+export interface SpeakReplySearch {
   readonly threadId: string;
   readonly text: string;
   readonly request: string;

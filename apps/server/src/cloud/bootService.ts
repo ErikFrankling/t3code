@@ -1673,11 +1673,11 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
         : problems.length === 0 &&
           !(manager.kind === "systemd" && systemdUnsafeValue(planForUnit(unit))) &&
           normalizeUnit(thisHomeUnit) === normalizeUnit(manager.render(planForUnit(unit))) &&
-        runtimeEntryExists &&
-        Option.isSome(runtimeSentinel) &&
-        runtimeSentinel.value.trim() === input.cliVersion &&
-        state?.activeVersion === input.cliVersion &&
-        state?.update?.status !== "pending",
+          runtimeEntryExists &&
+          Option.isSome(runtimeSentinel) &&
+          runtimeSentinel.value.trim() === input.cliVersion &&
+          state?.activeVersion === input.cliVersion &&
+          state?.update?.status !== "pending",
       unitPath,
       logPath,
     };

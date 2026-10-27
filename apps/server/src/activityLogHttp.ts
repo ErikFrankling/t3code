@@ -32,8 +32,8 @@ export const layerActivityLogRoute = HttpRouter.add(
       EnvironmentScopeRequiredError: HttpServerRespondable.toResponse,
     }),
     Effect.tapError((cause) => Effect.logError("activity_log.request_failed", { cause })),
-    Effect.catch(() =>
-      Effect.succeed(HttpServerResponse.text("The activity event is invalid.", { status: 400 })),
+    Effect.orElseSucceed(() =>
+      HttpServerResponse.text("The activity event is invalid.", { status: 400 }),
     ),
   ),
 );
