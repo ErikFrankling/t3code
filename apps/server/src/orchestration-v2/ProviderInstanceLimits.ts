@@ -38,8 +38,8 @@ export const limitsLayer = Layer.effect(
   Effect.gen(function* () {
     const state = yield* Ref.make<ReadonlyMap<string, number>>(new Map());
     return ProviderInstanceLimits.of({
-      markExhausted: (instanceId, resetAt) =>
-        Effect.gen(function* () {
+      markExhausted: Effect.fn("ProviderInstanceLimits.markExhausted")(
+        function* (instanceId, resetAt) {
           const nowMs = DateTime.toEpochMillis(yield* DateTime.now);
           const parsed = resetAt ? Date.parse(resetAt) : Number.NaN;
           const untilMs = !Number.isFinite(parsed)
@@ -51,7 +51,8 @@ export const limitsLayer = Layer.effect(
             return next;
           });
           return untilMs;
-        }),
+        },
+      ),
       exhaustedUntil: Ref.get(state),
     });
   }),
