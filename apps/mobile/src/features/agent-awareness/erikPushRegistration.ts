@@ -42,6 +42,19 @@ async function registerWith(environmentId: EnvironmentId, body: object): Promise
   return response.ok || response.status === 404;
 }
 
+/** The device's push token, or null when not allowed or without Firebase in this build. */
+async function readPushToken(): Promise<string | null> {
+  try {
+    const permission = await Effect.runPromise(requestAgentNotificationPermission);
+    if (permission.type !== "granted") return null;
+    return (await Notifications.getDevicePushTokenAsync()).data as string;
+  } catch (error) {
+    // No Firebase in this build (no google-services.json): nothing to register.
+    console.warn("[erik-push] registration failed", error);
+    return null;
+  }
+}
+
 export function useErikPushRegistration(): void {
   const { savedConnectionsById } = useSavedRemoteConnections();
   const environmentIds = Object.keys(savedConnectionsById).sort().join(",");
@@ -52,32 +65,25 @@ export function useErikPushRegistration(): void {
     let timer: ReturnType<typeof setTimeout> | null = null;
     let token: string | null = null;
     const pending = new Set(environmentIds.split(",") as EnvironmentId[]);
+    const appId = Constants.expoConfig?.android?.package ?? "";
 
     const attempt = async () => {
       if (timer) clearTimeout(timer);
       timer = null;
+      if (token === null) token = await readPushToken();
+      if (token === null) return;
+      let deviceId: Awaited<ReturnType<typeof loadAgentAwarenessDeviceId>>;
       try {
-        if (!token) {
-          const permission = await Effect.runPromise(requestAgentNotificationPermission);
-          if (permission.type !== "granted") return;
-          token = (await Notifications.getDevicePushTokenAsync()).data as string;
-        }
-        const deviceId = await loadAgentAwarenessDeviceId();
-        const body = {
-          token,
-          deviceId,
-          appId: Constants.expoConfig?.android?.package ?? "",
-          label: "Android",
-        };
-        for (const environmentId of pending) {
-          if (cancelled) return;
-          const done = await registerWith(environmentId, body).catch(() => false);
-          if (done) pending.delete(environmentId);
-        }
+        deviceId = await loadAgentAwarenessDeviceId();
       } catch (error) {
-        // No Firebase in this build (no google-services.json): nothing to register.
         console.warn("[erik-push] registration failed", error);
         return;
+      }
+      const body = { token, deviceId, appId, label: "Android" };
+      for (const environmentId of pending) {
+        if (cancelled) return;
+        const done = await registerWith(environmentId, body).catch(() => false);
+        if (done) pending.delete(environmentId);
       }
       if (!cancelled && pending.size > 0) timer = setTimeout(() => void attempt(), RETRY_MS);
     };
