@@ -57,8 +57,8 @@ export const layerPushDeviceRoute = Layer.unwrap(
           EnvironmentScopeRequiredError: HttpServerRespondable.toResponse,
         }),
         Effect.tapError((cause) => Effect.logError("push.register_failed", { cause })),
-        Effect.catch(() =>
-          Effect.succeed(HttpServerResponse.text("The push request failed.", { status: 400 })),
+        Effect.orElseSucceed(() =>
+          HttpServerResponse.text("The push request failed.", { status: 400 }),
         ),
       ),
     );
@@ -90,8 +90,8 @@ export const layerPushSendRoute = Layer.unwrap(
           EnvironmentScopeRequiredError: HttpServerRespondable.toResponse,
         }),
         Effect.tapError((cause) => Effect.logError("push.send_failed", { cause })),
-        Effect.catch(() =>
-          Effect.succeed(HttpServerResponse.text("The push request failed.", { status: 400 })),
+        Effect.orElseSucceed(() =>
+          HttpServerResponse.text("The push request failed.", { status: 400 }),
         ),
       ),
     );

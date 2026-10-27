@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WelcomeRouteImport } from './routes/welcome'
+import { Route as SpeakReplyRouteImport } from './routes/speak-reply'
 import { Route as PairRouteImport } from './routes/pair'
 import { Route as GuestRouteImport } from './routes/guest'
 import { Route as ConnectAgentRouteImport } from './routes/connect-agent'
@@ -56,6 +57,11 @@ import { Route as ChatEnvironmentIdThreadIdRouteImport } from './routes/_chat.$e
 const WelcomeRoute = WelcomeRouteImport.update({
   id: '/welcome',
   path: '/welcome',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SpeakReplyRoute = SpeakReplyRouteImport.update({
+  id: '/speak-reply',
+  path: '/speak-reply',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PairRoute = PairRouteImport.update({
@@ -280,6 +286,7 @@ export interface FileRoutesByFullPath {
   '/connect-agent': typeof ConnectAgentRoute
   '/guest': typeof GuestRoute
   '/pair': typeof PairRoute
+  '/speak-reply': typeof SpeakReplyRoute
   '/welcome': typeof WelcomeRoute
   '/new': typeof ChatNewRoute
   '/personal': typeof ChatPersonalRoute
@@ -323,6 +330,7 @@ export interface FileRoutesByTo {
   '/connect-agent': typeof ConnectAgentRoute
   '/guest': typeof GuestRoute
   '/pair': typeof PairRoute
+  '/speak-reply': typeof SpeakReplyRoute
   '/welcome': typeof WelcomeRoute
   '/new': typeof ChatNewRoute
   '/personal': typeof ChatPersonalRoute
@@ -369,6 +377,7 @@ export interface FileRoutesById {
   '/connect-agent': typeof ConnectAgentRoute
   '/guest': typeof GuestRoute
   '/pair': typeof PairRoute
+  '/speak-reply': typeof SpeakReplyRoute
   '/welcome': typeof WelcomeRoute
   '/_chat/new': typeof ChatNewRoute
   '/_chat/personal': typeof ChatPersonalRoute
@@ -416,6 +425,7 @@ export interface FileRouteTypes {
     | '/connect-agent'
     | '/guest'
     | '/pair'
+    | '/speak-reply'
     | '/welcome'
     | '/new'
     | '/personal'
@@ -459,6 +469,7 @@ export interface FileRouteTypes {
     | '/connect-agent'
     | '/guest'
     | '/pair'
+    | '/speak-reply'
     | '/welcome'
     | '/new'
     | '/personal'
@@ -504,6 +515,7 @@ export interface FileRouteTypes {
     | '/connect-agent'
     | '/guest'
     | '/pair'
+    | '/speak-reply'
     | '/welcome'
     | '/_chat/new'
     | '/_chat/personal'
@@ -550,6 +562,7 @@ export interface RootRouteChildren {
   ConnectAgentRoute: typeof ConnectAgentRoute
   GuestRoute: typeof GuestRoute
   PairRoute: typeof PairRoute
+  SpeakReplyRoute: typeof SpeakReplyRoute
   WelcomeRoute: typeof WelcomeRoute
   ProjectsProjectKeyRoute: typeof ProjectsProjectKeyRoute
   ThreadsEnvironmentIdThreadIdRoute: typeof ThreadsEnvironmentIdThreadIdRoute
@@ -562,6 +575,13 @@ declare module '@tanstack/react-router' {
       path: '/welcome'
       fullPath: '/welcome'
       preLoaderRoute: typeof WelcomeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/speak-reply': {
+      id: '/speak-reply'
+      path: '/speak-reply'
+      fullPath: '/speak-reply'
+      preLoaderRoute: typeof SpeakReplyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pair': {
@@ -955,6 +975,7 @@ const rootRouteChildren: RootRouteChildren = {
   ConnectAgentRoute: ConnectAgentRoute,
   GuestRoute: GuestRoute,
   PairRoute: PairRoute,
+  SpeakReplyRoute: SpeakReplyRoute,
   WelcomeRoute: WelcomeRoute,
   ProjectsProjectKeyRoute: ProjectsProjectKeyRoute,
   ThreadsEnvironmentIdThreadIdRoute: ThreadsEnvironmentIdThreadIdRoute,
