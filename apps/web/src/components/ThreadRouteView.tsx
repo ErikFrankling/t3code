@@ -115,16 +115,6 @@ export function ThreadRouteView({
       ? target.threadRef.environmentId
       : null;
 
-  // The personal agent is not another thread: its chat sits inside its home.
-  const serverConfigs = useServerConfigs();
-  const personalAgentEnvironmentId =
-    target.kind === "server" &&
-    target.threadRef.threadId === PERSONAL_AGENT_THREAD_ID &&
-    serverConfigs.get(target.threadRef.environmentId)?.environment.capabilities.attentionItems ===
-      true
-      ? target.threadRef.environmentId
-      : null;
-
   let view: React.ReactNode = null;
   let redirect: React.ReactNode = null;
   if (target.kind === "draft") {

@@ -72,7 +72,7 @@ export function HomeRouteScreen() {
     else setLocalSearchQuery(query);
   };
   const handleSelectThread = useCallback(
-    (thread: EnvironmentThreadShell) =>
+    (thread: Pick<EnvironmentThreadShell, "environmentId" | "id">) =>
       selectDetail({
         name: "Thread",
         params: { environmentId: String(thread.environmentId), threadId: String(thread.id) },

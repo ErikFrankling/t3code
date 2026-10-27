@@ -211,7 +211,7 @@ export const make = Effect.gen(function* () {
   });
 
   return DesktopDictation.of({
-    handle: (request) =>
+    handle: Effect.fn("DesktopDictation.handle")((request) =>
       Effect.sync(() => {
         if (request.action === "status") return reply(request);
         if (!tracker.send()) {
@@ -225,7 +225,8 @@ export const make = Effect.gen(function* () {
         }
         return reply(request);
       }),
-    reportFrom: (senderId, recording) =>
+    ),
+    reportFrom: Effect.fn("DesktopDictation.reportFrom")((senderId, recording) =>
       Effect.sync(() => {
         const contents = Electron.webContents.fromId(senderId);
         if (contents === undefined || contents.isDestroyed()) {
@@ -242,6 +243,7 @@ export const make = Effect.gen(function* () {
           recording,
         );
       }),
+    ),
   });
 });
 
