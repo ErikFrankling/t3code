@@ -69,7 +69,7 @@ export function HomeRouteScreen() {
     else if (workspace) workspace.dispatch({ type: "query", query, tab: "threads" });
     else setLocalSearchQuery(query);
   };
-  const handleSelectThread = (thread: EnvironmentThreadShell) =>
+  const handleSelectThread = (thread: Pick<EnvironmentThreadShell, "environmentId" | "id">) =>
     selectDetail({
       name: "Thread",
       params: { environmentId: String(thread.environmentId), threadId: String(thread.id) },
