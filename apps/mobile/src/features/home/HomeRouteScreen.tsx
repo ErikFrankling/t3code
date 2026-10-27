@@ -78,7 +78,7 @@ export function HomeRouteScreen() {
       runWhenHomeCovered(() => workspace.cancelSearch("threads"));
     selectDetail({ name: "Thread", params });
   };
-  const handleSelectThread = (thread: EnvironmentThreadShell) =>
+  const handleSelectThread = (thread: Pick<EnvironmentThreadShell, "environmentId" | "id">) =>
     selectThreadRoute({ environmentId: String(thread.environmentId), threadId: String(thread.id) });
   const handleNewThreadOnBranch = (thread: EnvironmentThreadShell) => {
     selectThreadRoute({
