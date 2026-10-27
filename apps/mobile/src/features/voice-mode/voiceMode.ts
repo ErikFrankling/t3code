@@ -6,6 +6,7 @@ import { fetch } from "expo/fetch";
 import { useSyncExternalStore } from "react";
 
 import { voiceCall } from "../../native/voiceCall";
+import { voiceModeOpen } from "./voiceModeOpen";
 import { reportVoiceModeSpan } from "../threads/activityLog";
 import {
   playVoiceCue,
@@ -107,6 +108,7 @@ const listeners = new Set<() => void>();
 
 function set(patch: Partial<VoiceModeState>) {
   state = { ...state, ...patch };
+  voiceModeOpen.set(state.on);
   for (const listener of listeners) listener();
 }
 

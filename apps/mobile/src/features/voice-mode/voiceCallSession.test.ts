@@ -60,6 +60,7 @@ vi.mock("react-native", () => ({
   AppRegistry: { registerHeadlessTask: () => undefined },
 }));
 vi.mock("expo-audio", () => ({
+  AudioModule: {},
   getRecordingPermissionsAsync: async () => ({ granted: true }),
   requestRecordingPermissionsAsync: async () => ({ granted: true }),
   setAudioModeAsync: async () => log.push("expo-audio setAudioModeAsync"),
