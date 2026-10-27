@@ -172,7 +172,9 @@ const voiceInputAtom = Atom.make((get) => {
     streamPhase = phase;
     if (phase === "recording") beginDictationStream(recorder.uri, session.ownerKey);
     else if (phase === "idle" || phase === "error") endDictationStream();
-    if (phase === "idle") offerKeptRecording();
+    // The controller deletes a delivered recording right after it goes idle,
+    // in the same tick; look for kept files only after that.
+    if (phase === "idle") setTimeout(offerKeptRecording, 0);
   });
   // A recording is deleted only once its words reached the chat or the draft,
   // so any file still here when dictation is idle is one that did not (the app
