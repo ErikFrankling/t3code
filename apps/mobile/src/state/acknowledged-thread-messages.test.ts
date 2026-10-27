@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
+
+// No thread is mounted in these tests, so nothing is echoed yet.
+vi.mock("./threads", () => ({ environmentThreadDetails: { threadAtom: () => ({}) } }));
 
 import {
   acknowledgedThreadMessagesAtom,

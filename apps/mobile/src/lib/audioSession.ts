@@ -1,5 +1,4 @@
 import { AudioModule, setAudioModeAsync, setIsAudioActiveAsync } from "expo-audio";
-import { Platform } from "react-native";
 
 type AudioSessionToken = {
   readonly kind: "playback" | "recording";
@@ -63,7 +62,11 @@ export function isAudioSessionOwner(token: AudioSessionToken): boolean {
 
 export function activateAudioSession(
   token: AudioSessionToken,
-  options: { readonly nativePlayback?: boolean; readonly allowBluetoothRecording?: boolean } = {},
+  options: {
+    readonly nativePlayback?: boolean;
+    readonly allowBluetoothRecording?: boolean;
+    readonly backgroundRecording?: boolean;
+  } = {},
 ): Promise<boolean> {
   return enqueue(async () => {
     if (!isAudioSessionOwner(token)) return false;
@@ -77,9 +80,7 @@ export function activateAudioSession(
       interruptionMode: "doNotMix",
       playsInSilentMode: true,
       shouldPlayInBackground: false,
-      // Locking the phone or a screen on top (a sign-in, a call) never stops a
-      // dictation: expo-audio records on in a foreground service.
-      allowsBackgroundRecording: token.kind === "recording" && Platform.OS === "android",
+      ...(options.backgroundRecording ? { allowsBackgroundRecording: true } : {}),
     });
     if (!isAudioSessionOwner(token)) return false;
     await setIsAudioActiveAsync(true);
