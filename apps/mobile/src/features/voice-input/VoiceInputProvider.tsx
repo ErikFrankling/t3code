@@ -239,25 +239,3 @@ function keptRecordings(): File[] {
   );
   return files.sort((a, b) => (b.modificationTime ?? 0) - (a.modificationTime ?? 0));
 }
-
-/** Recordings on the device that were never sent or put into a draft, newest first. */
-function keptRecordings(): File[] {
-  const files: File[] = [];
-  const add = (directory: Directory, match: (name: string) => boolean) => {
-    try {
-      if (!directory.exists) return;
-      for (const entry of directory.list()) {
-        if (entry instanceof File && match(entry.name) && (entry.size ?? 0) > 0) files.push(entry);
-      }
-    } catch {}
-  };
-  add(new Directory(Paths.document, "Audio"), (name) => name.endsWith(".aac"));
-  // Where recordings were kept before (the cache), in case an old one survived.
-  add(new Directory(Paths.cache, "Audio"), (name) => name.endsWith(".aac"));
-  // Voice mode's turns (they were kept in the cache before).
-  add(
-    new Directory(Paths.cache),
-    (name) => name.startsWith("voice-call-") && name.endsWith(".aac"),
-  );
-  return files.sort((a, b) => (b.modificationTime ?? 0) - (a.modificationTime ?? 0));
-}

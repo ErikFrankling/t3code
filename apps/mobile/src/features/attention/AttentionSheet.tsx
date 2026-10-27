@@ -33,7 +33,7 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { useAdaptiveWorkspaceLayout } from "../layout/AdaptiveWorkspaceLayout";
 import { PullRequestMarkdown } from "../pull-requests/PullRequestMarkdown";
 import { SpokenFeed, TodayStrip } from "./PersonalAgentHomeParts";
-import { useAndroidWorkspaceSelection } from "../workspace/useAndroidWorkspaceSelection";
+import { useSelectWorkspaceDetail } from "../workspace/useSelectWorkspaceDetail";
 
 const HEADER_SCROLL_EDGE_EFFECTS = nativeHeaderScrollEdgeEffects(Platform.OS, Platform.Version);
 
@@ -234,7 +234,7 @@ export function AttentionSheet({ route }: StaticScreenProps<AttentionTarget>) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const theme = useUniwindTheme();
-  const selectAndroidWorkspace = useAndroidWorkspaceSelection();
+  const selectDetail = useSelectWorkspaceDetail();
   const { data, error } = useEnvironmentQuery(
     serverEnvironment.attentionItemsLive({ environmentId, input: {} }),
   );
@@ -267,9 +267,7 @@ export function AttentionSheet({ route }: StaticScreenProps<AttentionTarget>) {
     });
   };
   const openThread = (threadId: ThreadId) => {
-    const destination = { environmentId, threadId };
-    if (Platform.OS === "android") selectAndroidWorkspace({ name: "Thread", params: destination });
-    else navigation.navigate("Thread", destination);
+    selectDetail({ name: "Thread", params: { environmentId, threadId } });
   };
 
   const items = data?.items ?? [];

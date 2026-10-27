@@ -50,6 +50,8 @@ describe("UsageLimitRecoveryCard", () => {
         <UsageLimitRecoveryCard
           thread={failedThread(new Date(30 * DAY_MS).toISOString())}
           environmentId={"env-1" as EnvironmentId}
+          providers={[]}
+          onSelectModel={() => {}}
         />,
       ),
     );
