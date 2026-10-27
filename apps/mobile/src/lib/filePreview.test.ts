@@ -122,6 +122,9 @@ vi.mock("expo", () => ({
     return player;
   },
 }));
+// The fork's read-aloud player (through ThreadFeed) keeps its clips in files.
+vi.mock("expo-file-system", () => ({ File: class {}, Paths: {} }));
+vi.mock("expo/fetch", () => ({ fetch: vi.fn() }));
 vi.mock("expo-video", () => ({
   useVideoPlayer: () => audio.video,
   VideoView: () => null,
