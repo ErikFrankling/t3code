@@ -22,6 +22,7 @@ vi.mock("../../components/ui/Button", () => ({
 }));
 vi.mock("../../state/threads", () => ({ threadEnvironment: { updateMetadata: {} } }));
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
+vi.mock("../../lib/uuid", () => ({ uuidv4: () => "uuid" }));
 
 import { UsageLimitRecoveryCard } from "./UsageLimitRecoveryCard";
 
@@ -34,6 +35,7 @@ function failedThread(resetAt: string): EnvironmentThreadShell {
     snoozedUntil: null,
     latestRun: { runId: "run-1", completedAt: new Date(0).toISOString() },
     limitRecovery: null,
+    modelSelection: { instanceId: "claudeAgent", model: "claude" },
     runtime: { status: "failed", lastErrorClass: "usage_limit", usageLimitResetAt: resetAt },
   } as unknown as EnvironmentThreadShell;
 }
