@@ -71,7 +71,6 @@ import {
   ThreadRouteScreen,
 } from "./features/threads/ThreadRouteScreen";
 import { AttentionSheet } from "./features/attention/AttentionSheet";
-import { ThreadRouteScreen } from "./features/threads/ThreadRouteScreen";
 import { McpAppFullscreenScreen } from "./features/threads/McpAppFullscreenScreen";
 import { ConnectionsRouteScreen } from "./features/connection/ConnectionsRouteScreen";
 import { ConnectionsNewRouteScreen } from "./features/connection/ConnectionsNewRouteScreen";
