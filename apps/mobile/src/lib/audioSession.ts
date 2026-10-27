@@ -76,8 +76,7 @@ export function activateAudioSession(
       shouldPlayInBackground: false,
       // Locking the phone or a screen on top (a sign-in, a call) never stops a
       // dictation: expo-audio records on in a foreground service.
-      allowsBackgroundRecording:
-        token.kind === "recording" && Platform.OS === "android",
+      allowsBackgroundRecording: token.kind === "recording" && Platform.OS === "android",
     });
     if (!isAudioSessionOwner(token)) return false;
     await setIsAudioActiveAsync(true);

@@ -70,7 +70,7 @@ const presenceRoute = HttpRouter.add(
   Effect.gen(function* () {
     yield* authenticateRawRouteWithScope(AuthOrchestrationReadScope);
     return HttpServerResponse.jsonUnsafe(voicePresence.presence());
-  }).pipe(Effect.catchTags(authErrors), Effect.catch(invalid)),
+  }).pipe(Effect.catchTags(authErrors)),
 );
 
 /** The speak daemon hands a message to the phone; 409 when no phone is in voice mode there. */
@@ -105,7 +105,7 @@ const statusRoute = HttpRouter.add(
     const status = id ? voicePresence.status(id) : null;
     if (!status) return HttpServerResponse.text("Unknown message.", { status: 404 });
     return HttpServerResponse.jsonUnsafe({ id, status });
-  }).pipe(Effect.catchTags(authErrors), Effect.catch(invalid)),
+  }).pipe(Effect.catchTags(authErrors)),
 );
 
 export const layerVoicePresenceRoutes = Layer.mergeAll(

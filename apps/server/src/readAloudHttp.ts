@@ -34,10 +34,8 @@ export const layerReadAloudRoute = HttpRouter.add(
       EnvironmentScopeRequiredError: HttpServerRespondable.toResponse,
     }),
     Effect.tapError((cause) => Effect.logError("read_aloud.request_failed", { cause })),
-    Effect.catch(() =>
-      Effect.succeed(
-        HttpServerResponse.text("The read-aloud request is invalid.", { status: 400 }),
-      ),
+    Effect.orElseSucceed(() =>
+      HttpServerResponse.text("The read-aloud request is invalid.", { status: 400 }),
     ),
   ),
 );
