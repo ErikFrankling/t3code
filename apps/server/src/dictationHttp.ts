@@ -79,12 +79,10 @@ export const layerDictationRoute = Layer.unwrap(
           EnvironmentScopeRequiredError: HttpServerRespondable.toResponse,
         }),
         Effect.tapError((cause) => Effect.logError("dictation.request_failed", { cause })),
-        Effect.catch(() =>
-          Effect.succeed(
-            HttpServerResponse.text(
-              "The local speech service is unavailable or the request is invalid.",
-              { status: 502 },
-            ),
+        Effect.orElseSucceed(() =>
+          HttpServerResponse.text(
+            "The local speech service is unavailable or the request is invalid.",
+            { status: 502 },
           ),
         ),
       ),
@@ -147,12 +145,10 @@ export const layerDictationAudioRoute = HttpRouter.add(
       EnvironmentInternalError: HttpServerRespondable.toResponse,
       EnvironmentScopeRequiredError: HttpServerRespondable.toResponse,
     }),
-    Effect.catch(() =>
-      Effect.succeed(
-        HttpServerResponse.text("The local speech service could not take the recording.", {
-          status: 502,
-        }),
-      ),
+    Effect.orElseSucceed(() =>
+      HttpServerResponse.text("The local speech service could not take the recording.", {
+        status: 502,
+      }),
     ),
   ),
 );

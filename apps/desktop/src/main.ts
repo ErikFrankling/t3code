@@ -181,9 +181,7 @@ const layerDesktopSnapShot = DesktopSnapShot.layer.pipe(
   Layer.provideMerge(layerDesktopWindow),
   Layer.provideMerge(layerDesktopFoundation),
 );
-const layerSpeakReplyWindow = SpeakReplyWindow.layer.pipe(
-  Layer.provideMerge(layerDesktopFoundation),
-);
+const layerSpeakReplyWindow = SpeakReplyWindow.layer.pipe(Layer.provide(layerDesktopFoundation));
 const layerDesktopAppActivation = DesktopAppActivation.layer.pipe(
   Layer.provide(layerDesktopWindow),
   // Merged: the IPC handlers reach the speak-reply window too.

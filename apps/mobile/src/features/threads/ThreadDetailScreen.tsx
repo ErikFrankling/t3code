@@ -13,6 +13,7 @@ import { parseThreadKey, threadKey } from "@t3tools/client-runtime/state/entitie
 import { createThreadVisitTracker } from "@t3tools/client-runtime/state/thread-visits";
 import { useChildThreadInputs, useThreadReportedModelSelection } from "../../state/entities";
 import { UsageLimitRecoveryCard } from "./UsageLimitRecoveryCard";
+import { updateThreadDraftModelSelection } from "../../state/use-thread-composer-state";
 import { ChatGptUsageLimitNotice } from "./ChatGptUsageLimitNotice";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import {
@@ -1515,7 +1516,13 @@ function ThreadDetailBody(props: ThreadDetailScreenProps) {
                     thread={props.selectedThread}
                     environmentId={props.environmentId}
                     providers={props.serverConfig?.providers ?? []}
-                    onSelectModel={props.onUpdateThreadModelSelection}
+                    onSelectModel={(selection) =>
+                      updateThreadDraftModelSelection(
+                        selectedThreadKey,
+                        selection,
+                        props.serverConfig?.providers ?? [],
+                      )
+                    }
                   />
                   <ChatGptUsageLimitNotice
                     key={`chatgpt-limit:${props.selectedThread.latestRun?.runId}`}

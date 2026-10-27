@@ -187,10 +187,6 @@ function RootRouteBranch() {
     return (
       <ToastProvider>
         <AnchoredToastProvider>
-          <BrowserChromeThemeSync key={pathname} />
-          <ContrastAppearanceSync />
-          <EnvironmentThemeSync />
-          <FontAppearanceSync />
           <Outlet />
         </AnchoredToastProvider>
       </ToastProvider>
