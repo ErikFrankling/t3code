@@ -103,6 +103,39 @@ describe("VoiceSession", () => {
     expect(fake.session.getSnapshot().phase).toBe("idle");
   });
 
+  it("reads a message that asks for no answer and leaves the microphone shut", async () => {
+    const fake = setup();
+    fake.session.start();
+    fake.session.say({ key: "u1", text: "The build passed.", listen: false });
+    expect(fake.session.getSnapshot().phase).toBe("speaking");
+    fake.finish();
+    await tick();
+    await finishAll(fake);
+    expect(fake.done).toEqual(["u1:played"]);
+    expect(fake.calls).toEqual([]);
+    expect(fake.started.map((s) => s.key)).toEqual(["u1"]);
+    expect(fake.session.getSnapshot().phase).toBe("idle");
+    // Erik can still answer on his own, and a later message is read as usual.
+    fake.session.talk();
+    await finishAll(fake);
+    expect(fake.session.getSnapshot().phase).toBe("listening");
+    expect(fake.calls).toEqual(["listen"]);
+  });
+
+  it("with several waiting, only the last one decides whether the microphone opens", async () => {
+    const fake = setup();
+    fake.session.start();
+    fake.session.say({ key: "u1", text: "First." });
+    fake.session.say({ key: "u2", text: "Second.", listen: false });
+    fake.finish();
+    await tick();
+    fake.finish();
+    await tick();
+    expect(fake.done).toEqual(["u1:played", "u2:played"]);
+    expect(fake.calls).toEqual([]);
+    expect(fake.session.getSnapshot().phase).toBe("idle");
+  });
+
   it("lets Erik talk any time, and holds the agent's message until he has sent", async () => {
     const fake = setup();
     fake.session.start();
