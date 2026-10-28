@@ -1,8 +1,14 @@
-import { PERSONAL_AGENT_THREAD_ID } from "@t3tools/contracts";
+import {
+  DEFAULT_SPEAK_MODE,
+  PERSONAL_AGENT_THREAD_ID,
+  SpeakMode,
+  type SpeakMode as SpeakModeValue,
+} from "@t3tools/contracts";
 import type { VoiceInputController } from "@t3tools/client-runtime/voice-input";
 import { VoiceSession } from "@t3tools/client-runtime/voice-session";
 import { getRecordingPermissionsAsync, requestRecordingPermissionsAsync } from "expo-audio";
 import { fetch } from "expo/fetch";
+import * as Schema from "effect/Schema";
 import { useSyncExternalStore } from "react";
 
 import { voiceCall } from "../../native/voiceCall";
@@ -34,6 +40,12 @@ import { getDictationPreview } from "../voice-input/dictationPreview";
  *
  * Outside voice mode the phone never speaks unprompted: no presence, so the
  * daemon never routes anything here.
+ *
+ * Whether the microphone opens after a message is Erik's voice mode, one
+ * setting shared with the PC (`/api/speak-mode`): "Conversation" opens it,
+ * "Voice out only" (the default) reads and waits, "Silent" says nothing. The
+ * card has the toggle; each poll brings back the value, so a flip on the PC
+ * shows here too.
  */
 type Composer = {
   readonly start: () => Promise<void>;
@@ -101,9 +113,16 @@ type VoiceModeState = {
   readonly on: boolean;
   readonly threadId: string | null;
   readonly error: string | null;
+  /** Erik's voice mode, as the environment last said. */
+  readonly speakMode: SpeakModeValue;
 };
 
-let state: VoiceModeState = { on: false, threadId: null, error: null };
+let state: VoiceModeState = {
+  on: false,
+  threadId: null,
+  error: null,
+  speakMode: DEFAULT_SPEAK_MODE,
+};
 const listeners = new Set<() => void>();
 
 function set(patch: Partial<VoiceModeState>) {
@@ -115,7 +134,14 @@ function set(patch: Partial<VoiceModeState>) {
 const deviceId = `phone-${Math.random().toString(36).slice(2, 10)}`;
 let polling = 0;
 
-type Utterance = { readonly id: string; readonly text: string; readonly source?: string };
+type Utterance = {
+  readonly id: string;
+  readonly text: string;
+  readonly source?: string;
+  readonly listen?: boolean;
+};
+
+const isSpeakMode = Schema.is(SpeakMode);
 
 async function beat(waitMs: number): Promise<ReadonlyArray<Utterance>> {
   const connection = readAloudConnection();
@@ -141,7 +167,11 @@ async function beat(waitMs: number): Promise<ReadonlyArray<Utterance>> {
       },
     );
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return ((await response.json()) as { utterances?: Utterance[] }).utterances ?? [];
+    const body = (await response.json()) as { utterances?: Utterance[]; speakMode?: unknown };
+    if (isSpeakMode(body.speakMode) && body.speakMode !== state.speakMode) {
+      set({ speakMode: body.speakMode });
+    }
+    return body.utterances ?? [];
   } catch (error) {
     done.unshift(...reports);
     throw error;
@@ -162,7 +192,12 @@ async function poll(run: number) {
     for (const utterance of utterances) {
       speaksHere = true;
       spokenSources.set(utterance.id, utterance.source ?? utterance.text);
-      voiceSession.say({ key: utterance.id, text: utterance.text, mode: "full" });
+      voiceSession.say({
+        key: utterance.id,
+        text: utterance.text,
+        mode: "full",
+        listen: utterance.listen !== false,
+      });
     }
     // A poll that came back empty at once (no connection yet, a failure)
     // waits before the next: otherwise the loop spins and freezes the app.
@@ -190,6 +225,8 @@ async function start(threadId: string) {
     return;
   }
   voiceSession.start();
+  // Presence and Erik's voice mode right away, not after the first long poll.
+  void beat(0).catch(() => undefined);
   void poll(++polling);
 }
 
@@ -235,7 +272,15 @@ export function voiceModeThreadChanged(
   }
   if (working || !reply || reply.id === replySeen) return;
   replySeen = reply.id;
-  voiceSession.say({ key: reply.id, text: reply.text, mode: "summary" });
+  // Silent: text only. Otherwise it is read, and the microphone opens after it
+  // only in the Conversation mode.
+  if (state.speakMode === "silent") return;
+  voiceSession.say({
+    key: reply.id,
+    text: reply.text,
+    mode: "summary",
+    listen: state.speakMode === "conversation",
+  });
 }
 
 // The call's buttons, for the whole of voice mode (the call's volume stays
@@ -254,7 +299,37 @@ voiceCall.onEvent((event) => {
   else if (event.type === "volume" || event.type === "button") voiceSession.endTurn();
 });
 
+/** Flips Erik's voice mode for the PC and the phone alike; shown at once, put back if it fails. */
+async function setSpeakMode(speakMode: SpeakModeValue) {
+  const before = state.speakMode;
+  if (speakMode === before) return;
+  set({ speakMode, error: null });
+  const connection = readAloudConnection();
+  const authorization = connection?.httpAuthorization ?? null;
+  try {
+    if (!connection || authorization?._tag === "Dpop") throw new Error("Not connected.");
+    const response = await fetch(new URL("/api/speak-mode", connection.httpBaseUrl).toString(), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(authorization ? { Authorization: `Bearer ${authorization.token}` } : {}),
+      },
+      body: JSON.stringify({ mode: speakMode }),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  } catch (error) {
+    // Unless another flip landed meanwhile.
+    if (state.speakMode === speakMode) {
+      set({
+        speakMode: before,
+        error: `Could not change the voice mode: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
+  }
+}
+
 export const voiceMode = {
+  setSpeakMode: (mode: SpeakModeValue) => void setSpeakMode(mode),
   /** Voice mode is on: a message sent now is tagged "voice mode" for the agent. */
   isOpen: () => state.on,
   start: (threadId: string) => void start(threadId),
