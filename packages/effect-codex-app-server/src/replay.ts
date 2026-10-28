@@ -558,9 +558,5 @@ const makeReplayClientWithState = Effect.fn(
 
   yield* drainInbound();
 
-  const client = yield* CodexClient.make(stdio, options, terminationError);
-  // A fixture ends with a clean runtime_exit that the tests inspect afterwards;
-  // a real process dying releases the session, a finished replay must not.
-  const { terminated: _terminated, ...replayClient } = client;
-  return CodexClient.CodexAppServerClient.of(replayClient);
+  return yield* CodexClient.make(stdio, options, terminationError);
 });
