@@ -123,6 +123,28 @@ device (`adb root; adb shell sendevent /dev/input/event13 1 114 1 ...`; `adb
 shell input keyevent` is injected and never reaches a media session while the
 screen is off).
 
+## Voice mode of the speak tool
+
+How the personal agent's `speak` tool treats the user is one setting, kept by
+the speak daemon on the PC (`~/.local/state/speak/mode`) and shared by the PC and
+the phone:
+
+- **Conversation**: it speaks, then voice input opens for the answer (the Speak
+  reply window on the PC, the microphone in phone voice mode).
+- **Voice out only** (the default): it speaks and voice input never opens by
+  itself; the user starts a reply. The reply window is not opened and the phone's
+  voice mode reads the message and waits.
+- **Silent**: nothing is said aloud, text only.
+
+The mode wins over the `reply` flag a caller passes. It is flipped from the
+**Personal agent** home (desktop and web, the toggle above the Today strip), the
+phone's voice-mode card, or `speak mode [conversation|voice-out|silent|next]`.
+The server exposes it as `GET`/`POST /api/speak-mode` (`{ mode }`; a `POST`
+without `mode` only reads), proxied to the daemon (`T3CODE_SPEAK_URL`, default
+`http://127.0.0.1:8791`; 503 where there is no daemon). The phone's presence poll
+(`POST /api/voice-presence`) also returns `speakMode`, and the daemon marks each
+message it hands the phone with `listen` (false unless Conversation).
+
 ## Speak reply
 
 When the personal agent speaks a message on the PC, the desktop app can open a

@@ -15,6 +15,7 @@ import { cn } from "../../lib/utils";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { Button } from "../ui/button";
+import { SpeakModeToggle } from "./SpeakModeToggle";
 import { TodoList } from "./TodoList";
 
 /** The personal agent home's live state: to-do items, what it said, today. */
@@ -301,6 +302,7 @@ export function PersonalAgentHome({
             {working ? "Working" : "Idle"}
           </span>
         </header>
+        <SpeakModeToggle environmentId={environmentId} />
         <TodayStrip today={state?.today ?? null} />
         <div className="mx-3 mb-1 flex rounded-md bg-muted p-0.5 2xl:hidden" role="tablist">
           {(

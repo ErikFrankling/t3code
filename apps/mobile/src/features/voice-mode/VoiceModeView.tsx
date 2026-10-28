@@ -1,5 +1,10 @@
 import { VOICE_LOOP_CUE_KEY } from "@t3tools/client-runtime/voice-loop";
-import type { EnvironmentId } from "@t3tools/contracts";
+import {
+  SPEAK_MODE_DESCRIPTIONS,
+  SPEAK_MODE_LABELS,
+  SPEAK_MODES,
+  type EnvironmentId,
+} from "@t3tools/contracts";
 import { useEffect, useRef, type ComponentRef } from "react";
 import { Pressable, ScrollView, useWindowDimensions, View } from "react-native";
 
@@ -92,9 +97,13 @@ export function VoiceModeCard(props: {
       ? "The full message is in the chat."
       : session.waiting > 0
         ? `${session.waiting} more to say`
-        : voiceCall.available
-          ? "Your agent may speak to you now. Volume down or an earbud tap to talk."
-          : "Your agent may speak to you now.";
+        : mode.speakMode === "silent"
+          ? "Silent: your agent writes, nothing is said aloud."
+          : mode.speakMode === "voice-out"
+            ? "Your agent may speak to you; tap Talk to answer."
+            : voiceCall.available
+              ? "Your agent may speak to you now. Volume down or an earbud tap to talk."
+              : "Your agent may speak to you now.";
 
   return (
     <View
@@ -137,6 +146,43 @@ export function VoiceModeCard(props: {
           />
           <Text className="text-sm text-foreground">Stop</Text>
         </Pressable>
+      </View>
+
+      <View
+        accessibilityRole="radiogroup"
+        accessibilityLabel="Voice mode"
+        className="mt-2 flex-row rounded-full bg-subtle p-0.5"
+      >
+        {SPEAK_MODES.map((value) => {
+          const selected = mode.speakMode === value;
+          return (
+            <Pressable
+              key={value}
+              accessibilityRole="radio"
+              accessibilityState={{ selected }}
+              accessibilityLabel={SPEAK_MODE_LABELS[value]}
+              accessibilityHint={SPEAK_MODE_DESCRIPTIONS[value]}
+              onPress={() => voiceMode.setSpeakMode(value)}
+              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+              className={
+                selected
+                  ? "h-8 flex-1 items-center justify-center rounded-full bg-primary px-1"
+                  : "h-8 flex-1 items-center justify-center rounded-full px-1"
+              }
+            >
+              <Text
+                numberOfLines={1}
+                className={
+                  selected
+                    ? "text-sm font-t3-bold text-primary-foreground"
+                    : "text-sm font-t3-medium text-foreground-secondary"
+                }
+              >
+                {SPEAK_MODE_LABELS[value]}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
 
       {talking ? (
