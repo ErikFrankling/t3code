@@ -13,7 +13,8 @@ import { VOICE_LOOP_CUE, VOICE_LOOP_CUE_KEY } from "./voiceLoop.ts";
  *
  * Messages that arrive while Erik talks wait until he has sent. A turn the
  * agent opened that stays silent is dropped, so the microphone is not left
- * open on an empty room.
+ * open on an empty room. In his "Voice out only" mode a message carries
+ * `listen: false`: it is read and the session goes back to waiting.
  */
 export type VoiceSessionPhase = "off" | "idle" | "speaking" | "cue" | "listening" | "sending";
 
@@ -22,6 +23,11 @@ export type VoiceUtterance = {
   readonly text: string;
   /** "full" reads the words as they are (the speak tool already wrote them for the ear). */
   readonly mode?: ReadAloudMode;
+  /**
+   * Open the microphone for an answer after it is read (the default). Erik's
+   * voice mode turns it off ("Voice out only"): he taps Talk when he wants to answer.
+   */
+  readonly listen?: boolean;
 };
 
 export type VoiceSessionSnapshot = {
@@ -200,6 +206,10 @@ export class VoiceSession {
     // Several at once: all of them first, then one answer.
     const next = this.#queue.shift();
     if (next) return void this.#speak(++this.#run, next, true);
+    if (utterance.listen === false) {
+      this.#set({ phase: "idle" });
+      return;
+    }
     void this.#listen(run, true);
   }
 
