@@ -47,6 +47,18 @@ describe("VoicePresence", () => {
     expect(presence.status("a")).toBe("played");
   });
 
+  it("passes on whether the phone should open the microphone after a message", async () => {
+    const presence = new VoicePresence(fakeClock());
+    await presence.beat(phone);
+    presence.say({ id: "a", text: "Quiet.", threadId: "personal-agent", listen: false });
+    presence.say({ id: "b", text: "Talk to me.", threadId: "personal-agent" });
+    const heard = await presence.beat(phone);
+    expect(heard.map((u) => [u.id, u.listen])).toEqual([
+      ["a", false],
+      ["b", undefined],
+    ]);
+  });
+
   it("only queues for the thread the phone is in voice mode on", async () => {
     const presence = new VoicePresence(fakeClock());
     await presence.beat({ ...phone, threadId: "other-thread" });
