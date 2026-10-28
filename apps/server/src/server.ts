@@ -40,6 +40,7 @@ import { layerDictationAudioRoute, layerDictationRoute } from "./dictationHttp.t
 import { layerActivityLogRoute } from "./activityLogHttp.ts";
 import { layerReadAloudRoute } from "./readAloudHttp.ts";
 import { layerPushDeviceRoute, layerPushSendRoute } from "./erikPushHttp.ts";
+import { layerSpeakModeRoutes } from "./speakModeHttp.ts";
 import { layerVoicePresenceRoutes } from "./voicePresenceHttp.ts";
 import { fixPath } from "./os-jank.ts";
 import * as Ws from "./ws.ts";
@@ -809,6 +810,7 @@ const layerMakeRoutes = Layer.mergeAll(
     layerPushDeviceRoute,
     layerPushSendRoute,
     layerVoicePresenceRoutes,
+    layerSpeakModeRoutes,
     DeviceHubProxy.layer,
     ServerBrowserStream.routeLayer,
     ServerHttp.layerStaticAndDevRoute,
