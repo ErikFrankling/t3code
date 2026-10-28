@@ -10,6 +10,7 @@ import {
 } from "effect/http";
 
 import { authenticateRawRouteWithScope } from "./http.ts";
+import { readSpeakMode } from "./speakMode.ts";
 import { voicePresence } from "./voicePresence.ts";
 
 const Id = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(200));
@@ -30,6 +31,8 @@ const SayRequest = Schema.Struct({
   text: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(4000)),
   /** The words the message was made from (the speak tool's text), for the chat's highlight. */
   source: Schema.optional(Schema.String.check(Schema.isMaxLength(8000))),
+  /** Open the microphone after it is said (false in Erik's "Voice out only" mode). */
+  listen: Schema.optional(Schema.Boolean),
 });
 
 const decodeBeat = Schema.decodeUnknownEffect(BeatRequest);
@@ -46,7 +49,11 @@ const invalid = () =>
     HttpServerResponse.text("The voice presence request is invalid.", { status: 400 }),
   );
 
-/** The phone in voice mode: report played messages, wait for the next ones (`voicePresence.ts`). */
+/**
+ * The phone in voice mode: report played messages, wait for the next ones
+ * (`voicePresence.ts`). The answer also carries Erik's voice mode, so the
+ * phone's toggle follows a flip made on the PC.
+ */
 const beatRoute = HttpRouter.add(
   "POST",
   "/api/voice-presence",
@@ -55,7 +62,8 @@ const beatRoute = HttpRouter.add(
     const request = yield* HttpServerRequest.HttpServerRequest;
     const body = yield* decodeBeat(yield* request.json);
     const utterances = yield* Effect.promise(() => voicePresence.beat(body));
-    return HttpServerResponse.jsonUnsafe({ utterances });
+    const speakMode = yield* Effect.promise(() => readSpeakMode(800));
+    return HttpServerResponse.jsonUnsafe({ utterances, speakMode: speakMode?.mode ?? null });
   }).pipe(
     Effect.catchTags(authErrors),
     Effect.tapError((cause) => Effect.logError("voice_presence.beat_failed", { cause })),
