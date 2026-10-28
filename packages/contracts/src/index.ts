@@ -75,4 +75,5 @@ export * from "./dictation.ts";
 export * from "./inputSource.ts";
 export * from "./activityLog.ts";
 export * from "./readAloud.ts";
+export * from "./speakMode.ts";
 export * from "./personalAgent.ts";

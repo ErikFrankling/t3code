@@ -31,6 +31,11 @@ export type Utterance = {
   readonly text: string;
   /** The words it was made from (the speak tool's text), so the chat can highlight it. */
   readonly source?: string | undefined;
+  /**
+   * Open the microphone for an answer once it is said. The speak daemon says
+   * no unless Erik's voice mode is "Conversation"; absent means yes.
+   */
+  readonly listen?: boolean | undefined;
   readonly threadId: string;
   readonly createdAt: number;
 };
@@ -206,6 +211,7 @@ export class VoicePresence {
         id: entry.id,
         text: entry.text,
         source: entry.source,
+        listen: entry.listen,
         threadId: entry.threadId,
         createdAt: entry.createdAt,
       });
