@@ -621,9 +621,12 @@ const settledCreationOutcomeKeysAtom = Atom.make((get): ReadonlyArray<string> =>
 }).pipe(Atom.withLabel("mobile:thread-outbox:settled-creation-outcomes"));
 
 function deliveredSequence(
-  result: AtomCommandResult<{ readonly sequence?: number }, unknown>,
+  result: AtomCommandResult<{ readonly sequence?: number } | object, unknown>,
 ): number | undefined {
-  return AsyncResult.isSuccess(result) ? result.value.sequence : undefined;
+  // A dictated turn answers with its delivery status, not a sequence.
+  return AsyncResult.isSuccess(result) && "sequence" in result.value
+    ? (result.value.sequence as number | undefined)
+    : undefined;
 }
 
 const runDeliveryCommand = <W, A, E>(
