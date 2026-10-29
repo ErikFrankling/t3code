@@ -5350,7 +5350,8 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
       assert.equal(wake.status, "queued");
       assert.notEqual(wake.queueHeld, true);
       const textContinuation = queued.runs[4]!;
-      assert.isTrue(textContinuation.queueHeld);
+      // A restart hold waits for no one, so later messages do not inherit it.
+      assert.notEqual(textContinuation.queueHeld, true);
       const now = yield* DateTime.now;
       yield* events.write({
         events: [
@@ -7611,6 +7612,14 @@ it.layer(layerTest)("queue watchdog", (it) => {
             MessageId.make("queue-watchdog:sent while held:restart-failed-continuation"),
         )!;
         assert.notEqual(later.queueHeld, true);
+        // An unheld message starts past the held queue; the thread is idle once it ends.
+        assert.equal(later.status, "starting");
+        yield* fx.write("later-done", {
+          ...later,
+          status: "completed",
+          startedAt: fx.now,
+          completedAt: fx.now,
+        });
 
         // Too soon after the run ended: the watchdog leaves it to the normal path.
         assert.equal(yield* fx.orchestrator.superviseQueues, 0);
