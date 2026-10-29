@@ -372,7 +372,7 @@ const layerUsageLimitFailoverProvided = UsageLimitFailover.layer.pipe(
   Layer.provide(
     Layer.mergeAll(
       layerOrchestratorProvided,
-      layerProviderAdapterRegistryProvided,
+      ProviderAdapterRegistry.layerFromProviderInstanceRegistry,
       ProviderInstanceLimits.limitsLayer,
     ),
   ),
