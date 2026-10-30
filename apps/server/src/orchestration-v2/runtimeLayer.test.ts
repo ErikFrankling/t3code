@@ -4942,6 +4942,25 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
       assert.isTrue(user.queueHeld);
 
       // A run that finishes despite a stop request does not release what the stop held.
+      // The fork holds only for a reason that waits for the user; a failure hold is not inherited,
+      // so the stop is what holds the later message.
+      {
+        const userRun = yield* runFor("user");
+        yield* eventSink.write({
+          events: [
+            {
+              id: EventId.make(`${threadId}:user:stop-hold`),
+              type: "run.updated",
+              threadId,
+              runId: userRun.id,
+              nodeId: userRun.rootNodeId,
+              providerInstanceId: userRun.providerInstanceId,
+              occurredAt: yield* DateTime.now,
+              payload: { ...userRun, queueHeld: true, queueHoldReason: "stop" },
+            },
+          ],
+        });
+      }
       yield* send("after-stop", "agent", false);
       assert.isTrue((yield* runFor("after-stop")).queueHeld);
       const issue = yield* runFor("issue");
@@ -5792,10 +5811,10 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
         after.runs.find((run) => run.id === held.id),
         held,
       );
-      // Nobody will resume a server message, so the completed run released it behind the wake.
+      // The fork never held the server message (a restart hold is not inherited), so it is untouched.
       assert.deepEqual(
         after.runs.find((run) => run.id === textContinuation.id),
-        { ...textContinuation, queueHeld: false },
+        textContinuation,
       );
     }),
   );
@@ -8424,10 +8443,8 @@ it.layer(layerTest)("queue watchdog", (it) => {
           completedAt: fx.now,
         });
 
-        // Too soon after the run ended: the watchdog leaves it to the normal path.
+        // The completed run releases the held agent message itself, so the watchdog has nothing to do.
         assert.equal(yield* fx.orchestrator.superviseQueues, 0);
-        yield* TestClock.adjust("31 seconds");
-        assert.equal(yield* fx.orchestrator.superviseQueues, 1);
         const started = (yield* fx.runs()).find((run) => run.id === queued.id)!;
         assert.notEqual(started.status, "queued");
         assert.equal(started.providerInstanceId, alternateInstanceId);
