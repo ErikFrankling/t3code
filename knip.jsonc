@@ -27,6 +27,9 @@
       "entry": [
         // These fixture scripts are injected into a browser page by path.
         "fixtures/*/*.js",
+        // The fork's erik-android.yml workflow and the mobile updater run these by path.
+        "erik-updates.mjs",
+        "erik-updates-ping.mjs",
         "knip-schemas.ts",
         "mobile-behavior/run.ts",
         "mobile-native-client.ts",
