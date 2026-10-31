@@ -1,5 +1,6 @@
 import {
   AuthOrchestrationOperateScope,
+  PERSONAL_AGENT_THREAD_ID,
   type EnvironmentId,
   type ScopedThreadRef,
   type ThreadId,
@@ -44,6 +45,7 @@ import { cn } from "~/lib/utils";
 import { textDirection } from "~/textDirection";
 import { useClientSettings } from "../../hooks/useSettings";
 import { GuestShareIndicator } from "./GuestShareControls";
+import { SpeakModeCompactToggle } from "../personalAgent/SpeakModeToggle";
 
 interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
@@ -411,6 +413,9 @@ export const ChatHeader = memo(function ChatHeader({
           ) : null}
         </WorkspaceBreadcrumbItem>
       </WorkspaceBreadcrumb>
+      {isServerThread && activeThreadId === PERSONAL_AGENT_THREAD_ID ? (
+        <SpeakModeCompactToggle environmentId={activeThreadEnvironmentId} />
+      ) : null}
       {isServerThread ? <GuestShareIndicator threadRef={activeThreadRef} /> : null}
     </div>
   );
