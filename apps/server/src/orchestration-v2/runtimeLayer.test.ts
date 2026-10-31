@@ -5041,7 +5041,7 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
               type: "run.updated",
               threadId,
               runId: userRun.id,
-              nodeId: userRun.rootNodeId,
+              nodeId: userRun.rootNodeId ?? undefined,
               providerInstanceId: userRun.providerInstanceId,
               occurredAt: yield* DateTime.now,
               payload: { ...userRun, queueHeld: true, queueHoldReason: "stop" },
