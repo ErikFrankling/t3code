@@ -86,6 +86,50 @@ export function useSpeakMode(environmentId: EnvironmentId) {
   return { mode, error, choose };
 }
 
+/**
+ * The same control squeezed into a thread header: the three modes as icons,
+ * the current one named. Reads and sets the same daemon mode as the full one.
+ */
+export function SpeakModeCompactToggle({ environmentId }: { environmentId: EnvironmentId }) {
+  const { mode, error, choose } = useSpeakMode(environmentId);
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Voice mode"
+      data-testid="speak-mode-compact"
+      title={error ?? undefined}
+      className={cn(
+        "flex shrink-0 items-center rounded-md bg-muted p-0.5",
+        mode === null && "opacity-60",
+      )}
+    >
+      {SPEAK_MODES.map((value) => (
+        <button
+          key={value}
+          type="button"
+          role="radio"
+          aria-checked={mode === value}
+          aria-label={SPEAK_MODE_LABELS[value]}
+          title={SPEAK_MODE_DESCRIPTIONS[value]}
+          disabled={mode === null}
+          onClick={() => choose(value)}
+          className={cn(
+            "flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium",
+            mode === value
+              ? "bg-background text-foreground shadow-xs"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {ICONS[value]}
+          {mode === value ? (
+            <span className="whitespace-nowrap">{SPEAK_MODE_LABELS[value]}</span>
+          ) : null}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** Conversation / Voice out only / Silent, one tap. */
 export function SpeakModeToggle({ environmentId }: { environmentId: EnvironmentId }) {
   const { mode, error, choose } = useSpeakMode(environmentId);
