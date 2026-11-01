@@ -1740,7 +1740,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         const held = projection.runs.filter(
           (run) => run.status === "queued" && run.queueHeld === true,
         );
-        if (held.length > 0 && !projection.runs.some(isBlockingRun)) {
+        if (held.length > 0 && !projection.runs.some(isActiveRun)) {
           const releasedAt = yield* DateTime.now;
           yield* writeSystemEvents(
             held.map((run) => ({
@@ -2653,7 +2653,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           threadId,
           Effect.gen(function* () {
             const { runs } = yield* projectionStore.getThreadRecords(threadId, ["runs"]);
-            if (runs.some(isBlockingRun)) return false;
+            if (runs.some(isActiveRun)) return false;
             const queued = runs.filter((run) => run.status === "queued");
             if (queued.length === 0) return false;
             const nowMs = DateTime.toEpochMillis(yield* DateTime.now);
