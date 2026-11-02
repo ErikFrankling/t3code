@@ -41,6 +41,7 @@ const reactTests = [
   "src/features/threads/useThreadListV2.test.tsx",
   "src/features/home/home-list-options.test.tsx",
   "src/features/workspace/useSearchScrollRestoration.test.tsx",
+  "src/features/home/ThreadListFilters.test.tsx",
   "src/features/connection/ConnectionsNewRouteScreen.test.tsx",
 ];
 
