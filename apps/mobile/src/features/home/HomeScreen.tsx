@@ -698,31 +698,35 @@ export function HomeScreen(props: HomeScreenProps) {
       <PersonalAgentCard entry={props.personalAgent} pane={primaryColumn ? "sidebar" : "screen"} />
     );
 
+  const filterRow =
+    Platform.OS === "android" || workspace ? (
+      <ThreadListFilters
+        activeOnly={Platform.OS === "android"}
+        gutter={sidebarSurface ? 8 : 0}
+        environments={props.environments}
+        projects={pickableProjectGroups(
+          sortHomeProjectScopes({
+            scopes: projectScopes,
+            threads: props.threads,
+            pendingTasks: [],
+            projectSortOrder: "updated_at",
+          }),
+        ).map((scope) => ({
+          key: scope.key,
+          label: scope.title,
+        }))}
+        selectedEnvironmentId={props.selectedEnvironmentId}
+        selectedProjectKey={props.selectedProjectKey}
+        onEnvironmentChange={props.onEnvironmentChange}
+        onProjectChange={props.onProjectChange}
+      />
+    ) : null;
+
   const v2ListHeader = (
     <>
       {listHeader}
       {personalAgentCard}
-      {Platform.OS === "ios" && workspace ? (
-        <ThreadListFilters
-          gutter={sidebarSurface ? 8 : 0}
-          environments={props.environments}
-          projects={pickableProjectGroups(
-            sortHomeProjectScopes({
-              scopes: projectScopes,
-              threads: props.threads,
-              pendingTasks: [],
-              projectSortOrder: "updated_at",
-            }),
-          ).map((scope) => ({
-            key: scope.key,
-            label: scope.title,
-          }))}
-          selectedEnvironmentId={props.selectedEnvironmentId}
-          selectedProjectKey={props.selectedProjectKey}
-          onEnvironmentChange={props.onEnvironmentChange}
-          onProjectChange={props.onProjectChange}
-        />
-      ) : null}
+      {filterRow}
     </>
   );
 
@@ -771,10 +775,11 @@ export function HomeScreen(props: HomeScreenProps) {
     return (
       <ScreenContent surface="screen">
         <View
-          className="flex-1 items-center justify-center px-4"
+          className="flex-1"
           style={{ paddingBottom: insets.bottom }}
         >
-          {v2ListEmpty}
+          {filterRow}
+          <View className="flex-1 items-center justify-center px-4">{v2ListEmpty}</View>
         </View>
       </ScreenContent>
     );
