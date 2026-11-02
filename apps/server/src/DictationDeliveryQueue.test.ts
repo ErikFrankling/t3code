@@ -211,6 +211,31 @@ describe("durable dictation delivery", () => {
     expect(sent[0]?.text).toBe("Existing text\nLatest live draft");
     expect(q.get("alice", input.id)?.usedDraft).toBe(true);
   });
+  it("sends the live draft when the refined text is only an annotation", async () => {
+    const sent: Turn[] = [];
+    const q = queue(
+      async () => state("complete", "[Unintelligible Speech]"),
+      async (c) => {
+        sent.push(c);
+      },
+    );
+    await q.start();
+    await q.enqueue(input);
+    await q.drain();
+    expect(sent[0]?.text).toBe("Existing text\nLatest live draft");
+    expect(q.get("alice", input.id)?.usedDraft).toBe(true);
+  });
+  it("moves an unreadable checkpoint aside once instead of failing every start", async () => {
+    const name = `${"a".repeat(64)}.json`;
+    await NodeFSP.writeFile(NodePath.join(directory, name), JSON.stringify({ id: "old" }));
+    const q = queue(
+      async () => state("complete", "x"),
+      async () => {},
+    );
+    await q.start();
+    expect(await NodeFSP.readdir(directory)).toEqual(["unreadable"]);
+    expect(await NodeFSP.readdir(NodePath.join(directory, "unreadable"))).toEqual([name]);
+  });
   it("deduplicates repeated Stop and resumes the same command after a restart", async () => {
     const sent: Turn[] = [];
     const q = queue(

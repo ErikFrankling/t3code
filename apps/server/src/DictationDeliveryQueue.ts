@@ -28,6 +28,14 @@ const withMessageText = (turn: DictationTurn, text: (current: string) => string)
     : turn;
 };
 
+/**
+ * What a transcript is when the recogniser only annotated the sound
+ * ("[Unintelligible Speech]", "[Human Sounds]"): no words, so the live draft
+ * is the better message.
+ */
+export const hasSpokenWords = (text: string): boolean =>
+  text.replace(/\[[^\]]*\]/g, "").trim().length > 0;
+
 export interface DeliveryJob {
   id: string;
   owner: string;
@@ -111,7 +119,25 @@ export class DictationDeliveryQueue {
         // older versions stay as they are, with their transcript.
         this.launch(job);
       } catch (error) {
-        this.deps.log("dictation.checkpoint_failed", { file: name, error: String(error) });
+        // Move what cannot be read aside once, so it neither blocks nor logs on
+        // every start. Nothing is deleted: the file stays in `unreadable/`.
+        let quarantined = false;
+        try {
+          const aside = NodePath.join(this.deps.directory, "unreadable");
+          await NodeFSP.mkdir(aside, { recursive: true, mode: 0o700 });
+          await NodeFSP.rename(
+            NodePath.join(this.deps.directory, name),
+            NodePath.join(aside, name),
+          );
+          quarantined = true;
+        } catch {
+          // Left in place; the next start reports it again.
+        }
+        this.deps.log("dictation.checkpoint_failed", {
+          file: name,
+          error: String(error),
+          quarantined,
+        });
       }
     }
   }
@@ -213,8 +239,8 @@ export class DictationDeliveryQueue {
     }
     if (this.controller.signal.aborted) return;
     if (job.status === "queued") {
-      job.usedDraft = !text.trim();
-      text = text.trim() || job.draft.trim();
+      job.usedDraft = !hasSpokenWords(text);
+      text = job.usedDraft ? job.draft.trim() : text.trim();
       if (!text) {
         job.status = "empty";
         job.error = "No speech was recognized. The original recording is retained.";
