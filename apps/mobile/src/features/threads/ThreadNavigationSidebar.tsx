@@ -49,6 +49,7 @@ import { buildHomeProjectScopes, resolveHomeProjectFilterScope } from "../home/h
 import { SwipeableScrollGateProvider, useSwipeableScrollGate } from "../home/thread-swipe-actions";
 import { usePendingTaskListActions } from "../home/usePendingTaskListActions";
 import { useThreadListActions } from "../home/useThreadListActions";
+import { ThreadListFilters } from "../home/ThreadListFilters";
 import { useFabScroll } from "../home/FabScrollContext";
 import { WorkspaceListHeader } from "../layout/workspace/WorkspaceListHeader";
 import { WorkspaceSidebarColumn } from "../layout/workspace/WorkspaceSidebarColumn";
@@ -645,6 +646,18 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
           overflow: "hidden",
         }}
       >
+        {Platform.OS === "android" ? (
+          <ThreadListFilters
+            activeOnly
+            gutter={0}
+            environments={environments}
+            projects={projectFilterOptions}
+            selectedEnvironmentId={options.selectedEnvironmentId}
+            selectedProjectKey={selectedProjectKey}
+            onEnvironmentChange={setSelectedEnvironmentId}
+            onProjectChange={setSelectedProjectKey}
+          />
+        ) : null}
         {listItems.length === 0 ? (
           <View className="flex-1 items-center justify-center">{listEmpty}</View>
         ) : (
