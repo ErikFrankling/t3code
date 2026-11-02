@@ -732,24 +732,28 @@ export function HomeScreen(props: HomeScreenProps) {
       <PersonalAgentCard entry={props.personalAgent} pane={primaryColumn ? "sidebar" : "screen"} />
     );
 
+  const filterRow =
+    Platform.OS === "android" || workspace ? (
+      <ThreadListFilters
+        activeOnly={Platform.OS === "android"}
+        gutter={primaryColumn ? 8 : 0}
+        environments={props.environments}
+        projects={pickableProjectGroups(projectScopes).map((scope) => ({
+          key: scope.key,
+          label: scope.title,
+        }))}
+        selectedEnvironmentId={props.selectedEnvironmentId}
+        selectedProjectKey={props.selectedProjectKey}
+        onEnvironmentChange={props.onEnvironmentChange}
+        onProjectChange={props.onProjectChange}
+      />
+    ) : null;
+
   const v2ListHeader = (
     <>
       {listHeader}
       {personalAgentCard}
-      {Platform.OS === "ios" && workspace ? (
-        <ThreadListFilters
-          gutter={primaryColumn ? 8 : 0}
-          environments={props.environments}
-          projects={pickableProjectGroups(projectScopes).map((scope) => ({
-            key: scope.key,
-            label: scope.title,
-          }))}
-          selectedEnvironmentId={props.selectedEnvironmentId}
-          selectedProjectKey={props.selectedProjectKey}
-          onEnvironmentChange={props.onEnvironmentChange}
-          onProjectChange={props.onProjectChange}
-        />
-      ) : null}
+      {filterRow}
     </>
   );
 
@@ -784,10 +788,12 @@ export function HomeScreen(props: HomeScreenProps) {
     return (
       <View className="flex-1 bg-header">
         <View
-          className="flex-1 items-center justify-center overflow-hidden rounded-t-[28px] bg-screen px-4"
+          className="flex-1 overflow-hidden rounded-t-[28px] bg-screen"
           style={{ paddingBottom: insets.bottom }}
         >
-          {v2ListEmpty}
+          <HomeTopContentSpacer />
+          {filterRow}
+          <View className="flex-1 items-center justify-center px-4">{v2ListEmpty}</View>
         </View>
       </View>
     );
