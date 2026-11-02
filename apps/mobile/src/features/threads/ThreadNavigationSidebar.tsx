@@ -61,6 +61,7 @@ import {
   WorkspaceConnectionTitle,
 } from "../home/WorkspaceConnectionTitle";
 import { SidebarHeaderActions } from "./sidebar-header-actions";
+import { ThreadListFilters } from "../home/ThreadListFilters";
 import { ThreadListToolbar } from "../home/ThreadListToolbar";
 import { useToolbarLayout } from "../../components/ui/useToolbarLayout";
 import { useFabScroll } from "../home/FabScrollContext";
@@ -803,6 +804,18 @@ function ThreadNavigationSidebarPane(
             : { paddingBottom: insets.bottom }
         }
       >
+        {Platform.OS === "android" ? (
+          <ThreadListFilters
+            activeOnly
+            gutter={0}
+            environments={environments}
+            projects={projectFilterOptions}
+            selectedEnvironmentId={options.selectedEnvironmentId}
+            selectedProjectKey={selectedProjectKey}
+            onEnvironmentChange={setSelectedEnvironmentId}
+            onProjectChange={setSelectedProjectKey}
+          />
+        ) : null}
         {Platform.OS === "android" && listItems.length === 0 ? (
           <View className="flex-1 items-center justify-center">{listEmpty}</View>
         ) : (
