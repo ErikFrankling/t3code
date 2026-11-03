@@ -12,6 +12,9 @@ import { DictationState, type DictationRequest, type EnvironmentId } from "@t3to
 import { Schema } from "effect";
 import {
   ArrowUpIcon,
+  LoaderCircleIcon,
+  CircleAlertIcon,
+  ClockIcon,
   ChevronDownIcon,
   DownloadIcon,
   Maximize2Icon,
@@ -39,6 +42,7 @@ import {
 import { indexedDbDictationStorage, memoryDictationStorage } from "./dictationStorage";
 import { publishVoiceDictation, registerVoiceDictation, useVoiceMode } from "./VoiceMode";
 import { Button } from "../ui/button";
+import { Popover, PopoverTrigger, PopoverPopup } from "../ui/popover";
 import { DictationCard, DictationTranscriptText } from "./DictationCard";
 import { useDesktopDictationSend } from "./desktopDictationSend";
 import {
@@ -387,7 +391,10 @@ export function Dictation({
   const engine = recorder();
   const all = useSyncExternalStore(engine.subscribe, engine.getSnapshot);
   const deliveries = all.filter(
-    (entry) => entry.record.environmentId === environmentId && entry.record.state === "sending",
+    (entry) =>
+      entry.record.environmentId === environmentId &&
+      entry.record.state === "sending" &&
+      (entry.record.target === target || (threadId !== null && entry.record.threadId === threadId)),
   );
   const entries = all
     .filter((entry) => entry.record.target === target && OPEN_STATES.has(entry.record.state))
@@ -451,7 +458,7 @@ export function Dictation({
   const chatWasAtEnd = useChatAtEndWhenOpened(viewVisible && !fullScreen);
   // In the app the card sits in the composer stack, in the flow (see ChatView);
   // elsewhere it floats right above the message box.
-  const slot = useDictationSlot(triggerRef, (viewVisible && !fullScreen) || deliveries.length > 0);
+  const slot = useDictationSlot(triggerRef, viewVisible && !fullScreen);
   const anchor = useComposerAnchor(triggerRef, viewVisible && !fullScreen && !slot);
   useKeepChatAtEnd(viewRef, slot !== null, chatWasAtEnd);
   useEffect(() => {
@@ -986,61 +993,104 @@ export function Dictation({
         </TooltipTrigger>
         <TooltipPopup>{triggerLabel}</TooltipPopup>
       </Tooltip>
-      {deliveries.length > 0 &&
-        createPortal(
-          <div
-            className={cn(
-              "mb-2 max-h-64 overflow-y-auto rounded-xl border bg-popover p-3 text-sm text-popover-foreground",
-              !slot && "fixed bottom-24 right-4 z-40 max-w-sm",
-            )}
-            aria-label="Dictation delivery"
-          >
-            {deliveries.map((entry) => {
-              const record = entry.record;
-              const server = record.server;
-              const problem = server?.deliveryError || entry.error || server?.error;
-              const status = problem
-                ? "Not sent. Retrying"
-                : entry.upload !== "uploaded"
-                  ? "Uploading recording…"
-                  : !record.handedOff
-                    ? "Submitting dictation…"
-                    : server?.delivery === "ready"
-                      ? "Sending message…"
-                      : "Transcribing recording…";
-              return (
-                <div key={record.id} className="space-y-1 py-1">
-                  <p
-                    role="status"
-                    className={problem ? "font-medium text-destructive" : "font-medium"}
-                  >
-                    {status}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    The agent has not received this message yet. Your recording is saved.
-                  </p>
-                  {problem && (
-                    <p role="alert" className="break-words text-xs text-destructive">
-                      {problem}
-                    </p>
-                  )}
-                  <details className="text-xs">
-                    <summary className="cursor-pointer">View transcript and save recording</summary>
-                    <p className="max-h-32 overflow-auto whitespace-pre-wrap py-2">
-                      {server?.final || server?.draft || "Waiting for transcription…"}
-                    </p>
-                    <Button size="xs" variant="outline" onClick={() => void download(record.id)}>
-                      <DownloadIcon />
-                      Save audio
-                    </Button>
-                  </details>
-                </div>
-              );
-            })}
-          </div>,
-          slot ?? document.body,
-        )}
+      {deliveries.map((entry) => (
+        <DeliveryIndicator
+          key={entry.record.id}
+          entry={entry}
+          engine={engine}
+          download={download}
+        />
+      ))}
       {view}
     </>
+  );
+}
+
+function DeliveryIndicator({
+  entry,
+  engine,
+  download,
+}: {
+  entry: DictationEntry;
+  engine: DictationRecorder;
+  download: (id: string) => Promise<void>;
+}) {
+  const [actionError, setActionError] = useState("");
+  const [stopping, setStopping] = useState(false);
+  const server = entry.record.server;
+  const active =
+    server?.delivery !== "abandoned" &&
+    (entry.requesting || (!entry.error && server?.deliveryActive === true));
+  const problem = entry.error || server?.deliveryError || "";
+  const retryScheduled = (server?.deliveryRetryAt ?? 0) > Date.now();
+  const label = entry.error
+    ? "Connection lost"
+    : server?.delivery === "abandoned"
+      ? "Not sent"
+      : active
+        ? "Sending dictation"
+        : retryScheduled
+          ? "Waiting to retry"
+          : "Dictation pending";
+  return (
+    <Popover onOpenChange={() => setActionError("")}>
+      <PopoverTrigger
+        render={<Button size="icon-sm" variant="ghost" aria-label={label} title={label} />}
+      >
+        {active ? (
+          <LoaderCircleIcon className="size-4 motion-safe:animate-spin" />
+        ) : problem ? (
+          <CircleAlertIcon className="size-4 text-warning" />
+        ) : (
+          <ClockIcon className="size-4 text-muted-foreground" />
+        )}
+      </PopoverTrigger>
+      <PopoverPopup className="max-w-sm p-3">
+        <p className="text-sm font-medium">{label}</p>
+        {problem && <p className="mt-2 text-xs text-muted-foreground">{problem}</p>}
+        {retryScheduled && server?.deliveryRetryAt && !active && !entry.error && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            Next attempt: {new Date(server.deliveryRetryAt).toLocaleTimeString()}
+          </p>
+        )}
+        <details className="mt-2 text-xs">
+          <summary className="cursor-pointer">Transcript</summary>
+          <p className="max-h-40 overflow-auto whitespace-pre-wrap py-2">
+            {server?.final || server?.draft || "No transcript yet."}
+          </p>
+        </details>
+        <div className="mt-3 flex gap-2">
+          <Button size="xs" variant="outline" onClick={() => void download(entry.record.id)}>
+            Save audio
+          </Button>
+          <Button
+            size="xs"
+            variant="outline"
+            disabled={stopping || !entry.record.handedOff}
+            onClick={async () => {
+              setStopping(true);
+              setActionError("");
+              try {
+                await engine.stopDelivery(entry.record.id);
+              } catch (cause) {
+                setActionError(cause instanceof Error ? cause.message : String(cause));
+              } finally {
+                setStopping(false);
+              }
+            }}
+          >
+            {stopping ? "Stopping…" : server?.delivery === "abandoned" ? "Dismiss" : "Stop sending"}
+          </Button>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Stopping keeps the recording under the microphone button for editing or sending again.
+        </p>
+        {actionError && (
+          <p role="alert" className="mt-2 text-xs text-destructive">
+            {actionError}
+          </p>
+        )}
+      </PopoverPopup>
+    </Popover>
   );
 }
