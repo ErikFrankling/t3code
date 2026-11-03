@@ -33,7 +33,14 @@ export interface DictationRecord {
   readonly handedOff: boolean;
   readonly server: Pick<
     DictationState,
-    "status" | "draft" | "final" | "error" | "delivery" | "deliveryError"
+    | "status"
+    | "draft"
+    | "final"
+    | "error"
+    | "delivery"
+    | "deliveryError"
+    | "deliveryActive"
+    | "deliveryRetryAt"
   > | null;
   /** Why the recording needs the user, in plain words. */
   readonly notice: string;

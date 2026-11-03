@@ -38,26 +38,51 @@ export const layerDictationRoute = Layer.unwrap(
         const request = yield* HttpServerRequest.HttpServerRequest;
         const client = yield* HttpClient.HttpClient;
         const body = yield* decodeDictationRequest(yield* request.json);
+        if (body.action === "stop-delivery") {
+          if (!body.id) return HttpServerResponse.text("Recording id required", { status: 400 });
+          const stopped = yield* Effect.tryPromise(() =>
+            deliveries.stop(session.subject, body.id!),
+          );
+          if (!stopped)
+            return HttpServerResponse.text(
+              "Delivery is being confirmed. Check its status before stopping it.",
+              { status: 409 },
+            );
+        }
+        const known = body.id ? deliveries.get(session.subject, body.id) : undefined;
+        if ((body.action === "status" || body.action === "stop-delivery") && known) {
+          const savedText =
+            known.turn.method === "launchThread"
+              ? known.turn.input.initialMessage?.text
+              : known.turn.command.type === "message.dispatch"
+                ? known.turn.command.text
+                : undefined;
+          return HttpServerResponse.jsonUnsafe({
+            id: known.id,
+            status: known.status === "queued" ? "finalizing" : "complete",
+            draft: known.draft,
+            final:
+              known.transcript ??
+              (known.status === "queued"
+                ? ""
+                : (savedText ?? known.draft).replace(known.marker, () => known.draft)),
+            error: "",
+            bytes: 0,
+            delivery: known.status,
+            deliveryError: known.error,
+            deliveryActive:
+              (known.status === "queued" || known.status === "ready") &&
+              deliveries.isActive(session.subject, known.id),
+            deliveryRetryAt: known.retryAt,
+          } satisfies DictationState);
+        }
+        if (body.action === "stop-delivery")
+          return HttpServerResponse.text("Delivery not found", { status: 404 });
         const response = yield* client.post(speechServiceUrl(), {
           body: HttpBody.jsonUnsafe(body),
           headers: { "X-STT-Owner": session.subject },
         });
         const raw = yield* response.text;
-        const known = body.id ? deliveries.get(session.subject, body.id) : undefined;
-        if (response.status === 404 && body.action === "status" && body.id && known) {
-          // The speech service forgot the recording, but its message is ours:
-          // clients keep their copy of the audio until they see it sent.
-          return HttpServerResponse.jsonUnsafe({
-            id: body.id,
-            status: "error",
-            draft: known.draft,
-            final: "",
-            error: raw,
-            bytes: 0,
-            delivery: known.status,
-            ...(known.error ? { deliveryError: known.error } : {}),
-          } satisfies DictationState);
-        }
         if (response.status !== 200) {
           yield* Effect.logWarning("dictation.speech_request_failed", {
             recordingId: body.id,
