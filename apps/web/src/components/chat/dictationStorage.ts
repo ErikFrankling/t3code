@@ -31,7 +31,10 @@ export interface DictationRecord {
   readonly registered: boolean;
   /** The server queued the delivery; only `sent` remains to be seen. */
   readonly handedOff: boolean;
-  readonly server: Pick<DictationState, "status" | "draft" | "final" | "error" | "delivery"> | null;
+  readonly server: Pick<
+    DictationState,
+    "status" | "draft" | "final" | "error" | "delivery" | "deliveryError"
+  > | null;
   /** Why the recording needs the user, in plain words. */
   readonly notice: string;
 }
