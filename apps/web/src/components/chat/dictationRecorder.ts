@@ -466,6 +466,7 @@ export class DictationRecorder {
         final: state.final,
         error: state.error,
         ...(state.delivery ? { delivery: state.delivery } : {}),
+        ...(state.deliveryError ? { deliveryError: state.deliveryError } : {}),
       },
     });
   }

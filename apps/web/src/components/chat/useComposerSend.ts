@@ -1423,7 +1423,10 @@ export function useComposerSend(input: ComposerSendInput) {
         if (dictation && !sendQueuesBehindSetup) resetLocalDispatch();
         setKeepFullHistory(routeThreadKey, false);
         clearUsageLimitsFor(routeThreadKey);
-        if (turnUsesAttachmentUploads) {
+        // Dictation has only queued the turn: its attachments are still pending
+        // until transcription finishes and intake claims them. Releasing here
+        // deletes the screenshot before the queued message can use it.
+        if (turnUsesAttachmentUploads && !dictation) {
           releaseDraftAttachments(composerAttachmentsSnapshot);
         }
         acknowledgeActiveThreadWoke();
