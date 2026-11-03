@@ -11,10 +11,12 @@ function fakeGateway() {
     { status: DictationState["status"]; chunks: number[]; bytes: number; final: string }
   >();
   const deliveries = new Map<string, NonNullable<DictationState["delivery"]>>();
+  const deliveryErrors = new Map<string, string>();
   const gateway = {
     down: false,
     recordings,
     deliveries,
+    deliveryErrors,
     /** First sample of every chunk the server holds, in order. */
     heard: (id: string) => recordings.get(id)?.chunks ?? [],
     request: async (_environmentId: string, body: DictationRequest): Promise<DictationState> => {
@@ -51,6 +53,7 @@ function fakeGateway() {
         error: "",
         bytes: recording.bytes,
         ...(delivery ? { delivery } : {}),
+        ...(deliveryErrors.has(id) ? { deliveryError: deliveryErrors.get(id)! } : {}),
       };
     },
   };
@@ -174,6 +177,14 @@ describe("durable dictation", () => {
     await until(() => entry(id)?.record.server?.delivery === "queued");
     expect(await storage.getRecord(id)).toBeDefined();
     expect(await storage.getChunk(id, 1)).toBeDefined();
+
+    gateway.deliveries.set(id, "ready");
+    gateway.deliveryErrors.set(id, "Attachment not found");
+    await until(() => entry(id)?.record.server?.deliveryError === "Attachment not found");
+    expect(entry(id)?.record.state).toBe("sending");
+    expect(await storage.getChunk(id, 1)).toBeDefined();
+    gateway.deliveryErrors.delete(id);
+    await until(() => entry(id)?.record.server?.deliveryError === undefined);
 
     gateway.deliveries.set(id, "sent");
     await until(() => entry(id) === undefined);
