@@ -44,6 +44,10 @@ function fakeGateway() {
         recording.final = `final of ${recording.chunks.length} chunks`;
       }
       if (body.action === "cancel") recording.status = "cancelled";
+      if (body.action === "stop-delivery") {
+        deliveries.set(id, "abandoned");
+        deliveryErrors.delete(id);
+      }
       const delivery = deliveries.get(id);
       return {
         id,
@@ -99,9 +103,59 @@ async function until(condition: () => boolean) {
 }
 
 const chunk = (value: number) => new Int16Array(16000).fill(value);
+
+function signal() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
 const recording = { target: "chat-1", environmentId: "env", project: "/repo", threadId: "t-1" };
 
 describe("durable dictation", () => {
+  it("reports activity only while its network request is pending", async () => {
+    const gateway = fakeGateway();
+    const entered = signal();
+    const response = signal();
+    const request = gateway.request;
+    gateway.request = async (...args) => {
+      entered.resolve();
+      await response.promise;
+      return request(...args);
+    };
+    const { recorder, entry, close } = page(memoryDictationStorage(), gateway);
+    const id = await recorder.create(recording);
+    await entered.promise;
+    expect(entry(id)?.requesting).toBe(true);
+    recorder.pause(id);
+    response.resolve();
+    await until(() => entry(id)?.record.registered === true);
+    expect(entry(id)?.requesting).toBe(false);
+    close();
+  });
+  it("dismisses a stopped delivery, keeps the recording and uses a fresh id for a manual resend", async () => {
+    const storage = memoryDictationStorage();
+    const gateway = fakeGateway();
+    const { recorder, entry, close } = page(storage, gateway);
+    const id = await recorder.create(recording);
+    await recorder.append(id, chunk(1));
+    const handoff: DictationHandoff = async (serverId, _draft, uploaded) => {
+      await uploaded;
+      gateway.deliveries.set(serverId, "ready");
+    };
+    await recorder.send(id, handoff);
+    gateway.deliveryErrors.set(id, "Attachment not found");
+    await until(() => entry(id)?.record.server?.deliveryError === "Attachment not found");
+    await recorder.stopDelivery(id);
+    expect(entry(id)?.record.state).toBe("paused");
+    expect(entry(id)?.record.server?.deliveryError).toBeUndefined();
+    expect(await storage.getChunk(id, 0)).toBeDefined();
+    await recorder.send(id, handoff);
+    expect(entry(id)?.record.serverId).not.toBe(id);
+    expect(gateway.deliveries.get(id)).toBe("abandoned");
+    close();
+  });
   it("keeps every chunk on the device while the server is down and uploads them in order later", async () => {
     const storage = memoryDictationStorage();
     const gateway = fakeGateway();
