@@ -29,6 +29,7 @@ export interface DictationEntry {
   readonly error: string;
   /** Saving to the device failed: the audio is only in this tab's memory. */
   readonly unsaved: boolean;
+  readonly requesting: boolean;
 }
 
 /** Hands a stopped recording to the chat, which sends it once the transcript exists. */
@@ -59,6 +60,7 @@ interface Live {
   failures: number;
   error: string;
   storageError: boolean;
+  requesting?: number;
   gone: boolean;
   finished: () => void;
   wake: () => void;
@@ -258,6 +260,11 @@ export class DictationRecorder {
     if (!live || live.gone) return;
     if (live.record.state !== "recording" && live.record.state !== "paused") return;
     if (!hasAudio(live.record)) return this.#forget(live);
+    if (live.record.server?.delivery === "abandoned") {
+      // A stopped immutable delivery must never be reused. Keep the transcript
+      // available while the saved audio is uploaded for the user's new send.
+      this.#update(live, { serverId: this.#deps.newId(), registered: false, uploaded: 0 });
+    }
     const { serverId } = live.record;
     this.#update(live, { state: "sending", notice: "", handedOff: false });
     const uploaded = this.#whenUploaded(live, serverId);
@@ -293,6 +300,36 @@ export class DictationRecorder {
     this.#update(live, { state: "edited", notice: "" });
     await this.#save(live);
     live.wake();
+  }
+
+  async stopDelivery(id: string) {
+    const live = this.#live.get(id);
+    if (!live || live.record.state !== "sending" || !live.record.handedOff) return;
+    const state: DictationState =
+      live.record.server?.delivery === "abandoned"
+        ? {
+            ...live.record.server,
+            id: live.record.serverId,
+            bytes: 0,
+            error: "",
+            deliveryError: undefined,
+            deliveryActive: false,
+            deliveryRetryAt: undefined,
+          }
+        : await this.#request(live, { action: "stop-delivery", id: live.record.serverId });
+    if (state.delivery === "sent") {
+      await this.#forget(live);
+      return;
+    }
+    if (state.delivery !== "abandoned") throw new Error("Delivery has not stopped yet.");
+    this.#accept(live, state);
+    this.#announceReturned(live.record.serverId);
+    this.#update(live, { state: "paused", handedOff: false, notice: "" });
+    live.error = "";
+    live.failures = 0;
+    await this.#save(live);
+    live.wake();
+    this.#publish();
   }
 
   /** Explicit, confirmed deletion: the only way audio leaves the device unsent. */
@@ -390,6 +427,7 @@ export class DictationRecorder {
               : "uploading",
         error: live.error,
         unsaved: live.storageError,
+        requesting: (live.requesting ?? 0) > 0,
       }));
     for (const listener of this.#listeners) listener();
   }
@@ -467,12 +505,21 @@ export class DictationRecorder {
         error: state.error,
         ...(state.delivery ? { delivery: state.delivery } : {}),
         ...(state.deliveryError ? { deliveryError: state.deliveryError } : {}),
+        deliveryActive: state.deliveryActive ?? false,
+        ...(state.deliveryRetryAt ? { deliveryRetryAt: state.deliveryRetryAt } : {}),
       },
     });
   }
 
-  #request(live: Live, body: DictationRequest) {
-    return this.#deps.request(live.record.environmentId, body);
+  async #request(live: Live, body: DictationRequest) {
+    live.requesting = (live.requesting ?? 0) + 1;
+    this.#publish();
+    try {
+      return await this.#deps.request(live.record.environmentId, body);
+    } finally {
+      live.requesting = (live.requesting ?? 1) - 1;
+      this.#publish();
+    }
   }
 
   /** Starts a fresh server recording and uploads all audio into it again. */
@@ -627,6 +674,8 @@ export class DictationRecorder {
       await this.#continueElsewhere(live);
       return "again";
     }
+    // A user action can stop the delivery while a status request is in flight.
+    if (live.record.state !== "sending") return "idle";
     this.#accept(live, state);
     if (!record.handedOff) {
       // The page closed while the chat was taking it. Did the server get it?
@@ -643,6 +692,10 @@ export class DictationRecorder {
     if (state.delivery === "sent") {
       await this.#forget(live);
       return "again";
+    }
+    if (state.delivery === "abandoned") {
+      await this.#save(live);
+      return "idle";
     }
     if (state.delivery === "empty") {
       this.#announceReturned(record.serverId);
