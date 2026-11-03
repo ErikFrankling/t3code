@@ -47,6 +47,8 @@ export interface DeliveryJob {
   status: "queued" | "ready" | "sent" | "empty" | "abandoned";
   usedDraft?: boolean;
   error?: string;
+  retryAt?: number;
+  transcript?: string;
 }
 interface Dependencies {
   directory: string;
@@ -69,6 +71,8 @@ export class DictationDeliveryQueue {
   private readonly tasks = new Map<string, Promise<void>>();
   private readonly controller = new AbortController();
   private mutation = Promise.resolve();
+  private writes = Promise.resolve();
+  private readonly active = new Map<string, "speech" | "dispatch">();
   private readonly deps: Dependencies;
   constructor(deps: Dependencies) {
     this.deps = deps;
@@ -78,7 +82,13 @@ export class DictationDeliveryQueue {
       .update(JSON.stringify([owner, id]))
       .digest("hex");
   }
-  private async save(job: DeliveryJob) {
+  private save(job: DeliveryJob) {
+    const snapshot = { ...job };
+    const operation = this.writes.then(() => this.write(snapshot));
+    this.writes = operation.catch(() => undefined);
+    return operation;
+  }
+  private async write(job: DeliveryJob) {
     const file = NodePath.join(this.deps.directory, `${this.key(job.owner, job.id)}.json`);
     const checkpoint = await NodeFSP.open(`${file}.new`, "w", 0o600);
     try {
@@ -114,9 +124,8 @@ export class DictationDeliveryQueue {
           throw new Error("Invalid delivery checkpoint");
         }
         this.jobs.set(this.key(job.owner, job.id), job);
-        // Voice input is never given up on: a delivery keeps retrying until it
-        // lands, however long that takes. Checkpoints marked "abandoned" by
-        // older versions stay as they are, with their transcript.
+        // Resume recoverable work; cancelled and permanently failed deliveries
+        // stay stopped, with their transcript available for explicit recovery.
         this.launch(job);
       } catch (error) {
         // Move what cannot be read aside once, so it neither blocks nor logs on
@@ -143,6 +152,36 @@ export class DictationDeliveryQueue {
   }
   get(owner: string, id: string) {
     return this.jobs.get(this.key(owner, id));
+  }
+  isActive(owner: string, id: string) {
+    return this.active.has(this.key(owner, id));
+  }
+  async stop(owner: string, id: string) {
+    const job = this.get(owner, id);
+    if (!job) return true;
+    // Intake may already have accepted this message. Never report cancellation
+    // while that result is unknown.
+    if (this.active.get(this.key(owner, id)) === "dispatch") return false;
+    if (job.status === "sent") return true;
+    job.status = "abandoned";
+    delete job.error;
+    delete job.retryAt;
+    await this.save(job);
+    return true;
+  }
+  private stopped(job: DeliveryJob) {
+    return job.status === "abandoned" || this.controller.signal.aborted;
+  }
+  private async speech(job: DeliveryJob, action: "finish" | "retry" | "status") {
+    const key = this.key(job.owner, job.id);
+    this.active.set(key, "speech");
+    delete job.retryAt;
+    delete job.error;
+    try {
+      return await this.deps.speech(job.owner, job.id, action);
+    } finally {
+      this.active.delete(key);
+    }
   }
   async enqueue(input: Omit<DeliveryJob, "attempts" | "status" | "queuedAt">) {
     const operation = this.mutation.then(async () => {
@@ -194,12 +233,14 @@ export class DictationDeliveryQueue {
   }
   private async settledState(job: DeliveryJob, initial: DictationState) {
     let state = initial;
-    while (true) {
+    while (!this.stopped(job)) {
       if (state.draft.trim()) job.draft = state.draft;
       if (state.status !== "recording" && state.status !== "finalizing") return state;
       await this.wait(800);
-      state = await this.deps.speech(job.owner, job.id, "status");
+      if (this.stopped(job)) break;
+      state = await this.speech(job, "status");
     }
+    return state;
   }
   private async run(job: DeliveryJob) {
     let text = "";
@@ -213,11 +254,12 @@ export class DictationDeliveryQueue {
     while (job.status === "queued" && !this.controller.signal.aborted) {
       job.attempts++;
       await this.save(job);
+      if (this.stopped(job)) return;
       this.deps.log("dictation.refinement_attempt", { recordingId: job.id, attempt: job.attempts });
       try {
         const state = await this.settledState(
           job,
-          await this.deps.speech(job.owner, job.id, job.attempts === 1 ? "finish" : "retry"),
+          await this.speech(job, job.attempts === 1 ? "finish" : "retry"),
         );
         if (state.status === "complete" || state.status === "cancelled") {
           text = state.final;
@@ -225,8 +267,10 @@ export class DictationDeliveryQueue {
         }
         throw new Error(state.error || "Refinement returned no text");
       } catch (error) {
-        if (this.controller.signal.aborted) return;
+        if (this.stopped(job)) return;
         job.error = String(error).slice(0, 500);
+        const delay = Math.min(30_000, 1000 * 2 ** Math.min(failures++, 5));
+        job.retryAt = Date.now() + delay;
         await this.save(job);
         this.deps.log("dictation.refinement_failed", {
           recordingId: job.id,
@@ -234,30 +278,42 @@ export class DictationDeliveryQueue {
           error: job.error,
         });
         if (error instanceof DictationRecordingUnavailable) break;
-        await this.wait(Math.min(30_000, 1000 * 2 ** Math.min(failures++, 5)));
+        await this.wait(delay);
       }
     }
-    if (this.controller.signal.aborted) return;
+    if (this.stopped(job)) return;
     if (job.status === "queued") {
       job.usedDraft = !hasSpokenWords(text);
       text = job.usedDraft ? job.draft.trim() : text.trim();
       if (!text) {
         job.status = "empty";
+        delete job.retryAt;
         job.error = "No speech was recognized. The original recording is retained.";
         await this.save(job);
         this.deps.log("dictation.no_speech", { recordingId: job.id });
         return;
       }
       job.turn = withMessageText(job.turn, (current) => current.replace(job.marker, () => text));
+      job.transcript = text;
       job.status = "ready";
+      delete job.error;
+      delete job.retryAt;
       await this.save(job);
     }
     let dispatchAttempts = 0;
-    while (!this.controller.signal.aborted) {
+    while (!this.stopped(job)) {
       try {
         // The orchestrator's durable command receipt prevents duplicates after a
         // crash between dispatch and our sent checkpoint. Never mint a new ID.
-        await this.deps.dispatch(job.turn);
+        const key = this.key(job.owner, job.id);
+        this.active.set(key, "dispatch");
+        delete job.error;
+        delete job.retryAt;
+        try {
+          await this.deps.dispatch(job.turn);
+        } finally {
+          this.active.delete(key);
+        }
         job.status = "sent";
         delete job.error;
         await this.save(job);
@@ -269,14 +325,25 @@ export class DictationDeliveryQueue {
         });
         return;
       } catch (error) {
+        if (this.stopped(job)) return;
         job.error = String(error).slice(0, 500);
+        // Missing/expired attachments cannot be repaired by retrying the same
+        // immutable request. Keep the transcript for an explicit recovery.
+        if (job.error.includes("AttachmentClaimError")) {
+          job.status = "abandoned";
+          delete job.retryAt;
+          await this.save(job);
+          return;
+        }
+        const delay = Math.min(300_000, 1000 * 2 ** Math.min(dispatchAttempts++, 9));
+        job.retryAt = Date.now() + delay;
         await this.save(job);
         this.deps.log("dictation.delivery_failed", {
           recordingId: job.id,
           threadId: dictationTurnThreadId(job.turn),
           error: job.error,
         });
-        await this.wait(Math.min(300_000, 1000 * 2 ** Math.min(dispatchAttempts++, 9)));
+        await this.wait(delay);
       }
     }
   }
