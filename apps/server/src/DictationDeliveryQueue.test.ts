@@ -71,6 +71,117 @@ function queue(
   return q;
 }
 describe("durable dictation delivery", () => {
+  it("cancels a scheduled retry instead of letting it send after dismissal", async () => {
+    const waiting = Promise.withResolvers<void>();
+    const resume = Promise.withResolvers<void>();
+    let attempts = 0;
+    const q = new DictationDeliveryQueue({
+      directory,
+      speech: async () => state("complete", "Words"),
+      dispatch: async () => {
+        attempts++;
+        throw new Error("temporarily unavailable");
+      },
+      log: () => {},
+      wait: async () => {
+        waiting.resolve();
+        await resume.promise;
+      },
+    });
+    queues.push(q);
+    await q.start();
+    await q.enqueue(input);
+    await waiting.promise;
+    expect(q.get(input.owner, input.id)?.retryAt).toEqual(expect.any(Number));
+    expect(q.isActive(input.owner, input.id)).toBe(false);
+    await q.stop(input.owner, input.id);
+    resume.resolve();
+    await q.drain();
+    expect(attempts).toBe(1);
+    expect(q.get(input.owner, input.id)?.retryAt).toBeUndefined();
+    expect(q.get(input.owner, input.id)?.error).toBeUndefined();
+  });
+  it("stops refinement durably without dispatching or losing the transcript", async () => {
+    const entered = Promise.withResolvers<void>();
+    const response = Promise.withResolvers<DictationState>();
+    const sent: Turn[] = [];
+    const q = queue(
+      async () => {
+        entered.resolve();
+        return response.promise;
+      },
+      async (c) => {
+        sent.push(c);
+      },
+    );
+    await q.start();
+    await q.enqueue(input);
+    await entered.promise;
+    expect(q.isActive(input.owner, input.id)).toBe(true);
+    await q.stop("another-owner", input.id);
+    expect(q.get(input.owner, input.id)?.status).toBe("queued");
+    expect(await q.stop(input.owner, input.id)).toBe(true);
+    response.resolve(state("complete", "Saved words"));
+    await q.drain();
+    expect(sent).toEqual([]);
+    expect(q.get(input.owner, input.id)).toMatchObject({
+      status: "abandoned",
+      draft: "Original live draft",
+    });
+    const restarted = queue(
+      async () => {
+        throw new Error("must not restart stopped speech");
+      },
+      async (c) => {
+        sent.push(c);
+      },
+    );
+    await restarted.start();
+    await restarted.drain();
+    expect(restarted.get(input.owner, input.id)?.status).toBe("abandoned");
+    expect(sent).toEqual([]);
+  });
+  it("does not claim cancellation while intake is deciding whether the message was sent", async () => {
+    const entered = Promise.withResolvers<void>();
+    const accepted = Promise.withResolvers<void>();
+    const q = queue(
+      async () => state("complete", "Words"),
+      async () => {
+        entered.resolve();
+        await accepted.promise;
+      },
+    );
+    await q.start();
+    await q.enqueue(input);
+    await entered.promise;
+    expect(await q.stop(input.owner, input.id)).toBe(false);
+    accepted.resolve();
+    await q.drain();
+    expect(q.get(input.owner, input.id)?.status).toBe("sent");
+    expect(q.isActive(input.owner, input.id)).toBe(false);
+  });
+  it("stops retrying an immutable missing attachment and keeps the final transcript", async () => {
+    let attempts = 0;
+    const q = queue(
+      async () => state("complete", "Recovered words"),
+      async () => {
+        attempts++;
+        throw new Error("AttachmentClaimError: attachment not found");
+      },
+    );
+    await q.start();
+    await q.enqueue(input);
+    await q.drain();
+    expect(attempts).toBe(1);
+    expect(q.get(input.owner, input.id)).toMatchObject({
+      status: "abandoned",
+      transcript: "Recovered words",
+    });
+    expect(q.get(input.owner, input.id)?.retryAt).toBeUndefined();
+    await q.stop(input.owner, input.id);
+    expect(q.get(input.owner, input.id)?.error).toBeUndefined();
+    expect(q.get(input.owner, input.id)?.transcript).toBe("Recovered words");
+  });
   it("waits out an unreachable speech service instead of sending the draft", async () => {
     const sent: Turn[] = [];
     let calls = 0;
