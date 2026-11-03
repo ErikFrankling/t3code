@@ -3,7 +3,15 @@ import { OrchestrationV2Command, OrchestrationV2ThreadLaunchInput } from "./orch
 
 /** Speech actions the host forwards to the local speech service. */
 export const DictationRequest = Schema.Struct({
-  action: Schema.Literals(["start", "append", "finish", "retry", "status", "cancel"]),
+  action: Schema.Literals([
+    "start",
+    "append",
+    "finish",
+    "retry",
+    "status",
+    "cancel",
+    "stop-delivery",
+  ]),
   id: Schema.optional(Schema.String.check(Schema.isMaxLength(64))),
   project: Schema.optional(Schema.String.check(Schema.isMaxLength(4096))),
   draft: Schema.optional(Schema.String.check(Schema.isMaxLength(200000))),
@@ -30,6 +38,8 @@ export const DictationState = Schema.Struct({
   bytes: Schema.Number,
   delivery: Schema.optional(DictationDeliveryStatus),
   deliveryError: Schema.optional(Schema.String),
+  deliveryActive: Schema.optional(Schema.Boolean),
+  deliveryRetryAt: Schema.optional(Schema.Number),
 });
 export type DictationState = typeof DictationState.Type;
 
