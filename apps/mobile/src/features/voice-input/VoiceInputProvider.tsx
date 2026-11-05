@@ -1,5 +1,10 @@
 import { useAtomValue } from "@effect/atom-react";
-import { AudioModule, RecordingPresets, type RecordingStatus } from "expo-audio";
+import {
+  AudioModule,
+  RecordingPresets,
+  getRecordingPermissionsAsync,
+  type RecordingStatus,
+} from "expo-audio";
 import { Directory, File, Paths } from "expo-file-system";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import { useSyncExternalStore } from "react";
@@ -158,7 +163,13 @@ const voiceInputAtom = Atom.make((get) => {
       const transcriber = registry.get(localVoiceTranscriberAtom);
       return transcriber === "checking" ? null : transcriber;
     },
-    requestPermission: permission.requestPermission,
+    requestPermission: async () => {
+      // Android shows its permission activity even for a granted permission,
+      // which pauses the app; ask only when needed.
+      const current = await getRecordingPermissionsAsync();
+      if (current.granted) return current;
+      return permission.requestPermission();
+    },
     configureRecording: configureVoiceRecordingAudio,
     // A recording whose transcription failed (no network, the server down)
     // is tried again by itself until its words reach the draft.
