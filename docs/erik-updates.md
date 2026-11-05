@@ -89,8 +89,10 @@ unsetting `T3CODE_MOBILE_UPDATES_ENABLED`: the dev shell turns updates off.
 Install-time downloads must stay out of the fingerprint too:
 `react-native-enriched-markdown` fetches native sources in its postinstall,
 and while they were hashed the PC resolved a different runtime than the
-homelab worker for the same commit (so `t3-android-release --local` is off).
-Ignoring them changes the runtime once, so it ships with a native release.
+homelab worker for the same commit, so `t3-android-release --local` was off.
+They are ignored since the v0.1.8-nightly.20261104.4192 native release; with
+them ignored the PC and the worker resolve the same runtime, and `--local`
+publishes JS updates from the PC again.
 
 ## Never a rollback
 
