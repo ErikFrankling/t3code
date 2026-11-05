@@ -5,7 +5,7 @@ import {
   ProjectId,
   type PersonalAgentEnsureResult,
 } from "@t3tools/contracts";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
@@ -153,7 +153,7 @@ export const ensurePersonalAgent = Effect.fn("PersonalAgent.ensure")(function* (
   const config = yield* ServerConfig.ServerConfig;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const crypto = yield* Crypto.Crypto;
+  const random = yield* SecureRandom.SecureRandom;
   const projects = yield* ProjectService.ProjectService;
   const threads = yield* ThreadManagementService.ThreadManagementService;
   const launches = yield* ThreadLaunchService.ThreadLaunchService;
@@ -179,8 +179,8 @@ export const ensurePersonalAgent = Effect.fn("PersonalAgent.ensure")(function* (
     }
   }
 
-  const id = yield* crypto
-    .randomUUIDv4()
+  const id = yield* random
+    .uuidV4()
     .pipe(Effect.mapError(failWith("Could not allocate an id.")));
   const existingProject = yield* projects
     .getByWorkspaceRoot(workspaceRoot)
