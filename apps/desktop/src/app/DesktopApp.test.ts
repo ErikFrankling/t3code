@@ -53,6 +53,7 @@ import * as DesktopWslBackend from "../wsl/DesktopWslBackend.ts";
 import * as BrowserImport from "../preview/BrowserImport/BrowserImport.ts";
 import * as DesktopBackendConfiguration from "../backend/DesktopBackendConfiguration.ts";
 import * as DesktopCliCommand from "./DesktopCliCommand.ts";
+import * as DesktopDictation from "./DesktopDictation.ts";
 import * as DesktopClientSettings from "../settings/DesktopClientSettings.ts";
 import * as DesktopConnectionCatalogStore from "./DesktopConnectionCatalogStore.ts";
 import * as DesktopIpc from "../ipc/DesktopIpc.ts";
@@ -69,6 +70,7 @@ import * as ElectronTheme from "../electron/ElectronTheme.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as MacPermissions from "../permissions/MacPermissions.ts";
 import * as PreviewManager from "../preview/Manager.ts";
+import * as SpeakReplyWindow from "../window/SpeakReplyWindow.ts";
 
 it.effect.each([false, true])(
   "stops backends together before flushing history and cancels Linux registration, stop defect=%s",
@@ -214,6 +216,7 @@ it.effect.each([false, true])(
             Layer.mock(BrowserImport.BrowserImport, {}),
             Layer.mock(DesktopBackendConfiguration.DesktopBackendConfiguration, {}),
             Layer.mock(DesktopCliCommand.DesktopCliCommand, {}),
+            Layer.mock(DesktopDictation.DesktopDictation, {}),
             Layer.mock(DesktopClientSettings.DesktopClientSettings, {}),
             Layer.mock(DesktopConnectionCatalogStore.DesktopConnectionCatalogStore, {}),
             Layer.mock(DesktopIpc.DesktopIpc, {}),
@@ -229,6 +232,7 @@ it.effect.each([false, true])(
             Layer.mock(ElectronTheme.ElectronTheme, {}),
             Layer.mock(ElectronWindow.ElectronWindow, {}),
             Layer.mock(MacPermissions.MacPermissions, {}),
+            Layer.mock(SpeakReplyWindow.SpeakReplyWindow, {}),
             Layer.mock(PreviewManager.PreviewManager, {
               isBrowserPartition: () => {
                 throw new Error("unexpected browser partition lookup");
