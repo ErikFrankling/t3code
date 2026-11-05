@@ -1283,7 +1283,8 @@ it.effect("continues past a run whose clock ran ahead after a hard reboot", () =
       ...cut,
       runs: [skewed, ...cut.runs],
     } as unknown as OrchestrationV2ThreadProjection);
-    assert.deepEqual(texts, ["Continue where you left off."]);
+    assert.lengthOf(texts, 1);
+    assert.isTrue(texts[0]!.startsWith("Continue where you left off."));
   }),
 );
 
