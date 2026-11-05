@@ -1070,13 +1070,13 @@ function DeliveryIndicator({
             onClick={async () => {
               setStopping(true);
               setActionError("");
-              try {
-                await engine.stopDelivery(entry.record.id);
-              } catch (cause) {
-                setActionError(cause instanceof Error ? cause.message : String(cause));
-              } finally {
-                setStopping(false);
-              }
+              // No try/finally: React Compiler skips components that use one.
+              const error = await engine.stopDelivery(entry.record.id).then(
+                () => null,
+                (cause: unknown) => (cause instanceof Error ? cause.message : String(cause)),
+              );
+              if (error !== null) setActionError(error);
+              setStopping(false);
             }}
           >
             {stopping ? "Stopping…" : server?.delivery === "abandoned" ? "Dismiss" : "Stop sending"}
