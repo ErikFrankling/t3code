@@ -82,7 +82,7 @@ const ThreadLimitRecoveryTool = Tool.make("t3_thread_limit_recovery", {
   dependencies: [
     McpInvocationContext.McpInvocationContext,
     ThreadManagementService.ThreadManagementService,
-    Crypto.Crypto,
+    SecureRandom.SecureRandom,
   ],
 })
   .annotate(Tool.Title, "Resume or snooze a limited thread at its reset")
