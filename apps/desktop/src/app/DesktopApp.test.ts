@@ -56,6 +56,7 @@ import * as BrowserImport from "../preview/BrowserImport/BrowserImport.ts";
 import * as DesktopBackendConfiguration from "../backend/DesktopBackendConfiguration.ts";
 import * as DesktopCliCommand from "./DesktopCliCommand.ts";
 import * as DesktopCliShim from "./DesktopCliShim.ts";
+import * as DesktopDictation from "./DesktopDictation.ts";
 import * as DesktopClientSettings from "../settings/DesktopClientSettings.ts";
 import * as DesktopConnectionCatalogStore from "./DesktopConnectionCatalogStore.ts";
 import * as DesktopIpc from "../ipc/DesktopIpc.ts";
@@ -73,6 +74,7 @@ import * as ElectronTheme from "../electron/ElectronTheme.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as MacPermissions from "../permissions/MacPermissions.ts";
 import * as PreviewManager from "../preview/Manager.ts";
+import * as SpeakReplyWindow from "../window/SpeakReplyWindow.ts";
 
 interface StubbedDesktop {
   readonly localEnvironmentEnabled: boolean;
@@ -205,6 +207,7 @@ const runStubbedDesktop = (stub: StubbedDesktop) =>
           Layer.mock(ChildProcessSpawner.ChildProcessSpawner, {}),
           Layer.mock(DesktopBackendConfiguration.DesktopBackendConfiguration, {}),
           Layer.mock(DesktopCliCommand.DesktopCliCommand, {}),
+          Layer.mock(DesktopDictation.DesktopDictation, {}),
           Layer.mock(DesktopClientSettings.DesktopClientSettings, {}),
           Layer.mock(DesktopConnectionCatalogStore.DesktopConnectionCatalogStore, {}),
           Layer.mock(DesktopIpc.DesktopIpc, {}),
@@ -232,6 +235,7 @@ const runStubbedDesktop = (stub: StubbedDesktop) =>
           Layer.mock(ElectronTheme.ElectronTheme, {}),
           Layer.mock(ElectronWindow.ElectronWindow, {}),
           Layer.mock(MacPermissions.MacPermissions, {}),
+          Layer.mock(SpeakReplyWindow.SpeakReplyWindow, {}),
           Layer.mock(PreviewManager.PreviewManager, {
             isBrowserPartition: () => {
               throw new Error("unexpected browser partition lookup");
