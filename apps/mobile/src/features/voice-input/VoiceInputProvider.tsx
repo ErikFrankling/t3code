@@ -1,6 +1,11 @@
 import { runAtomCommand } from "@t3tools/client-runtime/state/runtime";
 import { useAtomValue } from "@effect/atom-react";
-import { AudioModule, RecordingPresets, type RecordingStatus } from "expo-audio";
+import {
+  AudioModule,
+  RecordingPresets,
+  getRecordingPermissionsAsync,
+  type RecordingStatus,
+} from "expo-audio";
 import { Directory, File, Paths } from "expo-file-system";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import { useSyncExternalStore } from "react";
@@ -165,7 +170,13 @@ export const voiceInputAtom = Atom.make((get) => {
       const transcriber = registry.get(localVoiceTranscriberAtom);
       return transcriber === "checking" ? null : transcriber;
     },
-    requestPermission: permission.requestPermission,
+    requestPermission: async () => {
+      // Android shows its permission activity even for a granted permission,
+      // which pauses the app; ask only when needed.
+      const current = await getRecordingPermissionsAsync();
+      if (current.granted) return current;
+      return permission.requestPermission();
+    },
     configureRecording: async () => {
       const current = registry.get(mobilePreferencesAtom);
       const preferences = AsyncResult.isSuccess(current)
