@@ -707,7 +707,7 @@ describe("V2 environment commands", () => {
           },
         },
       ]);
-    }).pipe(Effect.provide(layerTestCrypto)),
+    }).pipe(Effect.provide(layerTestRandom)),
   );
 
   const turnSends = [
