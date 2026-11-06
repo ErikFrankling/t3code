@@ -25,6 +25,7 @@ import {
 } from "@t3tools/contracts";
 import { isLocalLoopbackHost } from "@t3tools/shared/hostClassification";
 import { encodeOAuthScope } from "@t3tools/shared/oauthScope";
+import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Digest from "effect/crypto/Digest";
 import * as DateTime from "effect/DateTime";
@@ -825,7 +826,8 @@ export const make = Effect.gen(function* () {
 
   // Explicit opt-in for trusted LAN deployments. Keep a real stored session so
   // websocket tickets and access-management routes share the same principal.
-  const noAuthEnabled = process.env.T3CODE_UNSAFE_NO_AUTH === "1";
+  const noAuthEnabled =
+    (yield* Config.String("T3CODE_UNSAFE_NO_AUTH").pipe(Config.withDefault(""))) === "1";
   let noAuthPrincipal: AuthenticatedSession | null = null;
   const loadNoAuthSession = Effect.gen(function* () {
     const active = yield* sessions.listActive();
