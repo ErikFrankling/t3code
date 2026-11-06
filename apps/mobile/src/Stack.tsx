@@ -678,18 +678,9 @@ const RootStackConfig = createWorkspaceStackNavigator({
     }),
     Attention: createNativeStackScreen({
       screen: AttentionSheet,
-      options: {
-        headerShown: false,
-        // An Android form sheet takes the vertical drag, so a long list in it
-        // never scrolls. The lists open as a full screen there instead.
-        ...(Platform.OS === "android"
-          ? { presentation: "card" as const }
-          : {
-              ...HORIZONTAL_FORM_SHEET_OPTIONS,
-              sheetAllowedDetents: [0.65, 0.95],
-              sheetGrabberVisible: true,
-            }),
-      },
+      // An Android form sheet takes the vertical drag, so a long list in it
+      // never scrolls. The lists open as a full screen there instead.
+      options: sheetRoute({ header: "none", detent: 0.65, maxDetent: 0.95, android: "card" }),
     }),
     ThreadAgents: createNativeStackScreen({
       screen: ThreadAgentsSheet,
