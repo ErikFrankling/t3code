@@ -74,7 +74,8 @@ export function dictationFetch(
 
 async function call(environmentId: string, body: DictationRequest): Promise<DictationState> {
   const response = await dictationFetch(environmentId as EnvironmentId, body, 30000);
-  if (!response.ok) throw new DictationHttpError(response.status, await response.text());
+  if (!response.ok)
+    throw new DictationHttpError({ status: response.status, message: await response.text() });
   return decodeDictationState(await response.json());
 }
 
