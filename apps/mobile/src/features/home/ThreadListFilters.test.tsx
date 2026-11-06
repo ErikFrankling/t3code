@@ -16,7 +16,7 @@ vi.mock("../../components/ui/Chip", () => ({
     </button>
   ),
 }));
-vi.mock("../workspace/ListFilterMenu", () => ({
+vi.mock("../layout/workspace/ListFilterMenu", () => ({
   ListFilterMenu: (props: { label: string }) => <span>{props.label}</span>,
 }));
 

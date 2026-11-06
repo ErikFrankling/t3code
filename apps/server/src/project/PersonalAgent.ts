@@ -179,9 +179,7 @@ export const ensurePersonalAgent = Effect.fn("PersonalAgent.ensure")(function* (
     }
   }
 
-  const id = yield* random
-    .uuidV4()
-    .pipe(Effect.mapError(failWith("Could not allocate an id.")));
+  const id = yield* random.uuidV4().pipe(Effect.mapError(failWith("Could not allocate an id.")));
   const existingProject = yield* projects
     .getByWorkspaceRoot(workspaceRoot)
     .pipe(Effect.mapError(failWith("Could not look up the personal project.")));

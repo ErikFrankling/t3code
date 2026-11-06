@@ -4,6 +4,7 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import * as NodeTimersPromises from "node:timers/promises";
 import type { DictationState, DictationTurn } from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
 
 /** The chat a turn goes to; the client always names it, even for a new chat. */
 export const dictationTurnThreadId = (turn: DictationTurn): string | undefined =>
@@ -63,7 +64,12 @@ interface Dependencies {
 }
 
 /** The speech service no longer has this recording; waiting cannot produce a transcript. */
-export class DictationRecordingUnavailable extends Error {}
+export class DictationRecordingUnavailable extends Schema.TaggedError<DictationRecordingUnavailable>()(
+  "DictationRecordingUnavailable",
+  { message: Schema.String },
+) {}
+
+const isDictationRecordingUnavailable = Schema.is(DictationRecordingUnavailable);
 
 /** Persist the destination and immutable turn before acknowledging Stop. */
 export class DictationDeliveryQueue {
@@ -277,7 +283,7 @@ export class DictationDeliveryQueue {
           attempt: job.attempts,
           error: job.error,
         });
-        if (error instanceof DictationRecordingUnavailable) break;
+        if (isDictationRecordingUnavailable(error)) break;
         await this.wait(delay);
       }
     }

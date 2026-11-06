@@ -1,4 +1,5 @@
 import type { DictationRequest, DictationState } from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
 
 import type { DictationRecord, DictationStorage } from "./dictationStorage";
 
@@ -12,13 +13,12 @@ import type { DictationRecord, DictationStorage } from "./dictationStorage";
  * recording because of an error, a reload or a closed view.
  */
 
-export class DictationHttpError extends Error {
-  readonly status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
+export class DictationHttpError extends Schema.TaggedError<DictationHttpError>()(
+  "DictationHttpError",
+  { status: Schema.Number, message: Schema.String },
+) {}
+
+const isDictationHttpError = Schema.is(DictationHttpError);
 
 export type DictationUpload = "uploaded" | "uploading" | "waiting";
 
@@ -86,7 +86,7 @@ function encode(samples: Int16Array) {
   return btoa(binary);
 }
 
-const statusOf = (cause: unknown) => (cause instanceof DictationHttpError ? cause.status : 0);
+const statusOf = (cause: unknown) => (isDictationHttpError(cause) ? cause.status : 0);
 
 export function plainDictationError(cause: unknown): string {
   const status = statusOf(cause);

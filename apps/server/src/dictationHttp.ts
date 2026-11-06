@@ -22,6 +22,10 @@ import { DictationDelivery, speechServiceUrl } from "./DictationDelivery.ts";
 import * as ServerConfig from "./config.ts";
 import { authenticateRawRouteWithScope } from "./http.ts";
 
+class DictationRouteError extends Schema.TaggedError<DictationRouteError>()("DictationRouteError", {
+  cause: Schema.Defect(),
+}) {}
+
 const decodeDictationRequest = Schema.decodeUnknownEffect(DictationRequest);
 const decodeDictationState = Schema.decodeUnknownEffect(Schema.fromJsonString(DictationState));
 
@@ -40,9 +44,10 @@ export const layerDictationRoute = Layer.unwrap(
         const body = yield* decodeDictationRequest(yield* request.json);
         if (body.action === "stop-delivery") {
           if (!body.id) return HttpServerResponse.text("Recording id required", { status: 400 });
-          const stopped = yield* Effect.tryPromise(() =>
-            deliveries.stop(session.subject, body.id!),
-          );
+          const stopped = yield* Effect.tryPromise({
+            try: () => deliveries.stop(session.subject, body.id!),
+            catch: (cause) => new DictationRouteError({ cause }),
+          });
           if (!stopped)
             return HttpServerResponse.text(
               "Delivery is being confirmed. Check its status before stopping it.",
@@ -145,17 +150,19 @@ export const layerDictationAudioRoute = HttpRouter.add(
     if (!Number.isSafeInteger(offset) || offset < 0) {
       return HttpServerResponse.text("Invalid offset.", { status: 400 });
     }
-    const result = yield* Effect.tryPromise(() =>
-      submitRecording({
-        directory: config.stateDir,
-        owner: session.subject,
-        id,
-        project: query.get("project") ?? "",
-        audio: audio.value,
-        offset,
-        final: query.get("final") !== "0",
-      }),
-    ).pipe(
+    const result = yield* Effect.tryPromise({
+      try: () =>
+        submitRecording({
+          directory: config.stateDir,
+          owner: session.subject,
+          id,
+          project: query.get("project") ?? "",
+          audio: audio.value,
+          offset,
+          final: query.get("final") !== "0",
+        }),
+      catch: (cause) => new DictationRouteError({ cause }),
+    }).pipe(
       Effect.tapError((cause) =>
         Effect.logWarning("dictation.audio_submit_failed", { recordingId: id, cause }),
       ),

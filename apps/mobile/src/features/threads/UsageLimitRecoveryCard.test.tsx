@@ -80,6 +80,8 @@ describe("UsageLimitRecoveryCard", () => {
         <UsageLimitRecoveryCard
           thread={failedThread(resetAt, code, errorClass)}
           environmentId={"env-1" as EnvironmentId}
+          providers={[]}
+          onSelectModel={() => {}}
         />,
       ),
     );
@@ -102,6 +104,8 @@ describe("UsageLimitRecoveryCard", () => {
         <UsageLimitRecoveryCard
           thread={failedThread(null, CHATGPT_WORKSPACE_USAGE_LIMIT_CODE)}
           environmentId={"env-1" as EnvironmentId}
+          providers={[]}
+          onSelectModel={() => {}}
         />,
       ),
     );
@@ -124,6 +128,8 @@ describe("UsageLimitRecoveryCard", () => {
         <UsageLimitRecoveryCard
           thread={failedThread(null, CHATGPT_WORKSPACE_USAGE_LIMIT_CODE)}
           environmentId={"env-1" as EnvironmentId}
+          providers={[]}
+          onSelectModel={() => {}}
         />,
       ),
     );
