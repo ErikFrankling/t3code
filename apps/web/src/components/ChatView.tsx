@@ -1728,6 +1728,7 @@ export default function ChatView(props: ChatViewProps) {
     );
     return message ? { id: message.id, text: message.text } : null;
   })();
+  const displayedTimelineKey = activeThreadKey ?? routeThreadKey;
   const displayedThreadRef = parseScopedThreadKey(displayedTimelineKey);
   const {
     worktreeSetup,
