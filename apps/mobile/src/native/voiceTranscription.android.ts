@@ -25,6 +25,7 @@ export type {
 } from "./voiceTranscription";
 
 const decodeDictationState = Schema.decodeUnknownSync(DictationState);
+const isVoiceTranscriptionError = Schema.is(VoiceTranscriptionError);
 const UPLOAD_INTERVAL_MS = 1_000;
 const POLL_INTERVAL_MS = 800;
 // The final recogniser waits out GPU contention and restarts on the PC.
@@ -253,7 +254,10 @@ export async function getLocalVoiceTranscriber(
       // Offline there is no connection yet: record anyway. The upload waits
       // (the recording is kept on the phone) and goes out once it is back.
       if (!resolved || resolved.connection()?.httpAuthorization?._tag === "Dpop") {
-        throw new VoiceTranscriptionError("unavailable", DIRECT_CONNECTION_NEEDED);
+        throw new VoiceTranscriptionError({
+          code: "unavailable",
+          message: DIRECT_CONNECTION_NEEDED,
+        });
       }
       const stream = new DictationStream(() => {
         const connection = resolved.connection();
@@ -277,8 +281,10 @@ export async function getLocalVoiceTranscriber(
             stream.cancel();
             throwIfVoiceTranscriptionAborted(signal);
           }
-          if (error instanceof VoiceTranscriptionError) throw error;
-          throw new VoiceTranscriptionError("transcription-failed", "Dictation failed.", {
+          if (isVoiceTranscriptionError(error)) throw error;
+          throw new VoiceTranscriptionError({
+            code: "transcription-failed",
+            message: "Dictation failed.",
             cause: error,
           });
         }

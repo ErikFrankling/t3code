@@ -648,7 +648,8 @@ describe("VoiceInputController", () => {
     });
     await harness.controller.start();
     expect(signal).toBeDefined();
-    harness.controller.cancel();
+    // Fork: a plain cancel keeps the audio; the confirmed discard deletes it.
+    harness.controller.cancelAndDelete();
     expect(signal?.aborted).toBe(true);
     const next = createHarness();
     const nextStart = next.controller.start();
@@ -662,14 +663,12 @@ describe("VoiceInputController", () => {
     await next.controller.interruptRecording();
   });
 
-  it("stops recording after a live inference failure and preserves the draft for retry", async () => {
+  it("stops recording after a live inference failure and keeps the draft and the audio for retry", async () => {
     const transcript = deferred<string>();
-    const released = deferred<void>();
     const harness = createHarness({
       getTranscriber: () => ({
         prepare: async () => ({ ...preparedTranscription(), start: () => transcript.promise }),
       }),
-      deleteRecording: () => released.resolve(undefined),
     });
     await harness.controller.start();
     transcript.reject(
@@ -678,7 +677,7 @@ describe("VoiceInputController", () => {
         message: "Speech quota reached.",
       }),
     );
-    await released.promise;
+    await vi.waitFor(() => expect(harness.controller.currentState.phase).toBe("error"));
     expect(harness.controller.currentState).toMatchObject({
       phase: "error",
       error: "Speech quota reached.",
@@ -686,6 +685,8 @@ describe("VoiceInputController", () => {
     });
     expect(harness.recorder.stop).toHaveBeenCalled();
     expect(harness.commits).toEqual([]);
+    // Fork: the audio stays on the device until its words reach the draft or the chat.
+    expect(harness.deleted).toEqual([]);
     const next = createHarness();
     await next.controller.start();
     expect(next.controller.currentState.phase).toBe("recording");
@@ -852,7 +853,11 @@ describe("VoiceInputController", () => {
   });
 
   it("keeps the words of an interrupted recording: they go to the draft, not the chat", async () => {
-    const transcribe = vi.fn(async () => "kept");
+    let abortedAtTranscribe: boolean | null = null;
+    const transcribe = vi.fn(async () => {
+      abortedAtTranscribe = (await preparationEntered.promise).aborted;
+      return "kept";
+    });
     const preparationEntered = deferred<AbortSignal>();
     const harness = createHarness({
       getTranscriber: () => ({
@@ -863,7 +868,7 @@ describe("VoiceInputController", () => {
       }),
     });
     await harness.controller.start();
-    const signal = await preparationEntered.promise;
+    await preparationEntered.promise;
     harness.recorder.uri = "file:///reset-empty.m4a";
     await harness.controller.handleRecorderStatus({
       isFinished: true,
@@ -873,7 +878,8 @@ describe("VoiceInputController", () => {
     });
 
     expect(transcribe).toHaveBeenCalledWith("file:///voice.m4a", expect.anything());
-    expect(signal.aborted).toBe(false);
+    // The interruption itself never cancels; cleanup after the commit may.
+    expect(abortedAtTranscribe).toBe(false);
     expect(harness.commits).toEqual([{ text: "hello kept", selection: { start: 10, end: 10 } }]);
     // Deleted only now that its words are in the draft.
     expect(harness.deleted).toContain("file:///voice.m4a");

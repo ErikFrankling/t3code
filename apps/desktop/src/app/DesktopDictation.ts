@@ -3,6 +3,7 @@
 import * as NodeChildProcess from "node:child_process";
 
 import type { DesktopDictationRequest, DesktopDictationResponse } from "@t3tools/contracts";
+import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -169,7 +170,8 @@ export const make = Effect.gen(function* () {
   const runFork = Effect.runForkWith(yield* Effect.context<never>());
   const warn = (message: string, cause: unknown) => void runFork(logWarning(message, { cause }));
   const hook = makeDictationHookRunner({
-    command: process.env[DICTATION_HOOK_ENV]?.trim() || undefined,
+    command:
+      (yield* Config.String(DICTATION_HOOK_ENV).pipe(Config.withDefault(""))).trim() || undefined,
     spawn: spawnDictationHook,
     warn,
   });

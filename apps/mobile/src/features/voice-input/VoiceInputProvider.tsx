@@ -127,7 +127,7 @@ const voiceInputAtom = Atom.make((get) => {
         ? createCallVoiceRecorder()
         : destination === "local"
           ? createVoiceRecorder(VOICE_RECORDING_OPTIONS)
-        : new AudioModule.AudioRecorder(VOICE_RECORDING_OPTIONS),
+          : new AudioModule.AudioRecorder(VOICE_RECORDING_OPTIONS),
     onStatus: (status: RecordingStatus) => {
       session.controller.handleRecorderStatus({
         isFinished: status.isFinished,

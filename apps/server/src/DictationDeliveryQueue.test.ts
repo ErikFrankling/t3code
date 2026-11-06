@@ -205,7 +205,7 @@ describe("durable dictation delivery", () => {
     const sent: Turn[] = [];
     const q = queue(
       async () => {
-        throw new DictationRecordingUnavailable("not found");
+        throw new DictationRecordingUnavailable({ message: "not found" });
       },
       async (c) => {
         sent.push(c);

@@ -13,6 +13,10 @@ import * as ServerConfig from "./config.ts";
 import { registerPushDevice, sendPush } from "./erikPush.ts";
 import { authenticateRawRouteWithScope } from "./http.ts";
 
+class PushRequestError extends Schema.TaggedError<PushRequestError>()("PushRequestError", {
+  cause: Schema.Defect(),
+}) {}
+
 const PushDeviceRequest = Schema.Struct({
   token: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(4096)),
   deviceId: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(200)),
@@ -47,7 +51,10 @@ export const layerPushDeviceRoute = Layer.unwrap(
         yield* authenticateRawRouteWithScope(AuthOrchestrationOperateScope);
         const request = yield* HttpServerRequest.HttpServerRequest;
         const body = yield* decodeDevice(yield* request.json);
-        const devices = yield* Effect.tryPromise(() => registerPushDevice(stateDir, body));
+        const devices = yield* Effect.tryPromise({
+          try: () => registerPushDevice(stateDir, body),
+          catch: (cause) => new PushRequestError({ cause }),
+        });
         yield* Effect.logInfo("push.device_registered", { label: body.label, devices });
         return HttpServerResponse.jsonUnsafe({ registered: true, devices });
       }).pipe(
@@ -76,7 +83,10 @@ export const layerPushSendRoute = Layer.unwrap(
         yield* authenticateRawRouteWithScope(AuthOrchestrationOperateScope);
         const request = yield* HttpServerRequest.HttpServerRequest;
         const body = yield* decodeSend(yield* request.json);
-        const result = yield* Effect.tryPromise(() => sendPush(stateDir, body));
+        const result = yield* Effect.tryPromise({
+          try: () => sendPush(stateDir, body),
+          catch: (cause) => new PushRequestError({ cause }),
+        });
         if (result.errors.length > 0) {
           yield* Effect.logWarning("push.send_partial", { ...result });
         }

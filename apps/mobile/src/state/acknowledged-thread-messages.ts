@@ -3,7 +3,6 @@ import { Atom } from "effect/reactivity";
 import { scopedThreadKey } from "../lib/scopedEntities";
 import { appAtomRegistry } from "./atom-registry";
 import { threadHasCaughtUpTo } from "@t3tools/client-runtime/state/threads";
-import { scopedThreadKey } from "../lib/scopedEntities";
 import { setThreadComposerError } from "./thread-composer-error";
 import type { AcknowledgedThreadMessage, QueuedThreadMessage } from "./thread-outbox-model";
 import { environmentThreadDetails } from "./threads";
