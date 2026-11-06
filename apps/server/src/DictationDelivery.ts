@@ -118,7 +118,7 @@ export const layer = Layer.effect(
           signal: AbortSignal.timeout(30_000),
         });
         if (response.status === 400 || response.status === 404)
-          throw new DictationRecordingUnavailable(await response.text());
+          throw new DictationRecordingUnavailable({ message: await response.text() });
         if (!response.ok) throw new Error(`Speech service returned HTTP ${response.status}`);
         return decodeDictationState(await response.json());
       },
