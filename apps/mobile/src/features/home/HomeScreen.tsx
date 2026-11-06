@@ -798,10 +798,7 @@ export function HomeScreen(props: HomeScreenProps) {
   if (Platform.OS === "android" && threadListV2Items.length === 0 && personalAgentCard === null) {
     return (
       <ScreenContent surface="screen">
-        <View
-          className="flex-1"
-          style={{ paddingBottom: insets.bottom }}
-        >
+        <View className="flex-1" style={{ paddingBottom: insets.bottom }}>
           {filterRow}
           <View className="flex-1 items-center justify-center px-4">{v2ListEmpty}</View>
         </View>

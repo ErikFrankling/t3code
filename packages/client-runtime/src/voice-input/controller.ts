@@ -831,8 +831,11 @@ export class VoiceInputController {
     this.recordingUri = null;
     // The audio is deleted only after its words reached the draft or the chat;
     // anything else (an error, a cancel) keeps the file.
-    if (this.keepRecordings) this.ownedRecordingUris.clear();
-    else this.deleteOwnedRecordings();
+    if (this.keepRecordings) {
+      this.ownedRecordingUris.clear();
+      // Upstream's retry mode keeps its failed audio owned, so a cancel deletes it.
+      if (this.retryRecording) this.ownedRecordingUris.add(this.retryRecording.uri);
+    } else this.deleteOwnedRecordings();
     this.keepRecordings = true;
     await this.releaseAudioSession();
     releaseSession(this.sessionToken);

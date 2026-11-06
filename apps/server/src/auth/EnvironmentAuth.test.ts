@@ -11,6 +11,7 @@ import {
 } from "@t3tools/shared/dpop";
 import { expect, it } from "@effect/vitest";
 import * as DateTime from "effect/DateTime";
+import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
@@ -23,6 +24,11 @@ import * as EnvironmentAuth from "./EnvironmentAuth.ts";
 import * as ServerSecretStore from "./ServerSecretStore.ts";
 import * as SessionStore from "./SessionStore.ts";
 import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
+
+// Opts into unsafe-no-auth for one test without touching the process environment.
+const unsafeNoAuthConfig = ConfigProvider.layer(
+  ConfigProvider.fromEnv({ env: { ...process.env, T3CODE_UNSAFE_NO_AUTH: "1" } }),
+);
 
 const TEST_SERVER_PORT = 13_773;
 
@@ -310,91 +316,52 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer))(
     );
 
     it.effect("reuses a real administrative session only with explicit unsafe-no-auth opt-in", () =>
-      Effect.acquireUseRelease(
-        Effect.sync(() => {
-          const previous = process.env.T3CODE_UNSAFE_NO_AUTH;
-          process.env.T3CODE_UNSAFE_NO_AUTH = "1";
-          return previous;
-        }),
-        () =>
-          Effect.gen(function* () {
-            const auth = yield* EnvironmentAuth.EnvironmentAuth;
-            const sessions = yield* SessionStore.SessionStore;
-            const missing = yield* auth.authenticateHttpRequest({
-              cookies: {},
-              headers: {},
-            } as never);
-            const stale = yield* auth.authenticateHttpRequest(
-              makeCookieRequest(sessions.cookieName, "stale"),
-            );
-            expect(missing.subject).toBe("no-auth");
-            expect(missing.scopes).toEqual(AuthStandardClientScopes);
-            expect(stale.sessionId).toBe(missing.sessionId);
-            const stored = yield* sessions.listActive();
-            expect(stored.some((session) => session.sessionId === missing.sessionId)).toBe(true);
-          }).pipe(Effect.provide(layerEnvironmentAuth())),
-        (previous) =>
-          Effect.sync(() => {
-            if (previous === undefined) delete process.env.T3CODE_UNSAFE_NO_AUTH;
-            else process.env.T3CODE_UNSAFE_NO_AUTH = previous;
-          }),
-      ),
+      Effect.gen(function* () {
+        const auth = yield* EnvironmentAuth.EnvironmentAuth;
+        const sessions = yield* SessionStore.SessionStore;
+        const missing = yield* auth.authenticateHttpRequest({
+          cookies: {},
+          headers: {},
+        } as never);
+        const stale = yield* auth.authenticateHttpRequest(
+          makeCookieRequest(sessions.cookieName, "stale"),
+        );
+        expect(missing.subject).toBe("no-auth");
+        expect(missing.scopes).toEqual(AuthStandardClientScopes);
+        expect(stale.sessionId).toBe(missing.sessionId);
+        const stored = yield* sessions.listActive();
+        expect(stored.some((session) => session.sessionId === missing.sessionId)).toBe(true);
+      }).pipe(Effect.provide(layerEnvironmentAuth().pipe(Layer.provide(unsafeNoAuthConfig)))),
     );
 
     it.effect("reports the current scope set for sessions stored by an older server", () =>
-      Effect.acquireUseRelease(
-        Effect.sync(() => {
-          const previous = process.env.T3CODE_UNSAFE_NO_AUTH;
-          process.env.T3CODE_UNSAFE_NO_AUTH = "1";
-          return previous;
-        }),
-        () =>
-          Effect.gen(function* () {
-            const auth = yield* EnvironmentAuth.EnvironmentAuth;
-            const sessions = yield* SessionStore.SessionStore;
-            const legacy = yield* sessions.issue({
-              method: "browser-session-cookie",
-              subject: "phone",
-              scopes: ["orchestration:read", "orchestration:operate"],
-            });
-            const session = yield* auth.authenticateHttpRequest(
-              makeCookieRequest(sessions.cookieName, legacy.token),
-            );
-            expect(session.sessionId).toBe(legacy.sessionId);
-            expect(session.scopes).toEqual(AuthStandardClientScopes);
-          }).pipe(Effect.provide(layerEnvironmentAuth())),
-        (previous) =>
-          Effect.sync(() => {
-            if (previous === undefined) delete process.env.T3CODE_UNSAFE_NO_AUTH;
-            else process.env.T3CODE_UNSAFE_NO_AUTH = previous;
-          }),
-      ),
+      Effect.gen(function* () {
+        const auth = yield* EnvironmentAuth.EnvironmentAuth;
+        const sessions = yield* SessionStore.SessionStore;
+        const legacy = yield* sessions.issue({
+          method: "browser-session-cookie",
+          subject: "phone",
+          scopes: ["orchestration:read", "orchestration:operate"],
+        });
+        const session = yield* auth.authenticateHttpRequest(
+          makeCookieRequest(sessions.cookieName, legacy.token),
+        );
+        expect(session.sessionId).toBe(legacy.sessionId);
+        expect(session.scopes).toEqual(AuthStandardClientScopes);
+      }).pipe(Effect.provide(layerEnvironmentAuth().pipe(Layer.provide(unsafeNoAuthConfig)))),
     );
 
     it.effect("exchanges any pairing code for an access token under unsafe-no-auth", () =>
-      Effect.acquireUseRelease(
-        Effect.sync(() => {
-          const previous = process.env.T3CODE_UNSAFE_NO_AUTH;
-          process.env.T3CODE_UNSAFE_NO_AUTH = "1";
-          return previous;
-        }),
-        () =>
-          Effect.gen(function* () {
-            const auth = yield* EnvironmentAuth.EnvironmentAuth;
-            const exchanged = yield* auth.exchangeBootstrapCredentialForAccessToken(
-              "anything",
-              ["orchestration:read"],
-              requestMetadata,
-            );
-            expect(exchanged.token_type).toBe("Bearer");
-            expect(exchanged.scope).toBe("orchestration:read");
-          }).pipe(Effect.provide(layerEnvironmentAuth())),
-        (previous) =>
-          Effect.sync(() => {
-            if (previous === undefined) delete process.env.T3CODE_UNSAFE_NO_AUTH;
-            else process.env.T3CODE_UNSAFE_NO_AUTH = previous;
-          }),
-      ),
+      Effect.gen(function* () {
+        const auth = yield* EnvironmentAuth.EnvironmentAuth;
+        const exchanged = yield* auth.exchangeBootstrapCredentialForAccessToken(
+          "anything",
+          ["orchestration:read"],
+          requestMetadata,
+        );
+        expect(exchanged.token_type).toBe("Bearer");
+        expect(exchanged.scope).toBe("orchestration:read");
+      }).pipe(Effect.provide(layerEnvironmentAuth().pipe(Layer.provide(unsafeNoAuthConfig)))),
     );
 
     it.effect("prefers a bearer token over a stale legacy cookie", () =>

@@ -21,19 +21,23 @@ function fakeGateway() {
     heard: (id: string) => recordings.get(id)?.chunks ?? [],
     request: async (_environmentId: string, body: DictationRequest): Promise<DictationState> => {
       await Promise.resolve();
-      if (gateway.down) throw new DictationHttpError(502, "Speech service unavailable");
+      if (gateway.down)
+        throw new DictationHttpError({ status: 502, message: "Speech service unavailable" });
       const id = body.id ?? "";
       if (body.action === "start" && !recordings.has(id))
         recordings.set(id, { status: "recording", chunks: [], bytes: 0, final: "" });
       const recording = recordings.get(id);
-      if (!recording) throw new DictationHttpError(404, "Not found");
+      if (!recording) throw new DictationHttpError({ status: 404, message: "Not found" });
       if (body.action === "append") {
         if (recording.status !== "recording")
-          throw new DictationHttpError(409, "Recording is already closed.");
+          throw new DictationHttpError({ status: 409, message: "Recording is already closed." });
         const sequence = body.sequence ?? -1;
         if (sequence !== recording.chunks.length - 1) {
           if (sequence !== recording.chunks.length)
-            throw new DictationHttpError(409, "Unexpected audio chunk sequence.");
+            throw new DictationHttpError({
+              status: 409,
+              message: "Unexpected audio chunk sequence.",
+            });
           const bytes = Uint8Array.from(atob(body.audio ?? ""), (char) => char.charCodeAt(0));
           recording.chunks.push(new Int16Array(bytes.buffer)[0] ?? 0);
           recording.bytes += bytes.byteLength;
