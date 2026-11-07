@@ -181,7 +181,9 @@ describe("getLocalVoiceTranscriber", () => {
   });
 
   it.each(["cancel", "cancel after stop", "model failure", "model failure after stop"] as const)(
-    "discards early audio without a late commit after %s",
+    // Fork: a confirmed discard (cancelAndDelete) deletes the audio; a model
+    // failure keeps it for Retry and Save ("never lose a dictation").
+    "ends early audio without a late commit after %s",
     async (ending) => {
       const nativePrepare = Promise.withResolvers<string | null>();
       mocks.prepare.mockReturnValue(nativePrepare.promise);
@@ -192,7 +194,7 @@ describe("getLocalVoiceTranscriber", () => {
       const cancelled = ending === "cancel" || ending === "cancel after stop";
       if (ending.endsWith("after stop")) finishing = dictation.controller.stop();
       if (cancelled) {
-        dictation.controller.cancel();
+        dictation.controller.cancelAndDelete();
       } else {
         nativePrepare.reject(Object.assign(new Error("download failed"), { code: "Network" }));
       }
@@ -203,7 +205,7 @@ describe("getLocalVoiceTranscriber", () => {
       mocks.prepare.mockResolvedValue("sv-SE");
       await next.controller.start();
       expect(next.controller.currentState.phase).toBe("recording");
-      expect(dictation.deleted).toEqual(["file:///voice.m4a"]);
+      expect(dictation.deleted).toEqual(cancelled ? ["file:///voice.m4a"] : []);
       expect(mocks.transcribe).not.toHaveBeenCalled();
       await next.controller.stop();
       expect(next.commits).toEqual(["Hej världen."]);
