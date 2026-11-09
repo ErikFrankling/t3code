@@ -89,13 +89,9 @@ export const make = Effect.gen(function* () {
       ),
     );
     const now = DateTime.toEpochMillis(yield* DateTime.now);
-    const selected = snapshots.find((provider) => provider.instanceId === selection.instanceId);
-    // Only a failed probe counts: a pending one is also not installed yet.
-    const unusable =
-      selected?.enabled === true &&
-      selected.status === "error" &&
-      (!selected.installed || selected.auth.status === "unauthenticated");
-    if (unusable || exhaustedUsageWindow(selected, now, selection.model)) {
+    const fallbackFrom = Effect.fn("TextGeneration.fallbackFrom")(function* (
+      failed: ModelSelection,
+    ) {
       const settings = yield* serverSettings.getSettings.pipe(
         Effect.mapError(
           (cause) =>
@@ -106,29 +102,62 @@ export const make = Effect.gen(function* () {
             }),
         ),
       );
-      selection =
-        fallbackTextGenerationModelSelection(
-          settings.providerInstances,
-          (instanceId, driver) => {
-            const provider = snapshots.find((candidate) => candidate.instanceId === instanceId);
-            return (
-              instanceId !== selection.instanceId &&
-              provider?.enabled === true &&
-              resolveProjectProviderInstanceEnabled(settings, null, instanceId) &&
-              provider.installed &&
-              provider.auth.status !== "unauthenticated" &&
-              provider.status !== "error" &&
-              isProviderAvailable(provider) &&
-              isProviderTextGenerationCapable(provider) &&
-              (operation !== "generateReviewGuide" || INVESTIGATING_DRIVERS.has(driver)) &&
-              !exhaustedUsageWindow(provider, now, defaultTextGenerationModel(driver))
-            );
-          },
-          { includeConfiguredInstances: true },
-        ) ?? selection;
+      return fallbackTextGenerationModelSelection(
+        settings.providerInstances,
+        (instanceId, driver) => {
+          const provider = snapshots.find((candidate) => candidate.instanceId === instanceId);
+          return (
+            instanceId !== failed.instanceId &&
+            provider?.enabled === true &&
+            resolveProjectProviderInstanceEnabled(settings, null, instanceId) &&
+            provider.installed &&
+            provider.auth.status !== "unauthenticated" &&
+            provider.status !== "error" &&
+            isProviderAvailable(provider) &&
+            isProviderTextGenerationCapable(provider) &&
+            (operation !== "generateReviewGuide" || INVESTIGATING_DRIVERS.has(driver)) &&
+            !exhaustedUsageWindow(provider, now, defaultTextGenerationModel(driver))
+          );
+        },
+        { includeConfiguredInstances: true },
+      );
+    });
+    const selected = snapshots.find((provider) => provider.instanceId === selection.instanceId);
+    // Only a failed probe counts: a pending one is also not installed yet.
+    const unusable =
+      selected?.enabled === true &&
+      selected.status === "error" &&
+      (!selected.installed || selected.auth.status === "unauthenticated");
+    if (unusable || exhaustedUsageWindow(selected, now, selection.model)) {
+      selection = (yield* fallbackFrom(selection)) ?? selection;
     }
-    return yield* resolveInstance(registry, operation, selection.instanceId).pipe(
-      Effect.flatMap((service) => invoke(service, selection)),
+    const attempt = (modelSelection: ModelSelection) =>
+      resolveInstance(registry, operation, modelSelection.instanceId).pipe(
+        Effect.flatMap((service) => invoke(service, modelSelection)),
+      );
+    const primary = selection;
+    // A provider can fail without its snapshot knowing (a rate limit, a broken config):
+    // try one other provider before giving up, so a title does not stay a truncated prompt.
+    return yield* attempt(primary).pipe(
+      Effect.catch((error) =>
+        fallbackFrom(primary).pipe(
+          Effect.orElseSucceed(() => null),
+          Effect.flatMap((fallback) =>
+            fallback === null
+              ? Effect.fail(error)
+              : Effect.logWarning("Text generation failed; trying another provider", {
+                  operation,
+                  failed: primary.instanceId,
+                  fallback: fallback.instanceId,
+                  detail: error.detail,
+                }).pipe(
+                  Effect.andThen(attempt(fallback)),
+                  // The first provider's error says what is actually misconfigured.
+                  Effect.mapError(() => error),
+                ),
+          ),
+        ),
+      ),
     );
   });
   return TextGeneration.of({
