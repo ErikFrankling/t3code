@@ -36,12 +36,20 @@ export function looksLikeSeedTitle(title: string, firstUserMessage: string | und
 
 export type TitleRefreshThread = Pick<
   OrchestrationV2AppThread,
-  "title" | "titleSource" | "titleRegeneration" | "archivedAt" | "deletedAt" | "lineage"
+  | "title"
+  | "titleSource"
+  | "titleRegeneration"
+  | "archivedAt"
+  | "deletedAt"
+  | "lineage"
+  | "createdBy"
+  | "creationSource"
 >;
 
 /**
- * Whether T3 may rename a thread on its own. Explicit renames and titles given at creation stay;
- * titles cut from the first message or written by a model follow the conversation.
+ * Whether T3 may rename a thread on its own. Explicit renames and titles the server gives at
+ * creation (the personal agent) stay; titles cut from the first message, written by a model or
+ * picked by an agent that launched the thread follow the conversation.
  */
 export function titleRefreshAllowed(
   thread: TitleRefreshThread,
@@ -57,7 +65,10 @@ export function titleRefreshAllowed(
     case "manual":
       return false;
     case undefined:
-      return looksLikeSeedTitle(thread.title, firstUserMessage());
+      return (
+        (thread.createdBy === "agent" && thread.creationSource === "mcp") ||
+        looksLikeSeedTitle(thread.title, firstUserMessage())
+      );
   }
 }
 
