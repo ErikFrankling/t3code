@@ -404,7 +404,7 @@ function avoidRule(projectTitle: string | undefined, others: string): string {
 function lengthRule(hasInstructions: boolean): string {
   return hasInstructions
     ? "- Follow the user's title instructions at the end of this prompt. Where they conflict with these rules, including on length and format, they win."
-    : "- 3-8 words, fewer than 40 characters.";
+    : "- 2-4 words, at most 28 characters. The sidebar shows only the first few words, so a longer title is cut off.\n- Lead with the most distinctive keyword: the system, feature, or problem the user would search for.";
 }
 
 // Keep shared editorial rules in these two prompts in sync.
@@ -425,7 +425,7 @@ Title the subject and outcome. Discard incidental instructions.
 
 Editorial rules:
 ${lengthRule(hasInstructions)}
-- Use a compact noun phrase or clear action phrase.
+- Use a compact noun phrase, such as "Session title renaming" or "Laptop battery drain". Drop articles and filler verbs.
 - Capture the umbrella goal when the request lists several symptoms or steps.
 - When asked about thread behavior, never include the referenced titles' topics. "[Fix login] why didn't this thread start?" means "Thread Startup Failure". Use linked topics only for requests about that work.
 - Name the product change, not the mock, plan, report, branch, or PR used to produce it.
@@ -458,7 +458,8 @@ Determine the title in this order:
 
 Editorial rules:
 ${lengthRule(hasInstructions)}
-- Use a compact noun phrase or clear action phrase.
+- Use a compact noun phrase, such as "Session title renaming" or "Laptop battery drain". Drop articles and filler verbs.
+- A previous title that is longer than this, or that copies the start of a message, is not accurate: shorten it.
 - Preserve the umbrella subject when later messages focus on one finding, provider, platform, or implementation detail.
 - When asked about thread behavior, never include the referenced titles' topics. "[Fix login] why didn't this thread start?" means "Thread Startup Failure". Use linked topics only for requests about that work.
 - A thread progressing through research, planning, implementation, review, CI, merge, and monitoring has usually not changed subjects.
