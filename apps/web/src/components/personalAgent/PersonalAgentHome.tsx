@@ -6,10 +6,20 @@ import {
   type SpokenEntry,
   type TodaySummary,
 } from "@t3tools/contracts";
-import { PauseIcon, PlayIcon, SparklesIcon } from "lucide-react";
+import * as Schema from "effect/Schema";
+import {
+  PanelLeftCloseIcon,
+  PanelLeftOpenIcon,
+  PanelRightCloseIcon,
+  PanelRightOpenIcon,
+  PauseIcon,
+  PlayIcon,
+  SparklesIcon,
+} from "lucide-react";
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { useAssetUrlState } from "../../assets/assetUrls";
+import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import { cn } from "../../lib/utils";
 import { useEnvironmentQuery } from "../../state/query";
@@ -249,6 +259,53 @@ function SpokenFeed({
 
 type SideTab = "todo" | "spoken";
 
+// Which side panels of the home are open. Both start open; closing one keeps
+// the chat wider until the user opens it again, on this device.
+const PANELS_KEY = "t3.personalAgent.panels";
+const PanelsSchema = Schema.Struct({ todo: Schema.Boolean, spoken: Schema.Boolean });
+const PANELS_OPEN = { todo: true, spoken: true } as const;
+
+/** A thin strip in place of a closed panel, with the one button that opens it. */
+function PanelRail({
+  side,
+  label,
+  badge,
+  className,
+  onOpen,
+}: {
+  side: "left" | "right";
+  label: string;
+  badge: string | null;
+  className: string;
+  onOpen: () => void;
+}) {
+  const Icon = side === "left" ? PanelLeftOpenIcon : PanelRightOpenIcon;
+  return (
+    <div
+      className={cn(
+        "hidden w-10 shrink-0 flex-col items-center gap-1 bg-background pt-2.5",
+        side === "left" ? "border-r border-border/65" : "border-l border-border/65",
+        className,
+      )}
+    >
+      <Button
+        variant="ghost-muted"
+        size="icon-sm"
+        aria-label={label}
+        title={label}
+        onClick={onOpen}
+      >
+        <Icon />
+      </Button>
+      {badge ? (
+        <span className="rounded bg-warning/14 px-1 text-2xs font-semibold tabular-nums text-warning-foreground">
+          {badge}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 /**
  * The personal agent's home: its one to-do list (Needs you on top) as the main
  * panel, the chat in the middle, and what it said out loud on the right, with
@@ -267,6 +324,9 @@ export function PersonalAgentHome({
   const { state, error } = usePersonalAgentHome(environmentId);
   const seenAt = useSpokenSeenAt();
   const [tab, setTab] = useState<SideTab>("todo");
+  const [panels, setPanels] = useLocalStorage(PANELS_KEY, PANELS_OPEN, PanelsSchema);
+  const setPanel = (panel: "todo" | "spoken", open: boolean) =>
+    setPanels((current) => ({ ...current, [panel]: open }));
   const now = Date.parse(`${useNowMinute()}:00Z`);
   const items = state?.items ?? [];
   const spoken = state?.spoken ?? [];
@@ -277,6 +337,7 @@ export function PersonalAgentHome({
   // Opening the home counts as having seen what it said, after a moment so the
   // new ones still show as new on arrival.
   const newestAt = newest ? (newest.queuedAt ?? newest.statusAt) : null;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- a timer that writes the seen mark to localStorage while the home is open
   useEffect(() => {
     if (newestAt === null) return;
     const timer = window.setTimeout(() => markSpokenSeen(newestAt), 4000);
@@ -287,9 +348,21 @@ export function PersonalAgentHome({
 
   return (
     <div className="flex h-full min-h-0">
+      {panels.todo ? null : (
+        <PanelRail
+          side="left"
+          label="Show the to-do panel"
+          badge={needsYou > 0 ? String(needsYou) : null}
+          className="lg:flex"
+          onOpen={() => setPanel("todo", true)}
+        />
+      )}
       <aside
         aria-label="Personal agent"
-        className="hidden w-80 shrink-0 2xl:w-[22rem] flex-col border-r border-border/65 bg-background lg:flex"
+        className={cn(
+          "hidden w-80 shrink-0 2xl:w-[22rem] flex-col border-r border-border/65 bg-background",
+          panels.todo && "lg:flex",
+        )}
       >
         <header className="flex items-center gap-2 px-3.5 pt-3 pb-2">
           <SparklesIcon className="size-4 text-primary" />
@@ -301,10 +374,22 @@ export function PersonalAgentHome({
           >
             {working ? "Working" : "Idle"}
           </span>
+          <Button
+            variant="ghost-muted"
+            size="icon-sm"
+            aria-label="Hide the to-do panel"
+            title="Hide the to-do panel"
+            onClick={() => setPanel("todo", false)}
+          >
+            <PanelLeftCloseIcon />
+          </Button>
         </header>
         <SpeakModeToggle environmentId={environmentId} />
         <TodayStrip today={state?.today ?? null} />
-        <div className="mx-3 mb-1 flex rounded-md bg-muted p-0.5 2xl:hidden" role="tablist">
+        <div
+          className={cn("mx-3 mb-1 flex rounded-md bg-muted p-0.5", panels.spoken && "2xl:hidden")}
+          role="tablist"
+        >
           {(
             [
               ["todo", needsYou > 0 ? `To-do · ${needsYou} need you` : "To-do"],
@@ -328,8 +413,13 @@ export function PersonalAgentHome({
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
           {error ? <p className="px-3.5 py-2 text-xs text-muted-foreground">{error}</p> : null}
-          <div className={cn(tab === "spoken" && "max-2xl:hidden")}>
-            <h3 className="hidden px-3.5 pt-1 text-xs font-semibold text-foreground 2xl:block">
+          <div className={cn(tab === "spoken" && (panels.spoken ? "max-2xl:hidden" : "hidden"))}>
+            <h3
+              className={cn(
+                "hidden px-3.5 pt-1 text-xs font-semibold text-foreground",
+                panels.spoken && "2xl:block",
+              )}
+            >
               To-do
               {needsYou > 0 ? (
                 <span className="ml-2 font-medium text-warning-foreground">
@@ -339,20 +429,56 @@ export function PersonalAgentHome({
             </h3>
             <TodoList environmentId={environmentId} items={items} />
           </div>
-          <div className={cn("2xl:hidden", tab !== "spoken" && "hidden")}>{spokenFeed}</div>
+          <div className={cn(panels.spoken && "2xl:hidden", tab !== "spoken" && "hidden")}>
+            {spokenFeed}
+          </div>
         </div>
       </aside>
-      <div className="flex min-w-0 flex-1 flex-col">{chat}</div>
+      <div
+        className={cn(
+          "flex min-w-0 flex-1 flex-col",
+          // The chat's panel controls are fixed to the window's top right; at
+          // 2xl they belong at the chat's edge, not over Said aloud or its rail.
+          panels.spoken
+            ? "2xl:[--workspace-controls-right:calc(20rem+0.75rem)]"
+            : "2xl:[--workspace-controls-right:calc(2.5rem+0.75rem)]",
+        )}
+      >
+        {chat}
+      </div>
       <aside
         aria-label="Said aloud"
-        className="hidden w-80 shrink-0 flex-col border-l border-border/65 bg-background 2xl:flex"
+        className={cn(
+          "hidden w-80 shrink-0 flex-col border-l border-border/65 bg-background",
+          panels.spoken && "2xl:flex",
+        )}
       >
-        <header className="flex items-baseline justify-between px-3.5 pt-3 pb-1">
-          <h2 className="text-sm font-semibold text-foreground">Said aloud</h2>
+        <header className="flex items-center gap-2 px-3.5 pt-2.5 pb-1 wco:pr-(--workspace-native-controls-inset)">
+          <h2 className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
+            Said aloud
+          </h2>
           {unseen ? <span className="text-2xs font-medium text-info-foreground">New</span> : null}
+          <Button
+            variant="ghost-muted"
+            size="icon-sm"
+            aria-label="Hide Said aloud"
+            title="Hide Said aloud"
+            onClick={() => setPanel("spoken", false)}
+          >
+            <PanelRightCloseIcon />
+          </Button>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto">{spokenFeed}</div>
       </aside>
+      {panels.spoken ? null : (
+        <PanelRail
+          side="right"
+          label="Show Said aloud"
+          badge={unseen ? "New" : null}
+          className="2xl:flex"
+          onOpen={() => setPanel("spoken", true)}
+        />
+      )}
     </div>
   );
 }
