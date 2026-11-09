@@ -26,8 +26,11 @@ const dictation =
   "Kinda really dislike the selecting UI right now in T3 Code. It's like selecting sessions.";
 
 describe("ThreadTitleRefresh", () => {
-  it("refreshes after the first three runs, then every third run", () => {
-    expect([1, 2, 3, 4, 5, 6, 7, 9, 10, 12].filter(isTitleRefreshRun)).toEqual([1, 2, 3, 6, 9, 12]);
+  it("refreshes after the first three runs, then ever more rarely", () => {
+    const refreshed = Array.from({ length: 100 }, (_, index) => index + 1).filter(
+      isTitleRefreshRun,
+    );
+    expect(refreshed).toEqual([1, 2, 3, 5, 8, 12, 18, 27, 41, 62, 93]);
     expect(isTitleRefreshRun(0)).toBe(false);
   });
 
