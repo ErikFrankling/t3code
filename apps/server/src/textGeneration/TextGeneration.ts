@@ -103,6 +103,39 @@ export const make = Effect.gen(function* () {
       ),
     );
     const now = DateTime.toEpochMillis(yield* DateTime.now);
+    const fallbackFrom = Effect.fn("TextGeneration.fallbackFrom")(function* (
+      failed: ModelSelection,
+    ) {
+      const settings = yield* serverSettings.getSettings.pipe(
+        Effect.mapError(
+          (cause) =>
+            new TextGenerationError({
+              operation,
+              detail: "Could not read fallback model settings.",
+              cause,
+            }),
+        ),
+      );
+      return fallbackTextGenerationModelSelection(
+        settings.providerInstances,
+        (instanceId, driver, model) => {
+          const provider = snapshots.find((candidate) => candidate.instanceId === instanceId);
+          return (
+            instanceId !== failed.instanceId &&
+            provider?.enabled === true &&
+            resolveProjectProviderInstanceEnabled(settings, projectId ?? null, instanceId) &&
+            provider.installed &&
+            provider.auth.status !== "unauthenticated" &&
+            provider.status !== "error" &&
+            isProviderAvailable(provider) &&
+            isProviderTextGenerationCapable(provider) &&
+            (operation !== "generateReviewGuide" || INVESTIGATING_DRIVERS.has(driver)) &&
+            !exhaustedUsageWindow(provider, now, model)
+          );
+        },
+        { defaultModelSelection: settings.defaultModelSelection },
+      );
+    });
     const selected = snapshots.find((provider) => provider.instanceId === selection.instanceId);
     // Only a failed probe counts: a pending one is also not installed yet.
     const unusable =
@@ -114,36 +147,7 @@ export const make = Effect.gen(function* () {
           (selected.status === "error" &&
             (!selected.installed || selected.auth.status === "unauthenticated"))));
     if (unusable || exhaustedUsageWindow(selected, now, selection.model)) {
-      const settings = yield* serverSettings.getSettings.pipe(
-        Effect.mapError(
-          (cause) =>
-            new TextGenerationError({
-              operation,
-              detail: "Could not read fallback model settings.",
-              cause,
-            }),
-        ),
-      );
-      selection =
-        fallbackTextGenerationModelSelection(
-          settings.providerInstances,
-          (instanceId, driver, model) => {
-            const provider = snapshots.find((candidate) => candidate.instanceId === instanceId);
-            return (
-              instanceId !== selection.instanceId &&
-              provider?.enabled === true &&
-              resolveProjectProviderInstanceEnabled(settings, projectId ?? null, instanceId) &&
-              provider.installed &&
-              provider.auth.status !== "unauthenticated" &&
-              provider.status !== "error" &&
-              isProviderAvailable(provider) &&
-              isProviderTextGenerationCapable(provider) &&
-              (operation !== "generateReviewGuide" || INVESTIGATING_DRIVERS.has(driver)) &&
-              !exhaustedUsageWindow(provider, now, model)
-            );
-          },
-          { defaultModelSelection: settings.defaultModelSelection },
-        ) ?? selection;
+      selection = (yield* fallbackFrom(selection)) ?? selection;
     }
     if (textGeneratorCannotRun && selection.instanceId === textGeneratorId) {
       return yield* new TextGenerationError({
@@ -152,10 +156,35 @@ export const make = Effect.gen(function* () {
           "Review guides need a coding agent that can read the checkout. None is ready. Pick Codex or Claude as the review guide model in Settings → Source control.",
       });
     }
-    return yield* installationGate.execute(
-      selection.instanceId,
-      resolveInstance(registry, operation, selection.instanceId).pipe(
-        Effect.flatMap((service) => invoke(service, selection)),
+    const attempt = (modelSelection: ModelSelection) =>
+      installationGate.execute(
+        modelSelection.instanceId,
+        resolveInstance(registry, operation, modelSelection.instanceId).pipe(
+          Effect.flatMap((service) => invoke(service, modelSelection)),
+        ),
+      );
+    const primary = selection;
+    // A provider can fail without its snapshot knowing (a rate limit, a broken config):
+    // try one other provider before giving up, so a title does not stay a truncated prompt.
+    return yield* attempt(primary).pipe(
+      Effect.catch((error) =>
+        fallbackFrom(primary).pipe(
+          Effect.orElseSucceed(() => null),
+          Effect.flatMap((fallback) =>
+            fallback === null
+              ? Effect.fail(error)
+              : Effect.logWarning("Text generation failed; trying another provider", {
+                  operation,
+                  failed: primary.instanceId,
+                  fallback: fallback.instanceId,
+                  detail: error.detail,
+                }).pipe(
+                  Effect.andThen(attempt(fallback)),
+                  // The first provider's error says what is actually misconfigured.
+                  Effect.mapError(() => error),
+                ),
+          ),
+        ),
       ),
     );
   });
