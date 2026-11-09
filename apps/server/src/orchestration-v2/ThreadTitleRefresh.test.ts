@@ -17,6 +17,8 @@ const thread = (overrides: Partial<TitleRefreshThread> = {}): TitleRefreshThread
   archivedAt: null,
   deletedAt: null,
   lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId },
+  createdBy: "user",
+  creationSource: "web",
   ...overrides,
 });
 
@@ -47,14 +49,34 @@ describe("ThreadTitleRefresh", () => {
     expect(titleRefreshAllowed(thread({ titleSource: "generated" }), () => undefined)).toBe(true);
   });
 
-  it("keeps explicit renames and titles given at creation", () => {
+  it("keeps explicit renames and titles the server gives at creation", () => {
     expect(titleRefreshAllowed(thread({ titleSource: "manual" }), () => undefined)).toBe(false);
     expect(
       titleRefreshAllowed(
-        thread({ titleSource: undefined, title: "Nightly update" }),
+        thread({ titleSource: undefined, title: "Personal agent", createdBy: "system" }),
         () => dictation,
       ),
     ).toBe(false);
+    expect(
+      titleRefreshAllowed(
+        thread({ titleSource: "manual", createdBy: "agent", creationSource: "mcp" }),
+        () => undefined,
+      ),
+    ).toBe(false);
+  });
+
+  it("follows the conversation for a title an agent picked when it launched the thread", () => {
+    expect(
+      titleRefreshAllowed(
+        thread({
+          titleSource: undefined,
+          title: "Homelab heavy worker unusable: load 150-210, heavy status hangs",
+          createdBy: "agent",
+          creationSource: "mcp",
+        }),
+        () => undefined,
+      ),
+    ).toBe(true);
   });
 
   it("refreshes an untracked title that is still the start of the first message", () => {
