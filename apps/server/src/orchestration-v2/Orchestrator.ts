@@ -5040,6 +5040,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           return {
             ...thread,
             ...(command.title === undefined ? {} : { title: command.title }),
+            // An explicit rename keeps automatic title refreshes away from this thread.
+            ...(command.title !== undefined && command.title !== thread.title
+              ? { titleSource: "manual" as const }
+              : {}),
             ...(command.limitRecovery === undefined ? {} : { limitRecovery }),
             ...(command.limitRecovery !== undefined &&
             limitRecovery?.snooze === true &&
@@ -5336,7 +5340,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           return thread.titleRegeneration?.requestId === command.requestId
             ? {
                 ...thread,
-                ...(command.title === undefined ? {} : { title: command.title }),
+                ...(command.title === undefined
+                  ? {}
+                  : { title: command.title, titleSource: "generated" as const }),
                 ...(command.outcome === undefined
                   ? {}
                   : {
@@ -7226,6 +7232,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       const thread: OrchestrationV2AppThread = {
         ...projection.thread,
         title: command.titleSeed ?? projection.thread.title,
+        ...(command.titleSeed === undefined ? {} : { titleSource: "seed" as const }),
         titleRegeneration: { requestId: command.commandId, startedAt: now },
         updatedAt: now,
       };

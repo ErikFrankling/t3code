@@ -1,0 +1,127 @@
+import {
+  CommandId,
+  type OrchestrationV2AppThread,
+  type OrchestrationV2DomainEvent,
+  type ThreadId,
+} from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Stream from "effect/Stream";
+
+import { forkParked } from "../serverActivation.ts";
+import * as Orchestrator from "./Orchestrator.ts";
+import * as ProjectionStore from "./ProjectionStore.ts";
+
+/** Refreshes after the first three runs, then every third run. */
+export function isTitleRefreshRun(ordinal: number): boolean {
+  return ordinal >= 1 && (ordinal <= 3 || ordinal % 3 === 0);
+}
+
+const MIN_REFRESH_INTERVAL_MS = 2 * 60_000;
+
+const comparable = (value: string): string =>
+  value
+    .toLocaleLowerCase()
+    .replace(/(\.\.\.|…)\s*$/u, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+
+/** A title that is the start of the first message, as the client seeds it before a model names the thread. */
+export function looksLikeSeedTitle(title: string, firstUserMessage: string | undefined): boolean {
+  if (title.trim() === "New thread") return true;
+  if (firstUserMessage === undefined) return false;
+  const seed = comparable(title);
+  return seed.length >= 8 && comparable(firstUserMessage).startsWith(seed);
+}
+
+export type TitleRefreshThread = Pick<
+  OrchestrationV2AppThread,
+  "title" | "titleSource" | "titleRegeneration" | "archivedAt" | "deletedAt" | "lineage"
+>;
+
+/**
+ * Whether T3 may rename a thread on its own. Explicit renames and titles given at creation stay;
+ * titles cut from the first message or written by a model follow the conversation.
+ */
+export function titleRefreshAllowed(
+  thread: TitleRefreshThread,
+  firstUserMessage: () => string | undefined,
+): boolean {
+  if (thread.archivedAt !== null || thread.deletedAt !== null) return false;
+  if (thread.lineage.relationshipToParent === "subagent") return false;
+  if (thread.titleRegeneration != null) return false;
+  switch (thread.titleSource) {
+    case "seed":
+    case "generated":
+      return true;
+    case "manual":
+      return false;
+    case undefined:
+      return looksLikeSeedTitle(thread.title, firstUserMessage());
+  }
+}
+
+/**
+ * Keeps auto-generated thread titles current: when a run completes, asks the title model to
+ * re-title the thread from the whole conversation. The regenerate prompt keeps an accurate title.
+ */
+export const make = Effect.gen(function* () {
+  const orchestrator = yield* Orchestrator.OrchestratorV2;
+  const projections = yield* ProjectionStore.ProjectionStoreV2;
+  const lastRefreshAt = new Map<ThreadId, number>();
+
+  const firstUserMessage = Effect.fn("ThreadTitleRefresh.firstUserMessage")(function* (
+    threadId: ThreadId,
+  ) {
+    const { runs } = yield* projections.getThreadRecords(threadId, ["runs"]);
+    const first = runs.reduce<(typeof runs)[number] | undefined>(
+      (earliest, run) =>
+        earliest === undefined || run.ordinal < earliest.ordinal ? run : earliest,
+      undefined,
+    );
+    if (first === undefined) return undefined;
+    const { messages } = yield* projections.getThreadRecords(threadId, ["messages"], {
+      messageIds: [first.userMessageId],
+    });
+    return messages[0]?.text;
+  });
+
+  const handle = Effect.fn("ThreadTitleRefresh.handle")(
+    function* (event: OrchestrationV2DomainEvent) {
+      if (event.type !== "run.updated" || event.payload.status !== "completed") return;
+      if (!isTitleRefreshRun(event.payload.ordinal)) return;
+      const threadId = event.threadId;
+      const nowMs = DateTime.toEpochMillis(yield* DateTime.now);
+      if (nowMs - (lastRefreshAt.get(threadId) ?? 0) < MIN_REFRESH_INTERVAL_MS) return;
+      const thread = yield* projections.getThread(threadId);
+      const first =
+        thread.titleSource === undefined ? yield* firstUserMessage(threadId) : undefined;
+      if (!titleRefreshAllowed(thread, () => first)) return;
+      lastRefreshAt.set(threadId, nowMs);
+      yield* orchestrator.dispatch({
+        type: "thread.metadata.update",
+        // One refresh per completed run, even across duplicate events.
+        commandId: CommandId.make(`server:title-refresh:${threadId}:${event.payload.id}`),
+        threadId,
+        regenerateTitle: true,
+      });
+    },
+    (effect, event) =>
+      effect.pipe(
+        Effect.catchCause((cause) =>
+          Effect.logWarning("thread title refresh skipped", { threadId: event.threadId, cause }),
+        ),
+      ),
+  );
+
+  const start = Effect.fn("ThreadTitleRefresh.start")(function* () {
+    yield* forkParked(
+      Stream.runForEach(orchestrator.streamDomainEvents, handle).pipe(
+        Effect.catchCause((cause) =>
+          Effect.logWarning("thread title refresh event stream failed", { cause }),
+        ),
+      ),
+    );
+  });
+  return { start, handle };
+});
