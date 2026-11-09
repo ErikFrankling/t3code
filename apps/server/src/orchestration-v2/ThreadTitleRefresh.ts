@@ -12,12 +12,18 @@ import { forkParked } from "../serverActivation.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 
-/** Refreshes after the first three runs, then every third run. */
+/**
+ * Refreshes after the first three runs, then ever more rarely (5, 8, 12, 18, 27, ...): a busy
+ * thread's title settles instead of flipping between paraphrases every few runs.
+ */
 export function isTitleRefreshRun(ordinal: number): boolean {
-  return ordinal >= 1 && (ordinal <= 3 || ordinal % 3 === 0);
+  if (ordinal < 1) return false;
+  let next = 1;
+  while (next < ordinal) next = next < 3 ? next + 1 : Math.ceil(next * 1.5);
+  return next === ordinal;
 }
 
-const MIN_REFRESH_INTERVAL_MS = 2 * 60_000;
+const MIN_REFRESH_INTERVAL_MS = 10 * 60_000;
 
 const comparable = (value: string): string =>
   value
