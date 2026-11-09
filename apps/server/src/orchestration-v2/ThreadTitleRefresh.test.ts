@@ -42,6 +42,14 @@ describe("ThreadTitleRefresh", () => {
     expect(looksLikeSeedTitle("Sidebar session titles", dictation)).toBe(false);
     expect(looksLikeSeedTitle("Kinda", dictation)).toBe(false);
     expect(looksLikeSeedTitle("Personal agent", undefined)).toBe(false);
+    // A dictation seed comes from the live draft, not the cleaned-up message that was delivered.
+    expect(
+      looksLikeSeedTitle(
+        "Okay, I have a new laptop set up and two setup. It...",
+        "Okay. I have a new laptop set up. To set up. It's a Samsung laptop.",
+      ),
+    ).toBe(true);
+    expect(looksLikeSeedTitle("Waiting for the build...", undefined)).toBe(false);
   });
 
   it("follows the conversation for seeded and generated titles", () => {
