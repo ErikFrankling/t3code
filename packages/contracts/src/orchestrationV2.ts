@@ -505,6 +505,11 @@ export const OrchestrationV2AppThread = Schema.Struct({
       }),
     ),
   ),
+  /**
+   * Where the title came from: the first message cut short, a model, or an explicit rename.
+   * Absent on threads titled before this was tracked and on titles given at creation.
+   */
+  titleSource: Schema.optional(Schema.Literals(["seed", "generated", "manual"])),
   rollbackRequestId: Schema.optional(CommandId),
   rollbackFailure: Schema.optional(
     Schema.NullOr(
