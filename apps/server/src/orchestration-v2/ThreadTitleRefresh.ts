@@ -26,9 +26,14 @@ const comparable = (value: string): string =>
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
 
+// The client seeds a title as the prompt's first 50 characters plus "..." (shared/String truncate).
+const SEED_TRUNCATED_LENGTH = 53;
+
 /** A title that is the start of the first message, as the client seeds it before a model names the thread. */
 export function looksLikeSeedTitle(title: string, firstUserMessage: string | undefined): boolean {
   if (title.trim() === "New thread") return true;
+  // Dictation seeds come from the live draft, so they need not match the delivered message.
+  if (title.endsWith("...") && Array.from(title).length === SEED_TRUNCATED_LENGTH) return true;
   if (firstUserMessage === undefined) return false;
   const seed = comparable(title);
   return seed.length >= 8 && comparable(firstUserMessage).startsWith(seed);
