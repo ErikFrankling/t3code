@@ -176,13 +176,7 @@ function RootRouteBranch() {
   // The desktop app's small always-on-top speak-reply window: no app shell and
   // none of the main window's coordinators (it must not claim `t3 app` requests).
   if (pathname === "/speak-reply") {
-    return (
-      <ToastProvider>
-        <AnchoredToastProvider>
-          <Outlet />
-        </AnchoredToastProvider>
-      </ToastProvider>
-    );
+    return <Outlet />;
   }
 
   // Settings can reopen /welcome mid-session, so it mounts everything the app does except the
