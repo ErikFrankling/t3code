@@ -19,7 +19,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Screen, ScreenStack, ScreenStackHeaderConfig } from "react-native-screens";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { AndroidScreenHeader } from "../../components/ui/AndroidScreenHeader";
+import { AndroidScreenHeader } from "../../components/ui/AndroidScreenHeader.android";
 import { SymbolView } from "../../components/ui/AppSymbol";
 import { AppText as Text } from "../../components/ui/AppText";
 import { ScreenContent } from "../../components/ui/ScreenContent";
