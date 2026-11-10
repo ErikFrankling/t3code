@@ -15,7 +15,7 @@ import { parseThreadKey, threadKey } from "@t3tools/client-runtime/state/entitie
 import { createThreadVisitTracker } from "@t3tools/client-runtime/state/thread-visits";
 import { useChildThreadInputs, useThreadReportedModelSelection } from "../../state/entities";
 import { UsageLimitRecoveryCard } from "./UsageLimitRecoveryCard";
-import { updateThreadDraftModelSelection } from "../../state/use-thread-composer-state";
+import { selectThreadModel } from "../../state/thread-model-selection";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import {
   effectiveSnoozed,
@@ -1733,10 +1733,9 @@ function ThreadDetailBody(
                       environmentId={props.environmentId}
                       providers={props.serverConfig?.providers ?? []}
                       onSelectModel={(selection) =>
-                        updateThreadDraftModelSelection(
-                          selectedThreadKey,
+                        selectThreadModel(
+                          { environmentId: props.environmentId, threadId: props.selectedThread.id },
                           selection,
-                          props.serverConfig?.providers ?? [],
                         )
                       }
                     />
