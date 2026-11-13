@@ -30,8 +30,8 @@ android-dev                  # first run builds+installs the dev client (7 min o
 
 Edit JS/TS under `apps/mobile` or `packages/*`; the app reloads on save.
 Press `r` in Metro to reload, `m` for the dev menu. In the app, add the
-environment `http://10.0.2.2:3773` (the emulator's name for the PC; any
-pairing code works in no-auth mode).
+environment `http://10.0.2.2:3773` (the emulator's name for the PC) and pair it
+with a code from `t3 pair` on the PC.
 
 `android-emulator stop` shuts the emulator down. The emulator log
 (`~/.local/state/t3code-android/emulator.log`) may say "Your GPU cannot be used

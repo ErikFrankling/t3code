@@ -204,11 +204,6 @@ delivery `sent`, which the server answers even when the speech service has
 forgotten the recording. Structured `dictation.*` events carry the recording ID and thread ID without
 logging transcript text.
 
-`T3CODE_UNSAFE_NO_AUTH=1` retains this deployment's explicit trusted-network mode;
-without that exact value, normal upstream authentication applies. The mode uses
-a persisted administrative session so websocket tickets remain functional, and
-accepts any pairing code so the mobile app can connect.
-
 ## Input source header
 
 Every message a user sends from a client carries `inputSource`: the device
