@@ -3554,6 +3554,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                 marker="pinned-header"
                                 label="Pinned"
                                 visible={from !== null}
+                                persistent={pinnedThreads.length > 0}
+                                count={pinnedThreads.length}
                                 isDropTarget={dragTargetSection === "pinned"}
                               />,
                             );
@@ -3565,6 +3567,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                 marker="pinned-divider"
                                 label="Active"
                                 visible={from !== null}
+                                persistent={pinnedThreads.length > 0}
                                 isDropTarget={dragTargetSection === "active"}
                               />,
                             );
