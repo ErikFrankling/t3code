@@ -107,6 +107,7 @@ import IconPlayerPlay from "@tabler/icons-react-native/IconPlayerPlay";
 import IconPlayerStopFilled from "@tabler/icons-react-native/IconPlayerStopFilled";
 import IconPlayerSkipBack from "@tabler/icons-react-native/IconPlayerSkipBack";
 import IconPlayerSkipForward from "@tabler/icons-react-native/IconPlayerSkipForward";
+import IconSparkles from "@tabler/icons-react-native/IconSparkles";
 import IconVolume from "@tabler/icons-react-native/IconVolume";
 import IconPlus from "@tabler/icons-react-native/IconPlus";
 import IconQrcode from "@tabler/icons-react-native/IconQrcode";
@@ -269,6 +270,7 @@ const ANDROID_ICON_BY_SF_SYMBOL = {
   "square.on.square": IconCopy,
   "square.grid.2x2": IconApps,
   "square.split.2x1": IconLayoutColumns,
+  sparkles: IconSparkles,
   star: IconStar,
   "star.fill": IconStarFilled,
   "sun.max": IconSun,
@@ -329,7 +331,6 @@ const ANDROID_ICON_BY_MATERIAL_NAME = {
   skip_previous: IconPlayerSkipBack,
   stop_circle: IconPlayerStopFilled,
   volume_up: IconVolume,
-  auto_awesome: IconSparkles,
   bolt: IconBolt,
   build: IconTool,
   chat: IconMessage,
