@@ -78,32 +78,64 @@ export function SidebarSectionPlaceholder(props: {
 export function SidebarDragBoundary(props: {
   marker: "pinned-header" | "pinned-divider";
   label: string;
+  /** A drag is in progress: the boundary shows its label and acts as a drop edge. */
   visible: boolean;
+  /**
+   * Pinned threads exist, so the boundary stays drawn outside drags: the header
+   * names the block and the divider closes it. Its height equals the drag label
+   * clearance, so picking a thread up does not shift the rows.
+   */
+  persistent?: boolean;
+  /** A muted trailing count, shown on the persistent header. */
+  count?: number;
   isDropTarget: boolean;
 }) {
+  const persistent = props.persistent === true;
+  const showLabel = props.visible || (persistent && props.marker === "pinned-header");
   return (
     <SortableSidebarMarker
       marker={props.marker}
       data-testid={`sidebar-${props.marker}`}
-      className="pointer-events-none relative mx-0.5 -mb-px h-0"
+      className={cn(
+        "pointer-events-none relative mx-0.5",
+        persistent ? "h-6 shrink-0" : "-mb-px h-0",
+      )}
     >
-      {props.visible ? (
-        <div className="sidebar-drag-boundary-label absolute inset-x-2 top-1 flex h-4 items-center gap-2">
-          <span
-            className={cn(
-              "shrink-0 text-xs font-medium",
-              props.isDropTarget ? "text-primary" : "text-sidebar-foreground/80",
-            )}
-          >
-            {props.label}
-          </span>
+      {props.visible || persistent ? (
+        <div
+          className="sidebar-drag-boundary-label absolute inset-x-2 top-1 flex h-4 items-center gap-2"
+          data-persistent={persistent ? "" : undefined}
+        >
+          {showLabel ? (
+            <span
+              className={cn(
+                "shrink-0 text-xs font-medium",
+                props.isDropTarget
+                  ? "text-primary"
+                  : props.visible
+                    ? "text-sidebar-foreground/80"
+                    : "text-sidebar-muted-foreground",
+              )}
+            >
+              {props.label}
+            </span>
+          ) : null}
           <span
             aria-hidden
             className={cn(
               "h-px flex-1",
-              props.isDropTarget ? "bg-primary/50" : "bg-sidebar-foreground/25",
+              props.isDropTarget
+                ? "bg-primary/50"
+                : props.visible
+                  ? "bg-sidebar-foreground/25"
+                  : "bg-sidebar-border",
             )}
           />
+          {persistent && props.marker === "pinned-header" && props.count !== undefined ? (
+            <span className="shrink-0 text-xs tabular-nums text-sidebar-muted-foreground">
+              {props.count}
+            </span>
+          ) : null}
         </div>
       ) : null}
     </SortableSidebarMarker>
