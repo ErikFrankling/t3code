@@ -1,4 +1,11 @@
-import { FolderPlusIcon, SearchIcon, SquarePenIcon, XIcon } from "lucide-react";
+import {
+  ArrowDownWideNarrowIcon,
+  FolderPlusIcon,
+  FoldersIcon,
+  SearchIcon,
+  SquarePenIcon,
+  XIcon,
+} from "lucide-react";
 import {
   type ComponentProps,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -7,8 +14,17 @@ import {
   type RefObject,
 } from "react";
 
+import { updateClientSettings, useClientSettings } from "~/hooks/useSettings";
 import { cn } from "~/lib/utils";
 import { Button } from "../ui/button";
+import {
+  Menu,
+  MenuCheckboxItem,
+  MenuGroup,
+  MenuGroupLabel,
+  MenuPopup,
+  MenuTrigger,
+} from "../ui/menu";
 import { SidebarInput, SidebarMenuButton } from "../ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
@@ -99,6 +115,7 @@ export function SidebarThreadHeader({
       <div className="flex shrink-0 items-center">
         {hasProjects ? (
           <>
+            <SidebarViewMenu />
             {projectScope}
             <SidebarHeaderIconButton label="Add project" onClick={onNewProject}>
               <FolderPlusIcon />
@@ -127,6 +144,61 @@ export function SidebarThreadHeader({
         </SidebarHeaderIconButton>
       </div>
     </div>
+  );
+}
+
+/** Groups the thread list by project; each project lists its newest thread first. */
+function SidebarViewMenu() {
+  const groupByProject = useClientSettings((settings) => settings.boringSidebarEnabled);
+  const multilineRows = useClientSettings((settings) => settings.boringSidebarMultilineRows);
+  return (
+    <Menu>
+      <MenuTrigger
+        render={
+          <SidebarHeaderIconButton
+            label={groupByProject ? "Sort threads: grouped by project" : "Sort threads"}
+            data-testid="sidebar-view-menu-trigger"
+          />
+        }
+      >
+        {groupByProject ? (
+          <FoldersIcon className="size-4" />
+        ) : (
+          <ArrowDownWideNarrowIcon className="size-4" />
+        )}
+      </MenuTrigger>
+      <MenuPopup align="start" side="bottom" className="min-w-56">
+        <MenuGroup>
+          <MenuGroupLabel>Sort threads</MenuGroupLabel>
+          <MenuCheckboxItem
+            variant="switch"
+            checked={groupByProject}
+            closeOnClick={false}
+            data-testid="sidebar-group-by-project"
+            onCheckedChange={(checked) =>
+              void updateClientSettings({ boringSidebarEnabled: Boolean(checked) })
+            }
+          >
+            <span className="flex flex-col">
+              <span>Group by project</span>
+              <span className="text-xs text-muted-foreground">Newest first in each project</span>
+            </span>
+          </MenuCheckboxItem>
+          {groupByProject ? (
+            <MenuCheckboxItem
+              variant="switch"
+              checked={multilineRows}
+              closeOnClick={false}
+              onCheckedChange={(checked) =>
+                void updateClientSettings({ boringSidebarMultilineRows: Boolean(checked) })
+              }
+            >
+              Two-line rows
+            </MenuCheckboxItem>
+          ) : null}
+        </MenuGroup>
+      </MenuPopup>
+    </Menu>
   );
 }
 
