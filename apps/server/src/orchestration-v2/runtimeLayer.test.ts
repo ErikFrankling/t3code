@@ -11537,6 +11537,7 @@ it.layer(layerTest)("queue watchdog", (it) => {
     () =>
       Effect.gen(function* () {
         const fx = yield* queueWatchdogFixture("restart-failed-continuation");
+        const events = yield* EventSink.EventSinkV2;
         yield* fx.send("interrupted turn", "defer_start");
         // Queued for the other account, as after a switch or failover.
         yield* fx.send("queued on the other account", "queue_after_active", {
@@ -11561,11 +11562,22 @@ it.layer(layerTest)("queue watchdog", (it) => {
           startedAt: fx.now,
           completedAt: fx.now,
         });
-        const later = (yield* fx.runs()).find(
-          (run) =>
-            run.userMessageId ===
-            MessageId.make("queue-watchdog:sent while held:restart-failed-continuation"),
-        )!;
+        const laterMessageId = MessageId.make(
+          "queue-watchdog:sent while held:restart-failed-continuation",
+        );
+        // The queue starts the unheld message from the run update, after the write returns.
+        yield* events
+          .stream({ threadId: fx.threadId, afterSequence: 0, eventType: "run.updated" })
+          .pipe(
+            Stream.filter(
+              (stored) =>
+                stored.event.type === "run.updated" &&
+                stored.event.payload.userMessageId === laterMessageId &&
+                stored.event.payload.status !== "queued",
+            ),
+            Stream.runHead,
+          );
+        const later = (yield* fx.runs()).find((run) => run.userMessageId === laterMessageId)!;
         assert.notEqual(later.queueHeld, true);
         // An unheld message starts past the held queue; the thread is idle once it ends.
         assert.equal(later.status, "starting");
@@ -11577,6 +11589,17 @@ it.layer(layerTest)("queue watchdog", (it) => {
         });
 
         // The completed run releases the held agent message itself, so the watchdog has nothing to do.
+        yield* events
+          .stream({ threadId: fx.threadId, afterSequence: 0, eventType: "run.updated" })
+          .pipe(
+            Stream.filter(
+              (stored) =>
+                stored.event.type === "run.updated" &&
+                stored.event.payload.id === queued.id &&
+                stored.event.payload.status !== "queued",
+            ),
+            Stream.runHead,
+          );
         assert.equal(yield* fx.orchestrator.superviseQueues, 0);
         const started = (yield* fx.runs()).find((run) => run.id === queued.id)!;
         assert.notEqual(started.status, "queued");
@@ -11795,12 +11818,22 @@ it.layer(layerUsageLimitFailoverTest)("queued message after an account switch", 
       yield* fx.send("queued on the first account", "queue_after_active");
       const [running, queued] = (yield* fx.runs()) as [OrchestrationV2Run, OrchestrationV2Run];
       assert.equal(queued.providerInstanceId, modelSelection.instanceId);
-      // The user switches the thread to the other account while the turn runs.
-      yield* fx.orchestrator.dispatch({
-        type: "thread.model-selection.set",
-        commandId: CommandId.make("queue-watchdog:switch:account-switch"),
-        threadId: fx.threadId,
-        modelSelection: { ...modelSelection, instanceId: alternateInstanceId },
+      // The thread moves to the other account while the turn runs. A user switch now waits for
+      // an idle thread, so this writes the recorded switch (as a failover or an older server did).
+      const switchedThread = (yield* fx.orchestrator.getThreadProjection(fx.threadId)).thread;
+      yield* events.write({
+        events: [
+          {
+            id: EventId.make("queue-watchdog:switch:account-switch"),
+            type: "thread.model-selection-updated",
+            threadId: fx.threadId,
+            occurredAt: fx.now,
+            payload: {
+              ...switchedThread,
+              modelSelection: { ...modelSelection, instanceId: alternateInstanceId },
+            },
+          },
+        ],
       });
       // The first account's turn then fails.
       yield* events.write({
