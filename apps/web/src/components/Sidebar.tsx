@@ -271,6 +271,7 @@ import {
 } from "./sidebar/SidebarThreadRow";
 import { SidebarDraftBlock } from "./sidebar/SidebarDraftBlock";
 import {
+  SidebarPinnedProjectHeading,
   SidebarProjectFolderHeader,
   sidebarFolderRowId,
 } from "./sidebar/SidebarProjectFolderHeader";
@@ -500,8 +501,14 @@ function useSidebarThreads(input: {
     clockKey: `${nowMinute}:${snoozeWakeClock}:${inboxReturnsVersion}`,
   });
 
-  const { pinnedThreads, activeThreads, workingThreads, snoozedThreads, settledThreads } =
-    partition;
+  const { activeThreads, workingThreads, snoozedThreads, settledThreads } = partition;
+  // Grouped by project, pinned threads follow the folder order, newest first in each
+  // project, and each project's first pinned row gets a heading. Folder mode has no
+  // in-list reordering, so this order never fights a drag.
+  const { pinnedThreads, pinnedProjectStarts } = groupPinnedThreadsByProject(
+    partition.pinnedThreads,
+    folderGroups,
+  );
   // Older settled threads load in pages; the shelf lists them only as far as they are loaded.
   const olderSettledShelf = useOlderSettledShelf({
     scopes: olderSettledScopes([...serverConfigs.keys()], scopedProjectKeys),
@@ -600,6 +607,7 @@ function useSidebarThreads(input: {
     workingShelfExpanded,
     toggleWorkingShelf: () => setWorkingShelfExpanded((value) => !value),
     projectFolders,
+    pinnedProjectStarts,
     toggleProjectFolder: (group: SidebarProjectSnapshot) => {
       const keys = sidebarFolderExpansionKeys(group);
       setProjectExpanded(keys, !resolveProjectExpanded(projectExpandedById, keys));
@@ -621,6 +629,36 @@ function useSidebarThreads(input: {
       threads.map((thread) => [threadShellKey(thread), thread.activeOrderKey ?? null] as const),
     ),
   };
+}
+
+const NO_PINNED_PROJECT_STARTS: ReadonlyMap<string, SidebarProjectSnapshot> = new Map();
+
+function groupPinnedThreadsByProject(
+  pinned: readonly EnvironmentThreadShell[],
+  folderGroups: readonly SidebarProjectSnapshot[] | null,
+): {
+  pinnedThreads: readonly EnvironmentThreadShell[];
+  pinnedProjectStarts: ReadonlyMap<string, SidebarProjectSnapshot>;
+} {
+  if (folderGroups === null || pinned.length === 0) {
+    return { pinnedThreads: pinned, pinnedProjectStarts: NO_PINNED_PROJECT_STARTS };
+  }
+  // The personal agent keeps leading the block, outside any project.
+  const lead = pinned.filter((thread) => thread.id === PERSONAL_AGENT_THREAD_ID);
+  const rest = sortWorkingThreadsBySend(
+    pinned.filter((thread) => thread.id !== PERSONAL_AGENT_THREAD_ID),
+  );
+  const folders = groupSidebarThreadsByProject(folderGroups, rest, () => false);
+  const starts = new Map<string, SidebarProjectSnapshot>();
+  const grouped: EnvironmentThreadShell[] = [...lead];
+  for (const folder of folders) {
+    starts.set(threadShellKey(folder.threads[0]!), folder.group);
+    grouped.push(...folder.threads);
+  }
+  // A pinned thread whose project has no folder (archived or filtered out) still shows, last.
+  const placed = new Set(grouped);
+  grouped.push(...rest.filter((thread) => !placed.has(thread)));
+  return { pinnedThreads: grouped, pinnedProjectStarts: starts };
 }
 
 function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
@@ -901,6 +939,8 @@ const SIDEBAR_DRAG_DISTANCE = 6;
 const SIDEBAR_AUTO_SCROLL: AutoScrollOptions = { threshold: { x: 0, y: 0.05 }, acceleration: 3 };
 
 const SIDEBAR_DRAG_LABEL_HEIGHT = 24;
+// With pinned threads present the boundaries stay drawn as headings this tall (SidebarDragBoundary).
+const SIDEBAR_PINNED_HEADING_HEIGHT = 32;
 
 const threadSearchResultId = (index: number) => `sidebar-thread-search-result-${index}`;
 
@@ -1324,6 +1364,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     workingShelfExpanded,
     toggleWorkingShelf,
     projectFolders,
+    pinnedProjectStarts,
     toggleProjectFolder,
     renderedSettledThreads,
     visibleSnoozedThreads,
@@ -1910,6 +1951,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     })();
   };
 
+  const boundaryLabelHeight =
+    pinnedThreads.length > 0 ? SIDEBAR_PINNED_HEADING_HEIGHT : SIDEBAR_DRAG_LABEL_HEIGHT;
   const handleThreadDragStart = (event: DragStartEvent) => {
     const activeKey = String(event.active.id);
     contextDragKeyRef.current = activeKey;
@@ -1924,7 +1967,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       const listRect = list.getBoundingClientRect();
       const scale = list.offsetWidth > 0 ? listRect.width / list.offsetWidth : 1;
       dragLabelOffsetRef.current =
-        header.getBoundingClientRect().top - listRect.top + SIDEBAR_DRAG_LABEL_HEIGHT * scale;
+        header.getBoundingClientRect().top - listRect.top + boundaryLabelHeight * scale;
     } else {
       dragLabelOffsetRef.current = 0;
     }
@@ -2053,7 +2096,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const sidebarSortingStrategy = createSidebarSortingStrategy({
     items: sidebarListItems,
     enabled: !isContextDrag,
-    boundaryLabelHeight: SIDEBAR_DRAG_LABEL_HEIGHT,
+    boundaryLabelHeight,
     settledOrder: draggedSettledOrder,
     ...(draggedActiveOrder === undefined ? {} : { activeOrder: draggedActiveOrder }),
     settledExpanded: settledShelfExpanded,
@@ -3493,6 +3536,18 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                         if (item.kind === "thread") {
                           // Folders draw active rows in their own place below.
                           if (projectFolders !== null && item.section === "active") continue;
+                          const pinnedProject =
+                            item.section === "pinned"
+                              ? pinnedProjectStarts.get(item.key)
+                              : undefined;
+                          if (pinnedProject) {
+                            items.push(
+                              <SidebarPinnedProjectHeading
+                                key={`pinned-project:${pinnedProject.projectKey}`}
+                                group={pinnedProject}
+                              />,
+                            );
+                          }
                           items.push(renderThreadRow(threadByKey.get(item.key)!, item.section));
                           continue;
                         }
@@ -3540,7 +3595,13 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               <SidebarDragBoundary
                                 key="pinned-divider"
                                 marker="pinned-divider"
-                                label="Active"
+                                label={
+                                  pinnedThreads.length === 0
+                                    ? "Active"
+                                    : projectFolders !== null
+                                      ? "Projects"
+                                      : "Threads"
+                                }
                                 visible={from !== null}
                                 persistent={pinnedThreads.length > 0}
                                 isDropTarget={dragTargetSection === "active"}

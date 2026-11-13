@@ -119,3 +119,18 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
     </li>
   );
 });
+
+/** Names a project's run of pinned threads when the sidebar is grouped by project. */
+export function SidebarPinnedProjectHeading(props: { group: SidebarProjectSnapshot }) {
+  return (
+    <li
+      data-testid="sidebar-pinned-project"
+      className="pointer-events-none mt-1.5 flex h-6 list-none items-center gap-2 px-(--sidebar-row-content-inset)"
+    >
+      <ProjectFavicon project={props.group} className="size-3.5 shrink-0" />
+      <span className="min-w-0 truncate text-xs font-medium text-sidebar-muted-foreground">
+        {props.group.displayName}
+      </span>
+    </li>
+  );
+}
