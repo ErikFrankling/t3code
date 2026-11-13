@@ -3691,7 +3691,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     {composerControls}
                   </div>
                   <Dictation
-                    key={composerDraftTargetKey}
+                    // Its sibling, the primary actions, is keyed `${environmentId}:${threadId}` too;
+                    // two equal keys made React leak one Dictation per visited thread.
+                    key={`dictation:${composerDraftTargetKey}`}
                     environmentId={environmentId}
                     target={composerDraftTargetKey}
                     project={gitCwd}
