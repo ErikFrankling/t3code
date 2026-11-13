@@ -284,7 +284,6 @@ import {
   useSidebarDrafts,
 } from "./sidebar/SidebarDraftBlock";
 import {
-  SidebarPinnedProjectHeading,
   SidebarProjectFolderHeader,
   sidebarFolderRowId,
 } from "./sidebar/SidebarProjectFolderHeader";
@@ -523,11 +522,11 @@ function useSidebarThreads(input: {
   });
 
   const { activeThreads, workingThreads, snoozedThreads, settledThreads } = partition;
-  // Grouped by project, pinned threads follow the folder order, newest first in each
-  // project, and each project's first pinned row gets a heading. Folder mode has no
-  // in-list reordering, so this order never fights a drag.
-  const { pinnedThreads, pinnedProjectStarts } = groupPinnedThreadsByProject(
-    partition.pinnedThreads,
+  const { pinnedThreads } = partition;
+  // Grouped by project, a pinned thread sits at the top of its project's folder (as in
+  // Codex), newest first. Only the personal agent and pins without a folder stay above.
+  const { topPinnedThreads, pinnedByFolder } = splitPinnedThreadsByProject(
+    pinnedThreads,
     folderGroups,
   );
   // Older settled threads load in pages; the shelf lists them only as far as they are loaded.
@@ -565,7 +564,11 @@ function useSidebarThreads(input: {
   const projectFolders =
     folderGroups === null
       ? null
-      : groupSidebarThreadsByProject(folderGroups, activeThreads, keepEmpty).map((folder) => {
+      : groupSidebarThreadsByProject(
+          folderGroups,
+          activeThreads,
+          (group) => keepEmpty(group) || pinnedByFolder.has(group),
+        ).map((folder) => {
           const collapsed = !resolveProjectExpanded(
             projectExpandedById,
             sidebarFolderExpansionKeys(folder.group),
@@ -579,6 +582,8 @@ function useSidebarThreads(input: {
           return {
             group: folder.group,
             collapsed,
+            // Pins stay in sight when their folder is closed.
+            pinned: pinnedByFolder.get(folder.group) ?? EMPTY_THREADS,
             threads: listsAll
               ? folder.threads
               : [
@@ -590,10 +595,10 @@ function useSidebarThreads(input: {
           };
         });
   const orderedThreads = [
-    ...pinnedThreads,
+    ...topPinnedThreads,
     ...(projectFolders === null
       ? activeThreads
-      : projectFolders.flatMap((folder) => folder.threads)),
+      : projectFolders.flatMap((folder) => [...folder.pinned, ...folder.threads])),
     ...visibleWorkingThreads,
     ...visibleSnoozedThreads,
     ...renderedSettledThreads,
@@ -635,7 +640,7 @@ function useSidebarThreads(input: {
     workingShelfExpanded,
     toggleWorkingShelf: () => setWorkingShelfExpanded((value) => !value),
     projectFolders,
-    pinnedProjectStarts,
+    topPinnedThreads,
     toggleProjectFolder: (group: SidebarProjectSnapshot) => {
       const keys = sidebarFolderExpansionKeys(group);
       setProjectExpanded(keys, !resolveProjectExpanded(projectExpandedById, keys));
@@ -668,34 +673,33 @@ function useSidebarThreads(input: {
   };
 }
 
-const NO_PINNED_PROJECT_STARTS: ReadonlyMap<string, SidebarProjectSnapshot> = new Map();
+const NO_PINNED_FOLDERS: ReadonlyMap<SidebarProjectSnapshot, readonly EnvironmentThreadShell[]> =
+  new Map();
 
-function groupPinnedThreadsByProject(
+function splitPinnedThreadsByProject(
   pinned: readonly EnvironmentThreadShell[],
   folderGroups: readonly SidebarProjectSnapshot[] | null,
 ): {
-  pinnedThreads: readonly EnvironmentThreadShell[];
-  pinnedProjectStarts: ReadonlyMap<string, SidebarProjectSnapshot>;
+  topPinnedThreads: readonly EnvironmentThreadShell[];
+  pinnedByFolder: ReadonlyMap<SidebarProjectSnapshot, readonly EnvironmentThreadShell[]>;
 } {
   if (folderGroups === null || pinned.length === 0) {
-    return { pinnedThreads: pinned, pinnedProjectStarts: NO_PINNED_PROJECT_STARTS };
+    return { topPinnedThreads: pinned, pinnedByFolder: NO_PINNED_FOLDERS };
   }
-  // The personal agent keeps leading the block, outside any project.
-  const lead = pinned.filter((thread) => thread.id === PERSONAL_AGENT_THREAD_ID);
+  // The personal agent belongs to no project, so it keeps its place above the folders.
+  const top = pinned.filter((thread) => thread.id === PERSONAL_AGENT_THREAD_ID);
   const rest = sortWorkingThreadsBySend(
     pinned.filter((thread) => thread.id !== PERSONAL_AGENT_THREAD_ID),
   );
-  const folders = groupSidebarThreadsByProject(folderGroups, rest, () => false);
-  const starts = new Map<string, SidebarProjectSnapshot>();
-  const grouped: EnvironmentThreadShell[] = [...lead];
-  for (const folder of folders) {
-    starts.set(threadShellKey(folder.threads[0]!), folder.group);
-    grouped.push(...folder.threads);
+  const byFolder = new Map<SidebarProjectSnapshot, readonly EnvironmentThreadShell[]>();
+  const placed = new Set<EnvironmentThreadShell>();
+  for (const folder of groupSidebarThreadsByProject(folderGroups, rest, () => false)) {
+    byFolder.set(folder.group, folder.threads);
+    for (const thread of folder.threads) placed.add(thread);
   }
-  // A pinned thread whose project has no folder (archived or filtered out) still shows, last.
-  const placed = new Set(grouped);
-  grouped.push(...rest.filter((thread) => !placed.has(thread)));
-  return { pinnedThreads: grouped, pinnedProjectStarts: starts };
+  // A pin whose project has no folder (archived or filtered out) still shows, on top.
+  top.push(...rest.filter((thread) => !placed.has(thread)));
+  return { topPinnedThreads: top, pinnedByFolder: byFolder };
 }
 
 function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
@@ -1430,7 +1434,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     workingShelfExpanded,
     toggleWorkingShelf,
     projectFolders,
-    pinnedProjectStarts,
+    topPinnedThreads,
     toggleProjectFolder,
     toggleProjectFolderShowAll,
     renderedSettledThreads,
@@ -2040,8 +2044,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     })();
   };
 
-  const boundaryLabelHeight =
-    pinnedThreads.length > 0 ? SIDEBAR_PINNED_HEADING_HEIGHT : SIDEBAR_DRAG_LABEL_HEIGHT;
+  // Grouped by project, pins live in their folders, so there is no Pinned section to head.
+  const showPinnedSection = projectFolders === null && pinnedThreads.length > 0;
+  const topPinnedKeys = new Set(topPinnedThreads.map(threadShellKey));
+  const boundaryLabelHeight = showPinnedSection
+    ? SIDEBAR_PINNED_HEADING_HEIGHT
+    : SIDEBAR_DRAG_LABEL_HEIGHT;
   const handleThreadDragStart = (event: DragStartEvent) => {
     const activeKey = String(event.active.id);
     contextDragKeyRef.current = activeKey;
@@ -3722,15 +3730,13 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                       if (item.kind === "thread") {
                         // Folders draw active rows in their own place below.
                         if (projectFolders !== null && item.section === "active") continue;
-                        const pinnedProject =
-                          item.section === "pinned" ? pinnedProjectStarts.get(item.key) : undefined;
-                        if (pinnedProject) {
-                          items.push(
-                            <SidebarPinnedProjectHeading
-                              key={`pinned-project:${pinnedProject.projectKey}`}
-                              group={pinnedProject}
-                            />,
-                          );
+                        // ...and pinned rows at the top of their project's folder.
+                        if (
+                          projectFolders !== null &&
+                          item.section === "pinned" &&
+                          !topPinnedKeys.has(item.key)
+                        ) {
+                          continue;
                         }
                         items.push(renderThreadRow(threadByKey.get(item.key)!, item.section));
                         continue;
@@ -3750,6 +3756,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               onContextMenu={handleProjectFolderContextMenu}
                             />,
                           );
+                          for (const thread of folder.pinned) {
+                            items.push(renderThreadRow(thread, "pinned", folderRow));
+                          }
                           for (const thread of folder.threads) {
                             items.push(renderThreadRow(thread, "active", folderRow));
                           }
@@ -3793,7 +3802,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               marker="pinned-header"
                               label={gt("Pinned", { $context: "sidebar section" })}
                               visible={from !== null}
-                              persistent={pinnedThreads.length > 0}
+                              persistent={showPinnedSection}
                               count={pinnedThreads.length}
                               isDropTarget={dragTargetSection === "pinned"}
                             />,
@@ -3805,14 +3814,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               key="pinned-divider"
                               marker="pinned-divider"
                               label={
-                                pinnedThreads.length === 0
-                                  ? gt("Active", { $context: "sidebar section" })
-                                  : projectFolders !== null
-                                    ? gt("Projects", { $context: "sidebar section" })
-                                    : gt("Threads", { $context: "sidebar section" })
+                                showPinnedSection
+                                  ? gt("Threads", { $context: "sidebar section" })
+                                  : gt("Active", { $context: "sidebar section" })
                               }
                               visible={from !== null}
-                              persistent={pinnedThreads.length > 0}
+                              persistent={showPinnedSection}
                               isDropTarget={dragTargetSection === "active"}
                             />,
                           );
