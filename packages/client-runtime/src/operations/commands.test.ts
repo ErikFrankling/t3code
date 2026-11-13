@@ -526,6 +526,8 @@ describe("V2 environment commands", () => {
         "command-host-gone-true",
       ]);
     }).pipe(Effect.provide(layerTestRandom)),
+  );
+
   it.effect("hands a dictated turn to the server instead of sending it", () =>
     Effect.gen(function* () {
       const commands: OrchestrationV2Command[] = [];
