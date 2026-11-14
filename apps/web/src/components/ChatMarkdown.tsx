@@ -134,6 +134,7 @@ import { recordVisitForThread } from "../browserHistoryStore";
 import { contextMenuSourceOf } from "../contextMenuSource";
 import {
   PreferredEditorEnvironmentRequiredError,
+  opensInSystemBrowser,
   useOpenInPreferredEditor,
   usePreferredEditor,
 } from "../editorPreferences";
@@ -978,7 +979,16 @@ function useChatMarkdownState({
             ? () => openMarkdownMedia(mediaPath, fileLinkMeta.filePath)
             : undefined
         }
-        openInEditorMenuLabel={canOpenApp ? gt("Open app") : preferredEditorMenuLabel}
+        openInEditorMenuLabel={
+          canOpenApp
+            ? gt("Open app")
+            : opensInSystemBrowser(fileLinkMeta.filePath, availableEditors)
+              ? gt("Open in default browser")
+              : preferredEditorMenuLabel
+        }
+        primaryOpensExternally={
+          canUseShellActions && opensInSystemBrowser(fileLinkMeta.filePath, availableEditors)
+        }
         onReveal={
           canUseShellActions && revealInFileManagerLabel !== undefined
             ? async () => revealFileInFileManager((await resolveHostPath()).absolutePath)
