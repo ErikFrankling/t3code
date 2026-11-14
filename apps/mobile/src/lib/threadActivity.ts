@@ -2461,23 +2461,6 @@ export function buildThreadFeed(
       entryRows.push(index);
       continue;
     }
-    const app = item.type === "dynamic_tool" ? mcpAppFromToolItem(item) : undefined;
-    if (app) {
-      const entry: RawThreadFeedEntry = {
-        type: "mcp-app",
-        id: `mcp-app:${row.visibility}:${row.sourceThreadId}:${row.sourceItemId}`,
-        createdAt,
-        runId: item.runId,
-        sourceThreadId: row.sourceThreadId,
-        itemId: row.sourceItemId,
-        revision: turnItemDetailRevision(item),
-        app,
-      };
-      projectedEntriesCache.set(row, { attemptId, entries: [entry] });
-      entries.push(entry);
-      entryRows.push(index);
-      continue;
-    }
     if (item.type === "user_message" || item.type === "assistant_message") {
       const updatedAt = DateTime.formatIso(item.updatedAt);
       const entry: RawThreadFeedEntry = {
