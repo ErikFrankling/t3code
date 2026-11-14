@@ -10,6 +10,7 @@ import {
   type AtomCommandFailure,
   type AtomCommandResult,
 } from "@t3tools/client-runtime/state/runtime";
+import { splitFilePathPosition } from "@t3tools/shared/fileLinks";
 import * as Cause from "effect/Cause";
 import * as Schema from "effect/Schema";
 import { AsyncResult } from "effect/reactivity";
@@ -42,6 +43,18 @@ export class PreferredEditorUnavailableError extends Schema.TaggedError<Preferre
   override get message(): string {
     return `No available editor can open ${this.targetPath} in environment ${this.environmentId}.`;
   }
+}
+
+// Fork (Erik): HTML files open in the system browser (xdg-open, so Firefox), never in
+// the code editor. A file-manager launch without `reveal` opens the system default app.
+export function opensInSystemBrowser(
+  targetPath: string,
+  availableEditors: ReadonlyArray<EditorId>,
+): boolean {
+  return (
+    availableEditors.includes("file-manager") &&
+    /\.(?:html?|xhtml)$/i.test(splitFilePathPosition(targetPath).path)
+  );
 }
 
 export function usePreferredEditor(availableEditors: ReadonlyArray<EditorId>) {
@@ -103,6 +116,13 @@ export function useOpenInPreferredEditor(
           }),
         ),
       );
+    }
+    if (opensInSystemBrowser(targetPath, availableEditors)) {
+      const result = await openInEditor({
+        environmentId,
+        input: { cwd: splitFilePathPosition(targetPath).path, editor: "file-manager" },
+      });
+      return mapAtomCommandResult(result, (): EditorId => "file-manager");
     }
     const editor = resolveAndPersistPreferredEditor(availableEditors);
     if (!editor) {

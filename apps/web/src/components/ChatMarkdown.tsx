@@ -128,6 +128,7 @@ import { stackedThreadToast, toastManager } from "./ui/toast";
 import { recordVisitForThread } from "../browserHistoryStore";
 import {
   PreferredEditorEnvironmentRequiredError,
+  opensInSystemBrowser,
   useOpenInPreferredEditor,
   usePreferredEditor,
 } from "../editorPreferences";
@@ -928,7 +929,16 @@ function useChatMarkdownState({
             ? () => openMarkdownMedia(mediaPath, fileLinkMeta.filePath)
             : undefined
         }
-        openInEditorMenuLabel={canOpenApp ? "Open app" : preferredEditorMenuLabel}
+        openInEditorMenuLabel={
+          canOpenApp
+            ? "Open app"
+            : opensInSystemBrowser(fileLinkMeta.filePath, availableEditors)
+              ? "Open in default browser"
+              : preferredEditorMenuLabel
+        }
+        primaryOpensExternally={
+          canUseShellActions && opensInSystemBrowser(fileLinkMeta.filePath, availableEditors)
+        }
         onReveal={
           canUseShellActions && revealInFileManagerLabel !== undefined
             ? async () => revealFileInFileManager((await resolveHostPath()).absolutePath)
