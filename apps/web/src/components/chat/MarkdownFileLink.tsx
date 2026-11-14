@@ -48,6 +48,8 @@ interface MarkdownFileLinkProps {
   resolveCopyPaths: () => Promise<ReturnType<typeof markdownFileCopyPaths>>;
   openInEditorMenuLabel: string;
   onOpenInBrowser?: (() => Promise<AtomCommandResult<unknown, unknown>>) | undefined;
+  /** A plain click runs `onOpen` too: HTML files open in the system browser. */
+  primaryOpensExternally?: boolean | undefined;
   onOpenMedia?: (() => void) | undefined;
   onReveal?: (() => Promise<AtomCommandResult<unknown, unknown>>) | undefined;
   revealLabel?: string | undefined;
@@ -72,6 +74,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
   onOpenInPanel,
   openInEditorMenuLabel,
   onOpenInBrowser,
+  primaryOpensExternally = false,
   onOpenMedia,
   onReveal,
   revealLabel,
@@ -351,7 +354,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
       onClick={(event) => {
         event.preventDefault();
         event.stopPropagation();
-        if (onOpen && shouldOpenMarkdownFileLinkInEditor(event)) {
+        if (onOpen && (primaryOpensExternally || shouldOpenMarkdownFileLinkInEditor(event))) {
           handleOpenInEditor();
           return;
         }
@@ -431,6 +434,7 @@ function areMarkdownFileLinkPropsEqual(
     previous.onOpenInPanel === next.onOpenInPanel &&
     previous.openInEditorMenuLabel === next.openInEditorMenuLabel &&
     previous.onOpenInBrowser === next.onOpenInBrowser &&
+    previous.primaryOpensExternally === next.primaryOpensExternally &&
     previous.onOpenMedia === next.onOpenMedia &&
     previous.onReveal === next.onReveal &&
     previous.resolveCopyPaths === next.resolveCopyPaths &&
