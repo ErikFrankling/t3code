@@ -110,3 +110,22 @@ it.each([
     });
   },
 );
+
+it("opens HTML in the system browser instead of the preferred editor", async () => {
+  state.allowed.add(primary);
+  state.getPreference.mockReturnValue("cursor");
+  const open = useOpenInPreferredEditor(primary, ["cursor", "file-manager"], "/work");
+  expect(await open("/work/report.html:3")).toMatchObject({
+    _tag: "Success",
+    value: "file-manager",
+  });
+  expect(state.run).toHaveBeenCalledExactlyOnceWith({
+    environmentId: primary,
+    input: { cwd: "/work/report.html", editor: "file-manager" },
+  });
+  expect(state.setPreference).not.toHaveBeenCalled();
+
+  state.run.mockClear();
+  const withoutSystemOpen = useOpenInPreferredEditor(primary, ["cursor"]);
+  expect(await withoutSystemOpen("/work/report.html")).toMatchObject({ value: "cursor" });
+});

@@ -57,6 +57,18 @@ export class PreferredEditorUnavailableError extends Schema.TaggedError<Preferre
   }
 }
 
+// Fork (Erik): HTML files open in the system browser (xdg-open, so Firefox), never in
+// the code editor. A file-manager launch without `reveal` opens the system default app.
+export function opensInSystemBrowser(
+  targetPath: string,
+  availableEditors: ReadonlyArray<EditorId>,
+): boolean {
+  return (
+    availableEditors.includes("file-manager") &&
+    /\.(?:html?|xhtml)$/i.test(splitFilePathPosition(targetPath).path)
+  );
+}
+
 export function usePreferredEditor(availableEditors: ReadonlyArray<EditorId>) {
   const [lastEditor, setLastEditor] = useLocalStorage(LAST_EDITOR_KEY, null, EditorId);
 
@@ -128,6 +140,15 @@ export function useOpenInPreferredEditor(
         ),
       );
     }
+    const fileUri = /^file:\/\//iu.test(targetPath) ? parseFileUrlHref(targetPath) : null;
+    const plainTarget = fileUri ? safeDecodeURIComponent(fileUri.path) : targetPath;
+    if (opensInSystemBrowser(plainTarget, availableEditors)) {
+      const result = await openInEditor({
+        environmentId,
+        input: { cwd: splitFilePathPosition(plainTarget).path, editor: "file-manager" },
+      });
+      return mapAtomCommandResult(result, (): EditorId => "file-manager");
+    }
     const editor = resolveAndPersistPreferredEditor(availableEditors);
     if (!editor) {
       return AsyncResult.failure(
@@ -140,7 +161,7 @@ export function useOpenInPreferredEditor(
         ),
       );
     }
-    const uri = /^file:\/\//iu.test(targetPath) ? parseFileUrlHref(targetPath) : null;
+    const uri = fileUri;
     const { line, column } = uri ? splitFilePathPosition("", uri.hash) : {};
     const result = await openInEditor({
       environmentId,
