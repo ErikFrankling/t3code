@@ -187,11 +187,21 @@ export const assertTargetWithinLimits = (
     ),
   );
 
-/** Background subagents retain credentials until provider exit; archived threads and other instances cannot act. */
+/**
+ * Live: an interruptible or `waiting` run (`activeRunId` omits `waiting`), a running background
+ * subagent, or a provider-started turn after a run that completed. Stopped, failed, cancelled
+ * and interrupted runs, archived threads and other provider instances cannot act.
+ */
 export const isLiveCallerShell = (
   shell: Pick<
     OrchestrationV2ThreadShell,
-    "archivedAt" | "activeRunId" | "providerInstanceId" | "pendingBackgroundTasks"
+    | "archivedAt"
+    | "activeRunId"
+    | "activityRunStatus"
+    | "status"
+    | "latestRunStopRequested"
+    | "providerInstanceId"
+    | "pendingBackgroundTasks"
   > | null,
   providerInstanceId: ProviderInstanceId | undefined,
 ) =>
@@ -199,10 +209,12 @@ export const isLiveCallerShell = (
   shell.archivedAt === null &&
   shell.providerInstanceId === providerInstanceId &&
   (shell.activeRunId !== null ||
+    (shell.activityRunStatus ?? null) !== null ||
     (shell.pendingBackgroundTasks?.some(
       (task) => task.kind === "subagent" && task.providerInstanceId === providerInstanceId,
     ) ??
-      false));
+      false) ||
+    (shell.status === "completed" && shell.latestRunStopRequested !== true));
 
 /** Thread callers need a live run or its background subagent in an unarchived thread. OAuth clients rely on their session and ceiling. */
 export function assertLiveCaller({ caller, scope }: Caller) {
