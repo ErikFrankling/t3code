@@ -33,6 +33,10 @@ const backgroundThreadId = ThreadId.make("thread:background");
 const oldProviderThreadId = ThreadId.make("thread:old-provider-background");
 const archivedThreadId = ThreadId.make("thread:archived-background");
 const unknownOwnerThreadId = ThreadId.make("thread:unknown-background-owner");
+const waitingThreadId = ThreadId.make("thread:waiting-run");
+const providerTurnThreadId = ThreadId.make("thread:provider-started-turn");
+const stoppedThreadId = ThreadId.make("thread:stopped-run");
+const failedThreadId = ThreadId.make("thread:failed-run");
 
 const backgroundShell = (threadId: ThreadId, providerInstanceId: ProviderInstanceId) => ({
   ...liveThreadShell(threadId, { activeRunId: null }),
@@ -64,6 +68,36 @@ const shells = new Map([
       ...liveThreadShell(unknownOwnerThreadId, { activeRunId: null }),
       pendingBackgroundTasks: [{ taskId: "task:unknown", kind: "subagent" as const }],
     },
+  ],
+  // A `waiting` run has no `activeRunId`; a command or monitor holds it, never a subagent.
+  [
+    waitingThreadId,
+    {
+      ...liveThreadShell(waitingThreadId, { activeRunId: null }),
+      status: "waiting" as const,
+      activityRunStatus: "waiting" as const,
+      pendingBackgroundTasks: [{ taskId: "task:monitor", kind: "monitor" as const }],
+    },
+  ],
+  // The provider started a turn itself (cross-session message, task notification): T3 has no run.
+  [
+    providerTurnThreadId,
+    {
+      ...liveThreadShell(providerTurnThreadId, { activeRunId: null }),
+      status: "completed" as const,
+    },
+  ],
+  [
+    stoppedThreadId,
+    {
+      ...liveThreadShell(stoppedThreadId, { activeRunId: null }),
+      status: "completed" as const,
+      latestRunStopRequested: true,
+    },
+  ],
+  [
+    failedThreadId,
+    { ...liveThreadShell(failedThreadId, { activeRunId: null }), status: "failed" as const },
   ],
 ]);
 
@@ -236,6 +270,10 @@ const background = threadCaller(backgroundThreadId);
 const oldProviderBackground = threadCaller(oldProviderThreadId);
 const archivedBackground = threadCaller(archivedThreadId);
 const unknownOwnerBackground = threadCaller(unknownOwnerThreadId);
+const waitingRun = threadCaller(waitingThreadId);
+const providerTurn = threadCaller(providerTurnThreadId);
+const stoppedRun = threadCaller(stoppedThreadId);
+const failedRun = threadCaller(failedThreadId);
 const mismatchedProvider = {
   ...background,
   thread: { ...background.thread!, providerInstanceId: ProviderInstanceId.make("claude") },
@@ -281,6 +319,14 @@ it.effect.each([
   ["acts_as_caller", mismatchedProvider, {}, "parent_not_active"],
   ["acts_as_caller", archivedBackground, {}, "parent_not_active"],
   ["acts_as_caller", unknownOwnerBackground, {}, "parent_not_active"],
+  ["acts_as_caller", waitingRun, {}, "ran"],
+  ["acts_as_caller", providerTurn, {}, "ran"],
+  ["acts_as_caller", stoppedRun, {}, "parent_not_active"],
+  ["acts_as_caller", failedRun, {}, "parent_not_active"],
+  ["writes_threads", waitingRun, { threadId: supervisedThreadId }, "ran"],
+  ["writes_threads", providerTurn, { threadId: supervisedThreadId }, "ran"],
+  ["writes_threads", stoppedRun, { threadId: supervisedThreadId }, "parent_not_active"],
+  ["acts_as_caller", fullAccessClient, {}, "thread_credential_required"],
 
   ["writes", supervised, {}, "ran"],
   ["writes", ended, {}, "parent_not_active"],
