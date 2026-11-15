@@ -8349,8 +8349,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             outcome: "updated" as const,
             summary: "Resumed thread",
           };
+    // A user resume carries no text of its own. The server's own continuation (usage-limit
+    // failover) carries the note that tells the agent why the account changed.
     const dispatchText =
-      command.manualContinuationOfRunId !== undefined
+      command.manualContinuationOfRunId !== undefined && command.creationSource !== "server"
         ? ""
         : delegatedCompletion === undefined
           ? command.text
