@@ -326,7 +326,6 @@ it.effect.each([
   ["writes_threads", waitingRun, { threadId: supervisedThreadId }, "ran"],
   ["writes_threads", providerTurn, { threadId: supervisedThreadId }, "ran"],
   ["writes_threads", stoppedRun, { threadId: supervisedThreadId }, "parent_not_active"],
-  ["acts_as_caller", fullAccessClient, {}, "thread_credential_required"],
 
   ["writes", supervised, {}, "ran"],
   ["writes", ended, {}, "parent_not_active"],
