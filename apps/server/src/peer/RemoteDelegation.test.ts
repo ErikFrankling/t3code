@@ -1145,7 +1145,7 @@ it.effect.each(["no active parent run", "a newer run owned by another provider"]
         const otherInstanceId = ProviderInstanceId.make("codex-other");
         const observingRun: OrchestrationV2Run =
           observer === "no active parent run"
-            ? { ...parentRun, status: "completed", completedAt: now }
+            ? { ...parentRun, status: "failed", completedAt: now }
             : {
                 id: RunId.make("run:laptop-other-provider"),
                 threadId: parentThreadId,
