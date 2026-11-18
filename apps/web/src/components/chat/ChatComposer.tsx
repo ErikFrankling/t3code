@@ -16,7 +16,7 @@ import { isLocalEnvironmentDisabled } from "../../localEnvironment";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useRightPanelStore } from "~/rightPanelStore";
 import { importPastedComposerText, readPastedComposerContext } from "../composerInlineTokenPaste";
-import { Dictation } from "./Dictation";
+import { Dictation, type DictationControls } from "./Dictation";
 import { useVoiceMode } from "./VoiceMode";
 import {
   questionAttachmentDraftId,
@@ -2049,9 +2049,18 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const primaryActionEnvironmentUnavailable =
     environmentUnavailable !== null ||
     (!activePendingProgress && (noProviderAvailable || projectSelectionRequired));
+  // The dictation shortcut drives the fork's Dictation, the composer's one mic. It
+  // drove upstream's voice input, which is off here, so it only opened Settings.
+  const dictationControls = useRef<DictationControls | null>(null);
   const dictationShortcutLabel = useDictationShortcut({
     keybindings,
-    speech: speechInput,
+    speech: {
+      available: true,
+      state: { phase: dictationBusy ? "recording" : "idle", error: null, errorAction: null },
+      start: async () => dictationControls.current?.start(),
+      stop: async () => dictationControls.current?.pause(),
+      cancel: () => dictationControls.current?.hide(),
+    },
     disabled: dictationDisabled,
     terminalOpen,
     modelPickerOpen: isComposerModelPickerOpen,
@@ -4100,6 +4109,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     project={gitCwd}
                     threadId={activeThreadId}
                     onBusyChange={setDictationBusy}
+                    controls={dictationControls}
                     onSend={onDictationSend}
                     onInsert={insertDictationStable}
                   />
