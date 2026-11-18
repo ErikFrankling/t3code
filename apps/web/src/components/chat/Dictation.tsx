@@ -372,6 +372,16 @@ async function startCapture(id: string | null, deps: CaptureDeps): Promise<strin
   }
 }
 
+/** What the composer's dictation shortcut does with the card (see ChatComposer). */
+export type DictationControls = {
+  /** Opens the card and records: resumes the open recording, else starts a new one. */
+  start(): Promise<void>;
+  /** Pauses the microphone; the recording stays for Send. */
+  pause(): void;
+  /** Hides the card; a recording keeps going. */
+  hide(): void;
+};
+
 export function Dictation({
   environmentId,
   target,
@@ -380,6 +390,7 @@ export function Dictation({
   onSend,
   onInsert,
   onBusyChange,
+  controls,
 }: {
   environmentId: EnvironmentId;
   target: string;
@@ -388,6 +399,8 @@ export function Dictation({
   onSend: DictationHandoff;
   onInsert: (text: string) => boolean;
   onBusyChange: (busy: boolean) => void;
+  /** Lets the composer's dictation shortcut drive this card. */
+  controls?: RefObject<DictationControls | null>;
 }) {
   const engine = recorder();
   const all = useSyncExternalStore(engine.subscribe, engine.getSnapshot);
@@ -541,6 +554,29 @@ export function Dictation({
     setSelectedId(id);
     void openMicrophone(id);
   }
+
+  const startFromShortcut = useStableCallback(async () => {
+    setOpen(true);
+    // A transcript being finished for the message box is not recorded into again.
+    const resume = selected && selected.record.state !== "edited" ? selected.record.id : null;
+    if (selected && !resume) return;
+    if (resume) setSelectedId(resume);
+    await openMicrophone(resume);
+  });
+  const pauseFromShortcut = useStableCallback(() => pauseRecording());
+  const hideFromShortcut = useStableCallback(() => setOpen(false));
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- publishes this card's controls to the composer's shortcut handle while mounted
+  useEffect(() => {
+    if (!controls) return;
+    controls.current = {
+      start: startFromShortcut,
+      pause: pauseFromShortcut,
+      hide: hideFromShortcut,
+    };
+    return () => {
+      controls.current = null;
+    };
+  }, [controls, startFromShortcut, pauseFromShortcut, hideFromShortcut]);
 
   function sendRecording(id: string) {
     closeMicrophone();
