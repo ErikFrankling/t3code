@@ -284,3 +284,54 @@ const executeEnvironmentRequest = Effect.fnUntraced(function* <
     }),
   );
 });
+
+/**
+ * Fork: headers for the fork's plain HTTP routes, which are not HttpApi groups.
+ * Renews a DPoP token and signs a proof for this request, as executeEnvironmentRequest
+ * does; `rejectedAccessToken` (the token the server just refused) forces a renewal.
+ */
+export const environmentFetchAuthorization = Effect.fn(
+  "clientRuntime.state.environmentFetchAuthorization",
+)(function* (input: {
+  readonly prepared: Pick<
+    PreparedConnection,
+    "environmentId" | "httpBaseUrl" | "httpAuthorization" | "target"
+  >;
+  readonly method: HttpMethod.HttpMethod;
+  /** Path and query, resolved against the connection's HTTP base URL. */
+  readonly path: string;
+  readonly rejectedAccessToken?: string;
+}) {
+  let httpBaseUrl = input.prepared.httpBaseUrl;
+  let authorization = input.prepared.httpAuthorization;
+  if (authorization?._tag === "Dpop") {
+    const remote = yield* RemoteEnvironmentAuthorization.RemoteEnvironmentAuthorization;
+    const direct = authorization.directConnection;
+    if (direct !== undefined) {
+      authorization = yield* remote.authorizeDirectDpopHttp(direct, input.rejectedAccessToken);
+    } else {
+      const current = yield* remote.authorizeDpopHttp({
+        expectedEnvironmentId: input.prepared.environmentId,
+        ...(input.rejectedAccessToken === undefined
+          ? {}
+          : { rejectedAccessToken: input.rejectedAccessToken }),
+      });
+      if (input.prepared.target._tag === "RelayConnectionTarget") {
+        httpBaseUrl = current.httpBaseUrl;
+      }
+      authorization = current.httpAuthorization;
+    }
+  }
+  const url = new URL(input.path, httpBaseUrl).toString();
+  const headers = yield* buildEnvironmentAuthHeaders(
+    authorization,
+    input.method,
+    url,
+    yield* Effect.serviceOption(ManagedRelay.ManagedRelayDpopSigner),
+  );
+  return {
+    url,
+    headers,
+    accessToken: authorization?._tag === "Dpop" ? authorization.accessToken : undefined,
+  };
+});

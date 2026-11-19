@@ -8,10 +8,10 @@ import { voiceLoopCueWav } from "@t3tools/client-runtime/voice-loop";
 import { ReadAloudState } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { createAudioPlayer, setAudioModeAsync, setIsAudioActiveAsync } from "expo-audio";
-import { fetch } from "expo/fetch";
 import { File, Paths } from "expo-file-system";
 import { useSyncExternalStore } from "react";
 
+import { environmentFetch } from "../../lib/environmentFetch";
 import { voiceCall } from "../../native/voiceCall";
 import { reportReadAloudPlayed, setActivityConnection } from "./activityLog";
 import { createReadAloudAudio } from "./readAloudAudio";
@@ -151,16 +151,11 @@ export const readAloudPlayer = new ReadAloudPlayer({
   },
   onPlayed: reportReadAloudPlayed,
   request: async (body) => {
-    const authorization = connection?.httpAuthorization ?? null;
-    if (!connection || authorization?._tag === "Dpop") {
+    if (!connection) {
       throw new Error("Read aloud needs a direct connection to your computer.");
     }
-    const response = await fetch(new URL("/api/read-aloud", connection.httpBaseUrl).toString(), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(authorization ? { Authorization: `Bearer ${authorization.token}` } : {}),
-      },
+    const response = await environmentFetch(connection, "/api/read-aloud", {
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
