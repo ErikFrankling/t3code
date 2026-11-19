@@ -2689,7 +2689,7 @@ export function buildThreadFeed(
         runId: item.runId,
         text: spoken,
       };
-      projectedEntriesCache.set(row, { attemptId, entries: [entry] });
+      projectedEntriesCache.set(row, { attemptId, locale, entries: [entry] });
       entries.push(entry);
       entryRows.push(index);
       continue;
