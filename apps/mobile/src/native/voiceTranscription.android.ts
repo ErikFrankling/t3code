@@ -1,6 +1,6 @@
-import { fetch } from "expo/fetch";
 import { File, FileMode } from "expo-file-system";
 
+import type { PreparedConnection } from "@t3tools/client-runtime/connection";
 import { DictationState } from "@t3tools/contracts";
 import {
   VoiceTranscriptionError,
@@ -14,6 +14,7 @@ import {
   setDictationPreview,
   updateDictationPreview,
 } from "../features/voice-input/dictationPreview";
+import { environmentFetch } from "../lib/environmentFetch";
 import { uuidv4 } from "../lib/uuid";
 import { dropUndeliveredDictation, undeliveredReason } from "../state/acknowledged-thread-messages";
 import type { ResolveDictationConnection, VoiceDictationTarget } from "./voiceTranscription";
@@ -32,8 +33,6 @@ const POLL_INTERVAL_MS = 800;
 const FINAL_TIMEOUT_MS = 30 * 60_000;
 
 const DIRECT_CONNECTION_NEEDED = "Dictation needs a direct connection to your computer.";
-
-type Endpoint = { readonly baseUrl: string; readonly headers: Record<string, string> };
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const done = (state: DictationState) =>
@@ -58,16 +57,13 @@ class DictationStream {
 
   constructor(
     /** Looked up on every request: recording starts offline and uploads once back. */
-    private readonly endpoint: () => Endpoint,
+    private readonly endpoint: () => PreparedConnection,
     readonly target: VoiceDictationTarget,
   ) {}
 
   private request(path: string, body: string | Uint8Array<ArrayBuffer>) {
-    const { baseUrl, headers } = this.endpoint();
-    return fetch(new URL(path, baseUrl).toString(), {
-      method: "POST",
+    return environmentFetch(this.endpoint(), path, {
       headers: {
-        ...headers,
         "Content-Type": typeof body === "string" ? "application/json" : "application/octet-stream",
       },
       body,
@@ -253,7 +249,7 @@ export async function getLocalVoiceTranscriber(
       const resolved = resolveConnection?.() ?? null;
       // Offline there is no connection yet: record anyway. The upload waits
       // (the recording is kept on the phone) and goes out once it is back.
-      if (!resolved || resolved.connection()?.httpAuthorization?._tag === "Dpop") {
+      if (!resolved) {
         throw new VoiceTranscriptionError({
           code: "unavailable",
           message: DIRECT_CONNECTION_NEEDED,
@@ -262,12 +258,7 @@ export async function getLocalVoiceTranscriber(
       const stream = new DictationStream(() => {
         const connection = resolved.connection();
         if (!connection) throw new Error("Not connected to your computer.");
-        const authorization = connection.httpAuthorization;
-        if (authorization?._tag === "Dpop") throw new Error(DIRECT_CONNECTION_NEEDED);
-        const headers: Record<string, string> = authorization
-          ? { Authorization: `Bearer ${authorization.token}` }
-          : {};
-        return { baseUrl: connection.httpBaseUrl, headers };
+        return connection;
       }, resolved.target);
       if (active && !active.following) active.cancel();
       active = stream;

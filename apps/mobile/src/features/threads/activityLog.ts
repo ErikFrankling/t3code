@@ -8,11 +8,12 @@ import {
 import type { ReadAloudPlayed } from "@t3tools/client-runtime/read-aloud";
 import type { VoiceLoopSpan } from "@t3tools/client-runtime/voice-loop";
 import type { PreparedConnection } from "@t3tools/client-runtime/connection";
-import { fetch } from "expo/fetch";
+
+import { environmentFetch } from "../../lib/environmentFetch";
 
 /**
  * Listening and attention reports to the environment's `/api/activity`, over
- * the connection read-aloud already uses (direct only, like read-aloud).
+ * the connection read-aloud already uses.
  */
 let connection: PreparedConnection | null = null;
 
@@ -21,14 +22,9 @@ export function setActivityConnection(next: PreparedConnection | null) {
 }
 
 const send = async (event: ActivityEvent) => {
-  const authorization = connection?.httpAuthorization ?? null;
-  if (!connection || authorization?._tag === "Dpop") return;
-  await fetch(new URL("/api/activity", connection.httpBaseUrl).toString(), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(authorization ? { Authorization: `Bearer ${authorization.token}` } : {}),
-    },
+  if (!connection) return;
+  await environmentFetch(connection, "/api/activity", {
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(event),
   });
 };
