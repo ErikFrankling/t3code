@@ -2,6 +2,7 @@ import {
   type RefObject,
   useEffect,
   useEffectEvent,
+  useImperativeHandle,
   useLayoutEffect,
   useRef,
   useState,
@@ -565,18 +566,12 @@ export function Dictation({
   });
   const pauseFromShortcut = useStableCallback(() => pauseRecording());
   const hideFromShortcut = useStableCallback(() => setOpen(false));
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- publishes this card's controls to the composer's shortcut handle while mounted
-  useEffect(() => {
-    if (!controls) return;
-    controls.current = {
-      start: startFromShortcut,
-      pause: pauseFromShortcut,
-      hide: hideFromShortcut,
-    };
-    return () => {
-      controls.current = null;
-    };
-  }, [controls, startFromShortcut, pauseFromShortcut, hideFromShortcut]);
+  // Publishes this card's controls to the composer's shortcut handle while mounted.
+  useImperativeHandle(
+    controls,
+    () => ({ start: startFromShortcut, pause: pauseFromShortcut, hide: hideFromShortcut }),
+    [startFromShortcut, pauseFromShortcut, hideFromShortcut],
+  );
 
   function sendRecording(id: string) {
     closeMicrophone();
