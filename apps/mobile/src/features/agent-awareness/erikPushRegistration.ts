@@ -1,12 +1,12 @@
 import { useEffect } from "react";
 import Constants from "expo-constants";
-import { fetch } from "expo/fetch";
 import * as Notifications from "expo-notifications";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { AppState, Platform } from "react-native";
 import type { EnvironmentId } from "@t3tools/contracts";
 
+import { environmentFetch } from "../../lib/environmentFetch";
 import { loadAgentAwarenessDeviceId } from "../../persistence/imperative";
 import { appAtomRegistry } from "../../state/atom-registry";
 import { environmentSession } from "../../state/session";
@@ -27,15 +27,9 @@ async function registerWith(environmentId: EnvironmentId, body: object): Promise
   const connection = Option.getOrNull(
     appAtomRegistry.get(environmentSession.preparedConnectionValueAtom(environmentId)),
   );
-  const authorization = connection?.httpAuthorization ?? null;
-  // Relay-only (DPoP) connections have no direct route to the server.
-  if (!connection || authorization?._tag === "Dpop") return false;
-  const response = await fetch(new URL("/api/push/devices", connection.httpBaseUrl).toString(), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(authorization ? { Authorization: `Bearer ${authorization.token}` } : {}),
-    },
+  if (!connection) return false;
+  const response = await environmentFetch(connection, "/api/push/devices", {
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   // Servers without the fork's push routes answer 404: nothing to retry.
