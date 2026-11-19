@@ -7,10 +7,10 @@ import {
 import type { VoiceInputController } from "@t3tools/client-runtime/voice-input";
 import { VoiceSession } from "@t3tools/client-runtime/voice-session";
 import { getRecordingPermissionsAsync, requestRecordingPermissionsAsync } from "expo-audio";
-import { fetch } from "expo/fetch";
 import * as Schema from "effect/Schema";
 import { useSyncExternalStore } from "react";
 
+import { environmentFetch } from "../../lib/environmentFetch";
 import { voiceCall } from "../../native/voiceCall";
 import { voiceModeOpen } from "./voiceModeOpen";
 import { reportVoiceModeSpan } from "../threads/activityLog";
@@ -145,27 +145,19 @@ const isSpeakMode = Schema.is(SpeakMode);
 
 async function beat(waitMs: number): Promise<ReadonlyArray<Utterance>> {
   const connection = readAloudConnection();
-  const authorization = connection?.httpAuthorization ?? null;
-  if (!connection || authorization?._tag === "Dpop" || !state.threadId) return [];
+  if (!connection || !state.threadId) return [];
   const reports = done.splice(0);
   try {
-    const response = await fetch(
-      new URL("/api/voice-presence", connection.httpBaseUrl).toString(),
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(authorization ? { Authorization: `Bearer ${authorization.token}` } : {}),
-        },
-        body: JSON.stringify({
-          deviceId,
-          threadId: state.threadId,
-          on: state.on,
-          done: reports,
-          waitMs,
-        }),
-      },
-    );
+    const response = await environmentFetch(connection, "/api/voice-presence", {
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        deviceId,
+        threadId: state.threadId,
+        on: state.on,
+        done: reports,
+        waitMs,
+      }),
+    });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const body = (await response.json()) as { utterances?: Utterance[]; speakMode?: unknown };
     if (isSpeakMode(body.speakMode) && body.speakMode !== state.speakMode) {
@@ -305,15 +297,10 @@ async function setSpeakMode(speakMode: SpeakModeValue) {
   if (speakMode === before) return;
   set({ speakMode, error: null });
   const connection = readAloudConnection();
-  const authorization = connection?.httpAuthorization ?? null;
   try {
-    if (!connection || authorization?._tag === "Dpop") throw new Error("Not connected.");
-    const response = await fetch(new URL("/api/speak-mode", connection.httpBaseUrl).toString(), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(authorization ? { Authorization: `Bearer ${authorization.token}` } : {}),
-      },
+    if (!connection) throw new Error("Not connected.");
+    const response = await environmentFetch(connection, "/api/speak-mode", {
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mode: speakMode }),
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
