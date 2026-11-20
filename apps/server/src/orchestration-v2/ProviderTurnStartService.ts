@@ -990,12 +990,12 @@ export const layer: Layer.Layer<
       let resumeFellBack = false;
       const messageText = withMessageSenderNote(
         providerMessage,
-      withInputSourceHeader(
-        projectComposerContextForProvider({
-          text: providerMessage.text,
-          records: providerMessage.context?.records ?? [],
-        }),
-        providerMessage.inputSource,
+        withInputSourceHeader(
+          projectComposerContextForProvider({
+            text: providerMessage.text,
+            records: providerMessage.context?.records ?? [],
+          }),
+          providerMessage.inputSource,
         ),
       );
       // Native goal commands go verbatim; handoff history waits a turn.
