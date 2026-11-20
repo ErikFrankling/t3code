@@ -5917,7 +5917,11 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
                 ...thread,
                 ...(command.title === undefined
                   ? {}
-                  : { title: command.title, titleRenamed: false, titleSource: "generated" as const }),
+                  : {
+                      title: command.title,
+                      titleRenamed: false,
+                      titleSource: "generated" as const,
+                    }),
                 ...(command.outcome === undefined
                   ? {}
                   : {
@@ -8669,16 +8673,16 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           : steerFollowUpSource?.status === "cancelled"
             ? { queueHeld: true }
             : heldRunsToRelease.length === 0 &&
-              inheritedQueueHold !== undefined &&
-              !wakeSkipsHold &&
-              queuedRunStop?.skipsHeldQueue !== true
-            ? {
-                queueHeld: true,
-                ...(inheritedQueueHold.queueHoldReason === undefined
-                  ? {}
-                  : { queueHoldReason: inheritedQueueHold.queueHoldReason }),
-              }
-            : {}),
+                inheritedQueueHold !== undefined &&
+                !wakeSkipsHold &&
+                queuedRunStop?.skipsHeldQueue !== true
+              ? {
+                  queueHeld: true,
+                  ...(inheritedQueueHold.queueHoldReason === undefined
+                    ? {}
+                    : { queueHoldReason: inheritedQueueHold.queueHoldReason }),
+                }
+              : {}),
         queuePosition:
           queuedRunStop !== undefined
             ? 1
