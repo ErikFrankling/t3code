@@ -1324,12 +1324,12 @@ export const layer: Layer.Layer<
       let resumeFellBack = false;
       const messageText = withMessageSenderNote(
         providerMessage,
-      withInputSourceHeader(
-        projectComposerContextForProvider({
-          text: providerMessage.text,
-          records: providerMessage.context?.records ?? [],
-        }),
-        providerMessage.inputSource,
+        withInputSourceHeader(
+          projectComposerContextForProvider({
+            text: providerMessage.text,
+            records: providerMessage.context?.records ?? [],
+          }),
+          providerMessage.inputSource,
         ),
       );
       const slashCommand = isSlashCommandMessage(providerMessage);

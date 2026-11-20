@@ -467,12 +467,12 @@ export const layer: Layer.Layer<
                 messageId: message.id,
                 text: withMessageSenderNote(
                   message,
-                withInputSourceHeader(
-                  projectComposerContextForProvider({
-                    text: message.text,
-                    records: message.context?.records ?? [],
-                  }),
-                  message.inputSource,
+                  withInputSourceHeader(
+                    projectComposerContextForProvider({
+                      text: message.text,
+                      records: message.context?.records ?? [],
+                    }),
+                    message.inputSource,
                   ),
                 ),
                 attachments: message.attachments,
