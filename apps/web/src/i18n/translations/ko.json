@@ -227,6 +227,10 @@
   "5ca35b5a769eadcd": "{count, plural, other {백그라운드 대기 업데이트 {count}회 시도함}}",
   "7f78d45ac7d49ffa": "{count, plural, other {예약된 작업 목록 {count}회 조회함}}",
   "5cf841526acd9494": "{count, plural, other {예약된 작업 목록 조회 {count}회 시도함}}",
+  "77ebfae847778e14": "{count, plural, one {Updated {count} Needs you item} other {Updated {count} Needs you items}}",
+  "eef68e8856edf06f": "{count, plural, one {Tried to update {count} Needs you item} other {Tried to update {count} Needs you items}}",
+  "36519e63f7559d43": "{count, plural, one {Listed Needs you items {count} time} other {Listed Needs you items {count} times}}",
+  "6e8b3e94b9eeeb2b": "{count, plural, one {Tried to list Needs you items {count} time} other {Tried to list Needs you items {count} times}}",
   "a0239a5f1e8f49dc": "{count, plural, other {스레드 구성 {count}회 확인함}}",
   "259e913a12d0934f": "{count, plural, other {스레드 구성 확인 {count}회 시도함}}",
   "637e1d61e2c76ce7": "{count, plural, other {스레드 모델 {count}회 설정함}}",
@@ -843,6 +847,8 @@
   "ae7d23ee8b5997f5": "음성 녹음을 마칠 수 없습니다.",
   "a86dd79861a8d4b1": "음성 입력 중에 초안이 변경되어 받아쓴 내용을 추가하지 않았습니다.",
   "b6e6c93abb35a98e": "음성이 감지되지 않았습니다.",
+  "50254c186068df52": "The transcript could not be added to the draft.",
+  "d581fbce6ef49336": "Saved, retrying by itself.",
   "00b2c3aa27c55993": "실시간 받아쓰기가 응답하지 않습니다.",
   "5d79508ce4a8ff68": "음성 받아쓰기가 취소되었습니다.",
   "eddbdaa060c8825f": "음성 사용 동의가 철회되었습니다.",
@@ -1638,6 +1644,7 @@
   "fca9c023f4f870b1": "브라우저에서 링크를 열 수 없습니다",
   "2db10394281f4dc9": "환경이 연결되어 있지 않습니다.",
   "dec509ec41570c46": "앱 열기",
+  "c2bda9fb5f80e710": "Open in default browser",
   "60e61c1f47ab5efe": "작업 전환",
   "db0b0f5af59690af": "스레드",
   "302b55f66796f688": "풀 리퀘스트를 연결할 수 없습니다",
@@ -2442,6 +2449,7 @@
   "e3ed00af71363d39": "이 프로젝트들에 아직 스레드가 없습니다",
   "981053bcf95b3d3f": "{project}에 아직 스레드가 없습니다",
   "151767f20fa67c48": "고정됨",
+  "517e0bee75df8668": "Threads",
   "db8f17154d4f0cfa": "활성",
   "9578dc3e84f82081": "작업 중",
   "a202dad5b0a0aa56": "다시 알림 설정됨",
@@ -3070,7 +3078,10 @@
     {
       "t": "span",
       "i": 2,
-      "c": [" ", "(이 페이지를 연 컴퓨터)"]
+      "c": [
+        " ",
+        "(이 페이지를 연 컴퓨터)"
+      ]
     }
   ],
   "b2d53b4d1d48fbef": [
@@ -3082,7 +3093,10 @@
     {
       "t": "span",
       "i": 2,
-      "c": [" ", "· 실행하는 사람이 이 액세스 권한을 얻습니다"]
+      "c": [
+        " ",
+        "· 실행하는 사람이 이 액세스 권한을 얻습니다"
+      ]
     }
   ],
   "c54cc9c75db9dc58": "방금 시작한 로그인만 승인하세요.",
@@ -4009,6 +4023,15 @@
     }
   ],
   "e58a1d884fa1d8f2": "스레드 세부 정보",
+  "43c5fbd02c6f330a": "간략히 보기",
+  "de45b075b016cb14": [
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    "개 더 보기"
+  ],
   "02d9667ff2c8e0b8": "이슈 {key}: {title}",
   "4276743ee60a3c62": "{count, plural, other {댓글 {count}개}}",
   "42f634397f3960aa": "스레드 세부 정보에 표시",
@@ -4048,15 +4071,6 @@
   ],
   "159ddd0d146a0f22": "지켜보는 중: 검사가 끝나거나, 누군가 댓글을 달거나, 브랜치가 충돌하면 에이전트가 깨어납니다. 클릭하여 중지하세요.",
   "1cbc8b5db51b4c77": "병합",
-  "43c5fbd02c6f330a": "간략히 보기",
-  "de45b075b016cb14": [
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    "개 더 보기"
-  ],
   "a3d040c4ef4fc6e9": "예상보다 빠름",
   "b16fdf56b16d99c9": "예상대로",
   "90f977e97ae8b6c6": "예상보다 느림",
@@ -4071,6 +4085,7 @@
   "66be4fb43249bbd2": "토큰 {max}개 중 {used}개",
   "ee3ae58c8b38a425": "{left}% 남음",
   "ebb26f93fb83a71b": "{label}: {left}% 남음",
+  "1b16346722b65812": "기간 {timeLeft}% 남음",
   "728c6cc1431e76c8": "{duration} 후 초기화 · {time}",
   "e16b0b9b490c8bc7": "{label}: {value}",
   "ba67d0a9ff5dabf0": "관리자 요청을 복사하는 중 클립보드 API를 사용할 수 없습니다.",
@@ -11805,7 +11820,6 @@
   "0bd938825ffcf992": "풀의 +{percent}%",
   "09c0e00d7fb55402": "초기화 크레딧 사용 중…",
   "4df3ff1be768a7ab": "{name}: {remaining}% 남음",
-  "1b16346722b65812": "기간 {timeLeft}% 남음",
   "7aaaff1c6484f25c": "구간",
   "8bcab2ef61de6518": "$0 한도",
   "a16b48709357a5a7": "사용량 관리",
