@@ -287,6 +287,10 @@
   "5ca35b5a769eadcd": "{count, plural, one {Intentó actualizar esperas en segundo plano {count} vez} other {Intentó actualizar esperas en segundo plano {count} veces}}",
   "7f78d45ac7d49ffa": "{count, plural, one {Listó tareas programadas {count} vez} other {Listó tareas programadas {count} veces}}",
   "5cf841526acd9494": "{count, plural, one {Intentó listar tareas programadas {count} vez} other {Intentó listar tareas programadas {count} veces}}",
+  "77ebfae847778e14": "{count, plural, one {Updated {count} Needs you item} other {Updated {count} Needs you items}}",
+  "eef68e8856edf06f": "{count, plural, one {Tried to update {count} Needs you item} other {Tried to update {count} Needs you items}}",
+  "36519e63f7559d43": "{count, plural, one {Listed Needs you items {count} time} other {Listed Needs you items {count} times}}",
+  "6e8b3e94b9eeeb2b": "{count, plural, one {Tried to list Needs you items {count} time} other {Tried to list Needs you items {count} times}}",
   "a0239a5f1e8f49dc": "{count, plural, one {Consultó la configuración del hilo {count} vez} other {Consultó la configuración del hilo {count} veces}}",
   "259e913a12d0934f": "{count, plural, one {Intentó consultar la configuración del hilo {count} vez} other {Intentó consultar la configuración del hilo {count} veces}}",
   "637e1d61e2c76ce7": "{count, plural, one {Definió el modelo del hilo {count} vez} other {Definió el modelo del hilo {count} veces}}",
@@ -951,6 +955,8 @@
   "ae7d23ee8b5997f5": "No se pudo terminar la grabación de voz.",
   "a86dd79861a8d4b1": "El borrador cambió mientras la entrada de voz estaba activa. No se añadió la transcripción.",
   "b6e6c93abb35a98e": "No se detectó voz.",
+  "50254c186068df52": "The transcript could not be added to the draft.",
+  "d581fbce6ef49336": "Saved, retrying by itself.",
   "00b2c3aa27c55993": "La transcripción en directo dejó de responder.",
   "5d79508ce4a8ff68": "Se canceló la transcripción de voz.",
   "eddbdaa060c8825f": "Se revocó el consentimiento de voz.",
@@ -1766,6 +1772,7 @@
   "fca9c023f4f870b1": "No se puede abrir el enlace en el navegador",
   "2db10394281f4dc9": "El entorno no está conectado.",
   "dec509ec41570c46": "Abrir app",
+  "c2bda9fb5f80e710": "Open in default browser",
   "60e61c1f47ab5efe": "Alternar tarea",
   "db0b0f5af59690af": "Hilo",
   "302b55f66796f688": "No se puede vincular la pull request",
@@ -2592,6 +2599,7 @@
   "e3ed00af71363d39": "Aún no hay hilos en estos proyectos",
   "981053bcf95b3d3f": "Aún no hay hilos en {project}",
   "151767f20fa67c48": "Fijados",
+  "517e0bee75df8668": "Threads",
   "db8f17154d4f0cfa": "Activos",
   "9578dc3e84f82081": "En curso",
   "a202dad5b0a0aa56": "Pospuestos",
@@ -3237,7 +3245,10 @@
     {
       "t": "span",
       "i": 2,
-      "c": [" ", "en el ordenador que abrió esta página"]
+      "c": [
+        " ",
+        "en el ordenador que abrió esta página"
+      ]
     }
   ],
   "b2d53b4d1d48fbef": [
@@ -3249,7 +3260,10 @@
     {
       "t": "span",
       "i": 2,
-      "c": [" ", "· quien lo ejecute obtiene este acceso"]
+      "c": [
+        " ",
+        "· quien lo ejecute obtiene este acceso"
+      ]
     }
   ],
   "c54cc9c75db9dc58": "Aprueba solo un inicio de sesión que acabes de iniciar.",

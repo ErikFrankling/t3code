@@ -287,6 +287,10 @@
   "5ca35b5a769eadcd": "{count, plural, one {Versucht, Hintergrund-Wartevorgänge {count}-mal zu aktualisieren} other {Versucht, Hintergrund-Wartevorgänge {count}-mal zu aktualisieren}}",
   "7f78d45ac7d49ffa": "{count, plural, one {Geplante Aufgaben {count}-mal aufgelistet} other {Geplante Aufgaben {count}-mal aufgelistet}}",
   "5cf841526acd9494": "{count, plural, one {Versucht, geplante Aufgaben {count}-mal aufzulisten} other {Versucht, geplante Aufgaben {count}-mal aufzulisten}}",
+  "77ebfae847778e14": "{count, plural, one {Updated {count} Needs you item} other {Updated {count} Needs you items}}",
+  "eef68e8856edf06f": "{count, plural, one {Tried to update {count} Needs you item} other {Tried to update {count} Needs you items}}",
+  "36519e63f7559d43": "{count, plural, one {Listed Needs you items {count} time} other {Listed Needs you items {count} times}}",
+  "6e8b3e94b9eeeb2b": "{count, plural, one {Tried to list Needs you items {count} time} other {Tried to list Needs you items {count} times}}",
   "a0239a5f1e8f49dc": "{count, plural, one {Thread-Konfiguration {count}-mal geprüft} other {Thread-Konfiguration {count}-mal geprüft}}",
   "259e913a12d0934f": "{count, plural, one {Versucht, die Thread-Konfiguration {count}-mal zu prüfen} other {Versucht, die Thread-Konfiguration {count}-mal zu prüfen}}",
   "637e1d61e2c76ce7": "{count, plural, one {Thread-Modell {count}-mal festgelegt} other {Thread-Modell {count}-mal festgelegt}}",
@@ -951,6 +955,8 @@
   "ae7d23ee8b5997f5": "Die Sprachaufnahme konnte nicht abgeschlossen werden.",
   "a86dd79861a8d4b1": "Der Entwurf hat sich während der Spracheingabe geändert. Das Transkript wurde nicht eingefügt.",
   "b6e6c93abb35a98e": "Es wurde keine Sprache erkannt.",
+  "50254c186068df52": "The transcript could not be added to the draft.",
+  "d581fbce6ef49336": "Saved, retrying by itself.",
   "00b2c3aa27c55993": "Die Live-Transkription reagiert nicht mehr.",
   "5d79508ce4a8ff68": "Die Sprachtranskription wurde abgebrochen.",
   "eddbdaa060c8825f": "Die Einwilligung zur Spracheingabe wurde widerrufen.",
@@ -1765,6 +1771,7 @@
   "fca9c023f4f870b1": "Link kann nicht im Browser geöffnet werden",
   "2db10394281f4dc9": "Umgebung ist nicht verbunden.",
   "dec509ec41570c46": "App öffnen",
+  "c2bda9fb5f80e710": "Open in default browser",
   "60e61c1f47ab5efe": "Aufgabe umschalten",
   "db0b0f5af59690af": "Thread",
   "302b55f66796f688": "Pull Request kann nicht verknüpft werden",
@@ -2592,6 +2599,7 @@
   "e3ed00af71363d39": "Noch keine Threads in diesen Projekten",
   "981053bcf95b3d3f": "Noch keine Threads in {project}",
   "151767f20fa67c48": "Angeheftet",
+  "517e0bee75df8668": "Threads",
   "db8f17154d4f0cfa": "Aktiv",
   "9578dc3e84f82081": "In Arbeit",
   "a202dad5b0a0aa56": "Zurückgestellt",
@@ -3238,7 +3246,10 @@
     {
       "t": "span",
       "i": 2,
-      "c": [" ", "auf dem Computer, der diese Seite geöffnet hat"]
+      "c": [
+        " ",
+        "auf dem Computer, der diese Seite geöffnet hat"
+      ]
     }
   ],
   "b2d53b4d1d48fbef": [
@@ -3250,7 +3261,10 @@
     {
       "t": "span",
       "i": 2,
-      "c": [" ", "· wer es ausführt, erhält diesen Zugriff"]
+      "c": [
+        " ",
+        "· wer es ausführt, erhält diesen Zugriff"
+      ]
     }
   ],
   "c54cc9c75db9dc58": "Genehmige nur eine Anmeldung, die du gerade selbst gestartet hast.",

@@ -5725,5 +5725,13 @@
   "46d614fa7b4bf1e5": "Arbetsflödeskörningar",
   "f6cf1627f4acc5ef": "Kommentarens synlighet",
   "eb1fd384ad5919dd": "Intern anteckning",
-  "b45f0b467e9406d0": "Svara kunden"
+  "b45f0b467e9406d0": "Svara kunden",
+  "77ebfae847778e14": "{count, plural, one {Uppdaterade {count} Behöver dig-punkt} other {Uppdaterade {count} Behöver dig-punkter}}",
+  "eef68e8856edf06f": "{count, plural, one {Försökte uppdatera {count} Behöver dig-punkt} other {Försökte uppdatera {count} Behöver dig-punkter}}",
+  "36519e63f7559d43": "{count, plural, one {Listade Behöver dig-punkter {count} gång} other {Listade Behöver dig-punkter {count} gånger}}",
+  "6e8b3e94b9eeeb2b": "{count, plural, one {Försökte lista Behöver dig-punkter {count} gång} other {Försökte lista Behöver dig-punkter {count} gånger}}",
+  "50254c186068df52": "Transkriptionen kunde inte läggas till i utkastet.",
+  "d581fbce6ef49336": "Sparad, försöker igen av sig själv.",
+  "af59c7fd7a0947b0": "Visa alla trådar",
+  "da81059bb9d773e7": "Radera den sparade inspelningen"
 }

@@ -5719,5 +5719,13 @@
   "46d614fa7b4bf1e5": "Exécutions de workflow",
   "f6cf1627f4acc5ef": "Visibilité du commentaire",
   "eb1fd384ad5919dd": "Note interne",
-  "b45f0b467e9406d0": "Répondre au client"
+  "b45f0b467e9406d0": "Répondre au client",
+  "77ebfae847778e14": "{count, plural, one {Updated {count} Needs you item} other {Updated {count} Needs you items}}",
+  "eef68e8856edf06f": "{count, plural, one {Tried to update {count} Needs you item} other {Tried to update {count} Needs you items}}",
+  "36519e63f7559d43": "{count, plural, one {Listed Needs you items {count} time} other {Listed Needs you items {count} times}}",
+  "6e8b3e94b9eeeb2b": "{count, plural, one {Tried to list Needs you items {count} time} other {Tried to list Needs you items {count} times}}",
+  "50254c186068df52": "The transcript could not be added to the draft.",
+  "d581fbce6ef49336": "Saved, retrying by itself.",
+  "af59c7fd7a0947b0": "Show all threads",
+  "da81059bb9d773e7": "Delete the kept recording"
 }

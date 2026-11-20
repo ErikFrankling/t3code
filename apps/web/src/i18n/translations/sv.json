@@ -287,6 +287,10 @@
   "5ca35b5a769eadcd": "{count, plural, one {Försökte uppdatera bakgrundsväntan {count} gång} other {Försökte uppdatera bakgrundsväntan {count} gånger}}",
   "7f78d45ac7d49ffa": "{count, plural, one {Listade schemalagda uppgifter {count} gång} other {Listade schemalagda uppgifter {count} gånger}}",
   "5cf841526acd9494": "{count, plural, one {Försökte lista schemalagda uppgifter {count} gång} other {Försökte lista schemalagda uppgifter {count} gånger}}",
+  "77ebfae847778e14": "{count, plural, one {Uppdaterade {count} Behöver dig-punkt} other {Uppdaterade {count} Behöver dig-punkter}}",
+  "eef68e8856edf06f": "{count, plural, one {Försökte uppdatera {count} Behöver dig-punkt} other {Försökte uppdatera {count} Behöver dig-punkter}}",
+  "36519e63f7559d43": "{count, plural, one {Listade Behöver dig-punkter {count} gång} other {Listade Behöver dig-punkter {count} gånger}}",
+  "6e8b3e94b9eeeb2b": "{count, plural, one {Försökte lista Behöver dig-punkter {count} gång} other {Försökte lista Behöver dig-punkter {count} gånger}}",
   "a0239a5f1e8f49dc": "{count, plural, one {Kontrollerade trådkonfiguration {count} gång} other {Kontrollerade trådkonfiguration {count} gånger}}",
   "259e913a12d0934f": "{count, plural, one {Försökte kontrollera trådkonfiguration {count} gång} other {Försökte kontrollera trådkonfiguration {count} gånger}}",
   "637e1d61e2c76ce7": "{count, plural, one {Valde trådmodell {count} gång} other {Valde trådmodell {count} gånger}}",
@@ -951,6 +955,8 @@
   "ae7d23ee8b5997f5": "Kunde inte slutföra röstinspelningen.",
   "a86dd79861a8d4b1": "Utkastet ändrades medan röstinmatningen pågick. Transkriptionen lades inte till.",
   "b6e6c93abb35a98e": "Inget tal upptäcktes.",
+  "50254c186068df52": "Transkriptionen kunde inte läggas till i utkastet.",
+  "d581fbce6ef49336": "Sparad, försöker igen av sig själv.",
   "00b2c3aa27c55993": "Livetranskriberingen slutade svara.",
   "5d79508ce4a8ff68": "Rösttranskriberingen avbröts.",
   "eddbdaa060c8825f": "Samtycket till röstinspelning återkallades.",
@@ -1766,6 +1772,7 @@
   "fca9c023f4f870b1": "Det gick inte att öppna länken i webbläsaren",
   "2db10394281f4dc9": "Miljön är inte ansluten.",
   "dec509ec41570c46": "Öppna app",
+  "c2bda9fb5f80e710": "Open in default browser",
   "60e61c1f47ab5efe": "Växla uppgift",
   "db0b0f5af59690af": "Tråd",
   "302b55f66796f688": "Det gick inte att länka pull request",
@@ -2592,6 +2599,7 @@
   "e3ed00af71363d39": "Inga trådar i de här projekten än",
   "981053bcf95b3d3f": "Inga trådar i {project} än",
   "151767f20fa67c48": "Fästa",
+  "517e0bee75df8668": "Threads",
   "db8f17154d4f0cfa": "Aktiva",
   "9578dc3e84f82081": "Arbetar",
   "a202dad5b0a0aa56": "Snoozade",
@@ -3237,7 +3245,10 @@
     {
       "t": "span",
       "i": 2,
-      "c": [" ", "på datorn som öppnade den här sidan"]
+      "c": [
+        " ",
+        "på datorn som öppnade den här sidan"
+      ]
     }
   ],
   "b2d53b4d1d48fbef": [
@@ -3249,7 +3260,10 @@
     {
       "t": "span",
       "i": 2,
-      "c": [" ", "· den som kör den får den här åtkomsten"]
+      "c": [
+        " ",
+        "· den som kör den får den här åtkomsten"
+      ]
     }
   ],
   "c54cc9c75db9dc58": "Godkänn bara en inloggning som du själv precis har startat.",

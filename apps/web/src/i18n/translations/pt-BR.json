@@ -287,6 +287,10 @@
   "5ca35b5a769eadcd": "{count, plural, one {Tentou atualizar esperas em segundo plano {count} vez} other {Tentou atualizar esperas em segundo plano {count} vezes}}",
   "7f78d45ac7d49ffa": "{count, plural, one {Listou as tarefas agendadas {count} vez} other {Listou as tarefas agendadas {count} vezes}}",
   "5cf841526acd9494": "{count, plural, one {Tentou listar as tarefas agendadas {count} vez} other {Tentou listar as tarefas agendadas {count} vezes}}",
+  "77ebfae847778e14": "{count, plural, one {Updated {count} Needs you item} other {Updated {count} Needs you items}}",
+  "eef68e8856edf06f": "{count, plural, one {Tried to update {count} Needs you item} other {Tried to update {count} Needs you items}}",
+  "36519e63f7559d43": "{count, plural, one {Listed Needs you items {count} time} other {Listed Needs you items {count} times}}",
+  "6e8b3e94b9eeeb2b": "{count, plural, one {Tried to list Needs you items {count} time} other {Tried to list Needs you items {count} times}}",
   "a0239a5f1e8f49dc": "{count, plural, one {Verificou a configuração da thread {count} vez} other {Verificou a configuração da thread {count} vezes}}",
   "259e913a12d0934f": "{count, plural, one {Tentou verificar a configuração da thread {count} vez} other {Tentou verificar a configuração da thread {count} vezes}}",
   "637e1d61e2c76ce7": "{count, plural, one {Definiu o modelo da thread {count} vez} other {Definiu o modelo da thread {count} vezes}}",
@@ -951,6 +955,8 @@
   "ae7d23ee8b5997f5": "Não foi possível concluir a gravação de voz.",
   "a86dd79861a8d4b1": "O rascunho mudou durante a entrada de voz. A transcrição não foi adicionada.",
   "b6e6c93abb35a98e": "Nenhuma fala detectada.",
+  "50254c186068df52": "The transcript could not be added to the draft.",
+  "d581fbce6ef49336": "Saved, retrying by itself.",
   "00b2c3aa27c55993": "A transcrição ao vivo parou de responder.",
   "5d79508ce4a8ff68": "A transcrição de voz foi cancelada.",
   "eddbdaa060c8825f": "O consentimento de voz foi revogado.",
@@ -1766,6 +1772,7 @@
   "fca9c023f4f870b1": "Não foi possível abrir o link no navegador",
   "2db10394281f4dc9": "O ambiente não está conectado.",
   "dec509ec41570c46": "Abrir app",
+  "c2bda9fb5f80e710": "Open in default browser",
   "60e61c1f47ab5efe": "Alternar tarefa",
   "db0b0f5af59690af": "Thread",
   "302b55f66796f688": "Não foi possível vincular o pull request",
@@ -2592,6 +2599,7 @@
   "e3ed00af71363d39": "Ainda não há threads nestes projetos",
   "981053bcf95b3d3f": "Ainda não há threads em {project}",
   "151767f20fa67c48": "Fixadas",
+  "517e0bee75df8668": "Threads",
   "db8f17154d4f0cfa": "Ativas",
   "9578dc3e84f82081": "Trabalhando",
   "a202dad5b0a0aa56": "Adiadas",
@@ -3237,7 +3245,10 @@
     {
       "t": "span",
       "i": 2,
-      "c": [" ", "no computador que abriu esta página"]
+      "c": [
+        " ",
+        "no computador que abriu esta página"
+      ]
     }
   ],
   "b2d53b4d1d48fbef": [
@@ -3249,7 +3260,10 @@
     {
       "t": "span",
       "i": 2,
-      "c": [" ", "· quem executar recebe este acesso"]
+      "c": [
+        " ",
+        "· quem executar recebe este acesso"
+      ]
     }
   ],
   "c54cc9c75db9dc58": "Aprove apenas um login que você acabou de iniciar.",

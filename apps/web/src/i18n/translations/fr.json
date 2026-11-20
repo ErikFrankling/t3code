@@ -287,6 +287,10 @@
   "5ca35b5a769eadcd": "{count, plural, one {Tentative de mettre à jour les attentes en arrière-plan {count} fois} other {Tentative de mettre à jour les attentes en arrière-plan {count} fois}}",
   "7f78d45ac7d49ffa": "{count, plural, one {Tâches planifiées listées {count} fois} other {Tâches planifiées listées {count} fois}}",
   "5cf841526acd9494": "{count, plural, one {Tentative de lister les tâches planifiées {count} fois} other {Tentative de lister les tâches planifiées {count} fois}}",
+  "77ebfae847778e14": "{count, plural, one {Updated {count} Needs you item} other {Updated {count} Needs you items}}",
+  "eef68e8856edf06f": "{count, plural, one {Tried to update {count} Needs you item} other {Tried to update {count} Needs you items}}",
+  "36519e63f7559d43": "{count, plural, one {Listed Needs you items {count} time} other {Listed Needs you items {count} times}}",
+  "6e8b3e94b9eeeb2b": "{count, plural, one {Tried to list Needs you items {count} time} other {Tried to list Needs you items {count} times}}",
   "a0239a5f1e8f49dc": "{count, plural, one {Configuration du fil vérifiée {count} fois} other {Configuration du fil vérifiée {count} fois}}",
   "259e913a12d0934f": "{count, plural, one {Tentative de vérifier la configuration du fil {count} fois} other {Tentative de vérifier la configuration du fil {count} fois}}",
   "637e1d61e2c76ce7": "{count, plural, one {Modèle du fil défini {count} fois} other {Modèle du fil défini {count} fois}}",
@@ -951,6 +955,8 @@
   "ae7d23ee8b5997f5": "Impossible de terminer l’enregistrement vocal.",
   "a86dd79861a8d4b1": "Le brouillon a changé pendant la saisie vocale. La transcription n’a pas été ajoutée.",
   "b6e6c93abb35a98e": "Aucune parole détectée.",
+  "50254c186068df52": "The transcript could not be added to the draft.",
+  "d581fbce6ef49336": "Saved, retrying by itself.",
   "00b2c3aa27c55993": "La transcription en direct ne répond plus.",
   "5d79508ce4a8ff68": "La transcription vocale a été annulée.",
   "eddbdaa060c8825f": "Le consentement vocal a été révoqué.",
@@ -1766,6 +1772,7 @@
   "fca9c023f4f870b1": "Impossible d’ouvrir le lien dans le navigateur",
   "2db10394281f4dc9": "L’environnement n’est pas connecté.",
   "dec509ec41570c46": "Ouvrir l’app",
+  "c2bda9fb5f80e710": "Open in default browser",
   "60e61c1f47ab5efe": "Cocher/décocher la tâche",
   "db0b0f5af59690af": "Fil",
   "302b55f66796f688": "Impossible d’associer la pull request",
@@ -2592,6 +2599,7 @@
   "e3ed00af71363d39": "Pas encore de fil dans ces projets",
   "981053bcf95b3d3f": "Pas encore de fil dans {project}",
   "151767f20fa67c48": "Épinglés",
+  "517e0bee75df8668": "Threads",
   "db8f17154d4f0cfa": "Actifs",
   "9578dc3e84f82081": "En cours",
   "a202dad5b0a0aa56": "Reportés",
@@ -3237,7 +3245,10 @@
     {
       "t": "span",
       "i": 2,
-      "c": [" ", "sur l’ordinateur qui a ouvert cette page"]
+      "c": [
+        " ",
+        "sur l’ordinateur qui a ouvert cette page"
+      ]
     }
   ],
   "b2d53b4d1d48fbef": [
@@ -3249,7 +3260,10 @@
     {
       "t": "span",
       "i": 2,
-      "c": [" ", "· quiconque l’exécute obtient cet accès"]
+      "c": [
+        " ",
+        "· quiconque l’exécute obtient cet accès"
+      ]
     }
   ],
   "c54cc9c75db9dc58": "N’approuvez qu’une connexion que vous venez de lancer.",
