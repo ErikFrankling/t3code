@@ -14873,18 +14873,21 @@ const layerUsageLimitFailoverTest = Layer.mergeAll(
     }),
   ),
   Layer.provide(
-    Layer.succeed(ProviderInstanceRegistry.ProviderInstanceRegistry, {
-      getInstance: (instanceId) =>
-        Effect.succeed(
-          [providerInstance, sameGroupAlternateInstance].find(
-            (instance) => instanceId === instance.instanceId,
+    Layer.merge(
+      ModelManifest.layerTest,
+      Layer.succeed(ProviderInstanceRegistry.ProviderInstanceRegistry, {
+        getInstance: (instanceId) =>
+          Effect.succeed(
+            [providerInstance, sameGroupAlternateInstance].find(
+              (instance) => instanceId === instance.instanceId,
+            ),
           ),
-        ),
-      listInstances: Effect.succeed([providerInstance, sameGroupAlternateInstance]),
-      listUnavailable: Effect.succeed([]),
-      streamChanges: Stream.empty,
-      subscribeChanges: Effect.never,
-    }),
+        listInstances: Effect.succeed([providerInstance, sameGroupAlternateInstance]),
+        listUnavailable: Effect.succeed([]),
+        streamChanges: Stream.empty,
+        subscribeChanges: Effect.never,
+      }),
+    ),
   ),
   Layer.provide(layerGitWorkflowTest),
   Layer.provide(layerProjectServiceTest),
