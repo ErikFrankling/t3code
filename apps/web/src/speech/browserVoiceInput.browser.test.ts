@@ -279,7 +279,7 @@ it("streams the opening audio in order when the destination becomes ready during
   };
   const transcription = await platform.transcriber.prepare({ signal: abort.signal });
   await platform.recorder.prepareToRecordAsync(abort.signal);
-  platform.recorder.record({ forDuration: 1 });
+  platform.recorder.record();
   const opening = new Float32Array([0.1]);
   const continuing = new Float32Array([0.2]);
   microphone.feed(opening);
