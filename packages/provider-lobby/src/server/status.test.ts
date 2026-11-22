@@ -1,13 +1,13 @@
 import { assert, describe, it } from "@effect/vitest";
 
 import { buildLobbyAcpSpawnInput } from "./adapter.ts";
-import { lobbyModelsFromCheck } from "./status.ts";
+import { lobbyModelsFromCheck, lobbyVersionFromCheck } from "./status.ts";
 
 describe("Lobby provider", () => {
   it("lists `lobby acp check` models by their ACP value with Lobby's effort levels", () => {
-    const models = lobbyModelsFromCheck(
-      JSON.stringify({
+    const check = JSON.stringify({
         site: "https://lobby.example.com",
+        version: "0.1.2",
         email: "dev@example.com",
         accountId: "ws-1",
         models: [
@@ -20,8 +20,8 @@ describe("Lobby provider", () => {
           },
           { value: "codex:gpt-6-astra", name: "GPT-6 Astra", source: null, reasoningEfforts: [], defaultReasoningEffort: null },
         ],
-      }),
-    );
+      });
+    const models = lobbyModelsFromCheck(check);
     assert.deepStrictEqual(
       models?.map((model) => [model.slug, model.name, model.isDefault === true]),
       [
@@ -31,6 +31,7 @@ describe("Lobby provider", () => {
     );
     const effort = models?.[0]?.capabilities?.optionDescriptors?.[0];
     assert.strictEqual(effort?.id, "effort");
+    assert.strictEqual(lobbyVersionFromCheck(check), "0.1.2");
     assert.strictEqual(lobbyModelsFromCheck("lobby: not json"), undefined);
   });
 

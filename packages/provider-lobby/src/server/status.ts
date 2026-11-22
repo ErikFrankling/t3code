@@ -43,9 +43,10 @@ const EFFORT_LABELS: Readonly<Record<string, string>> = {
   max: "Max",
 };
 
-/** `lobby acp check`: the key's account and the models a chat can use. */
+/** `lobby acp check`: the CLI version, the key's account and the models a chat can use. */
 const LobbyCheck = Schema.fromJsonString(
   Schema.Struct({
+    version: Schema.optional(Schema.NullOr(Schema.String)),
     email: Schema.NullOr(Schema.String),
     models: Schema.Array(
       Schema.Struct({
@@ -89,6 +90,11 @@ export function lobbyModelsFromCheck(stdout: string): ReadonlyArray<ServerProvid
             ],
           }),
   }));
+}
+
+/** The CLI version `lobby acp check` reports (older CLIs report none). */
+export function lobbyVersionFromCheck(stdout: string): string | null {
+  return Option.getOrUndefined(decodeLobbyCheck(stdout.trim()))?.version ?? null;
 }
 
 export function lobbyAuthFromCheck(stdout: string): ServerProviderAuth {
@@ -199,7 +205,7 @@ export const checkLobbyProviderStatus = Effect.fn("checkLobbyProviderStatus")(fu
     checkedAt,
     {
       installed: true,
-      version: null,
+      version: lobbyVersionFromCheck(output.stdout),
       status: models.length > 0 ? "ready" : "warning",
       auth: lobbyAuthFromCheck(output.stdout),
       ...(models.length > 0
