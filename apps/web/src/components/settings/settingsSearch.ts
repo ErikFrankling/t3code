@@ -860,7 +860,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: msg("Provider update checks"),
     to: "/settings/maintenance",
     searchTerms: [
-      msg("installed cli versions newer available codex claude cursor grok fx kiro opencode"),
+      msg("installed cli versions newer available codex claude cursor grok fx kiro lobby opencode"),
     ],
     scope: "environment-defaults",
   },
@@ -1093,7 +1093,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/providers",
     searchTerms: [
       msg(
-        "agents cli codex claude cursor grok fx kiro opencode antigravity google sign in sign out install subscription instances authentication api key models configuration binary path config directory codex_home shadow home endpoint arguments environment variables display name accent color custom favorite hidden auto compact native sessions import resume",
+        "agents cli codex claude cursor grok fx kiro lobby opencode antigravity google sign in sign out install subscription instances authentication api key models configuration binary path config directory codex_home shadow home endpoint arguments environment variables display name accent color custom favorite hidden auto compact native sessions import resume",
       ),
     ],
   },
