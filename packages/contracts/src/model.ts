@@ -124,6 +124,7 @@ const CURSOR_DRIVER_KIND = ProviderDriverKind.make("cursor");
 const GROK_DRIVER_KIND = ProviderDriverKind.make("grok");
 const FX_DRIVER_KIND = ProviderDriverKind.make("fx");
 const KIRO_DRIVER_KIND = ProviderDriverKind.make("kiro");
+const LOBBY_DRIVER_KIND = ProviderDriverKind.make("lobby");
 const MUSE_DRIVER_KIND = ProviderDriverKind.make("muse");
 const PI_DRIVER_KIND = ProviderDriverKind.make("pi");
 const ACP_REGISTRY_DRIVER_KIND = ProviderDriverKind.make("acpRegistry");
@@ -206,6 +207,7 @@ export const PROVIDER_DISPLAY_NAMES: Partial<Record<ProviderDriverKind, string>>
   [GROK_DRIVER_KIND]: "Grok",
   [FX_DRIVER_KIND]: "fx",
   [KIRO_DRIVER_KIND]: "Kiro",
+  [LOBBY_DRIVER_KIND]: "Lobby",
   [MUSE_DRIVER_KIND]: "Muse Code",
   [ACP_REGISTRY_DRIVER_KIND]: "ACP Registry",
   [PI_DRIVER_KIND]: "Pi",
