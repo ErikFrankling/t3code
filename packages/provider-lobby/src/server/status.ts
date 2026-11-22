@@ -65,7 +65,9 @@ const decodeLobbyCheck = Schema.decodeUnknownOption(LobbyCheck);
  * Lobby's models as T3 models. The slug is `lobby acp`'s `adapter:id` value, so the
  * same model on two harnesses stays two choices; `effort` is `lobby acp`'s option id.
  */
-export function lobbyModelsFromCheck(stdout: string): ReadonlyArray<ServerProviderModel> | undefined {
+export function lobbyModelsFromCheck(
+  stdout: string,
+): ReadonlyArray<ServerProviderModel> | undefined {
   const check = Option.getOrUndefined(decodeLobbyCheck(stdout.trim()));
   if (check === undefined) return undefined;
   return check.models.map((model, index) => ({
@@ -174,7 +176,9 @@ export const checkLobbyProviderStatus = Effect.fn("checkLobbyProviderStatus")(fu
         ChildProcess.make(spawn.command, spawn.args, { env: probeEnvironment, shell: spawn.shell }),
       ),
     ),
-    Effect.timeoutOption(resolveProviderProbeTimeoutMs("lobby", AUTH_PROBE_TIMEOUT_MS, environment)),
+    Effect.timeoutOption(
+      resolveProviderProbeTimeoutMs("lobby", AUTH_PROBE_TIMEOUT_MS, environment),
+    ),
     Effect.result,
   );
   if (Result.isFailure(result) || Option.isNone(result.success)) {
@@ -197,7 +201,9 @@ export const checkLobbyProviderStatus = Effect.fn("checkLobbyProviderStatus")(fu
       version: null,
       status: "error",
       auth: { status: /API key/i.test(output.stderr) ? "unauthenticated" : "unknown" },
-      message: cliMessage(output.stderr) ?? "The Lobby CLI could not read your account. Update it and try again.",
+      message:
+        cliMessage(output.stderr) ??
+        "The Lobby CLI could not read your account. Update it and try again.",
     });
   }
   return snapshot(
