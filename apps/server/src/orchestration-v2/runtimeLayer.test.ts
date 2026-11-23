@@ -15117,13 +15117,18 @@ it.layer(layerTest)("queue after a server restart", (it) => {
             },
           ],
         });
-        for (let attempt = 0; attempt < 20; attempt += 1) {
+        // The start reads the projection on the database worker, so give it real time too.
+        const queuedRun = () =>
+          orchestrator
+            .getThreadProjection(threadId)
+            .pipe(Effect.map(({ runs }) => runs.find((run) => run.id === queued.id)!));
+        for (let attempt = 0; attempt < 40; attempt += 1) {
           yield* Effect.yieldNow;
           yield* TestClock.adjust("100 millis");
+          yield* TestClock.withLive(Effect.sleep("5 millis"));
+          if (kind === "restart-continuation" && (yield* queuedRun()).status !== "queued") break;
         }
-        const after = (yield* orchestrator.getThreadProjection(threadId)).runs.find(
-          (run) => run.id === queued.id,
-        )!;
+        const after = yield* queuedRun();
         if (kind === "restart-continuation") {
           assert.notEqual(after.status, "queued");
         } else {
@@ -15594,7 +15599,12 @@ it.layer(layerUsageLimitFailoverTest)("queued message after an account switch", 
           },
         ],
       });
-      for (let attempt = 0; attempt < 10; attempt += 1) yield* Effect.yieldNow;
+      // The start reads the projection on the database worker, so give it real time too.
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        yield* Effect.yieldNow;
+        if ((yield* fx.runs()).find((run) => run.id === queued.id)?.status !== "queued") break;
+        yield* TestClock.withLive(Effect.sleep("5 millis"));
+      }
       const started = (yield* fx.runs()).find((run) => run.id === queued.id)!;
       // Started right away (no failure hold, no watchdog cooldown) on the new account.
       assert.notEqual(started.status, "queued");

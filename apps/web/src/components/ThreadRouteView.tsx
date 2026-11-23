@@ -255,15 +255,15 @@ export function ThreadRouteView({
     >
       <BackgroundThreadContext value={background}>
         <HiddenThreadContext value={background}>
-        {view !== null && personalAgentEnvironmentId !== null ? (
-          <PersonalAgentHome
-            environmentId={personalAgentEnvironmentId}
-            working={serverThreadShell !== null && isThreadWorking(serverThreadShell)}
-            chat={view}
-          />
-        ) : (
-          view
-        )}
+          {view !== null && personalAgentEnvironmentId !== null ? (
+            <PersonalAgentHome
+              environmentId={personalAgentEnvironmentId}
+              working={serverThreadShell !== null && isThreadWorking(serverThreadShell)}
+              chat={view}
+            />
+          ) : (
+            view
+          )}
         </HiddenThreadContext>
       </BackgroundThreadContext>
       {background ? null : redirect}
