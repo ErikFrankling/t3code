@@ -9,11 +9,11 @@ const layer = it.layer(NodeSqliteClient.layer({ filename: ":memory:" }));
 const updatedAt = "2026-09-01T00:00:00.000Z";
 const deliveredPayload = JSON.stringify({ completionDelivery: { state: "delivered" } });
 
-layer("075_SubagentDeliveryState", (it) => {
+layer("076_SubagentDeliveryState", (it) => {
   it.effect("backfills delivery state without failing on an unreadable payload", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
-      yield* runMigrations({ toMigrationInclusive: 74 });
+      yield* runMigrations({ toMigrationInclusive: 75 });
       const payloads = [
         ["delivered", deliveredPayload],
         ["unreadable", ""],

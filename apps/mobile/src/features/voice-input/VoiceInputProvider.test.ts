@@ -20,11 +20,25 @@ vi.mock("expo-audio", () => ({
   AudioModule: {},
   RecordingPresets: { HIGH_QUALITY: { ios: {}, android: {} } },
   requestRecordingPermissionsAsync: async () => ({ granted: true }),
+  getRecordingPermissionsAsync: async () => ({ granted: true }),
   setAudioModeAsync: vi.fn(async () => {}),
   setIsAudioActiveAsync: async () => {},
 }));
 vi.mock("../../native/voiceRecorder", () => ({ createVoiceRecorder: vi.fn() }));
-vi.mock("../../native/voiceTranscription", () => ({ getLocalVoiceTranscriber: async () => null }));
+vi.mock("../../native/voiceTranscription", () => ({
+  getLocalVoiceTranscriber: async () => null,
+  beginDictationStream: () => {},
+  endDictationStream: () => {},
+}));
+// The fork's voice mode and dictation delivery; the native call module loads expo.
+vi.mock("../../native/voiceCall", () => ({
+  voiceCall: { active: false, subscribe: () => () => {} },
+}));
+vi.mock("../../state/session", async () => {
+  const { Atom } = await import("effect/reactivity");
+  const Option = await import("effect/Option");
+  return { environmentSession: { preparedConnectionValueAtom: () => Atom.make(Option.none()) } };
+});
 vi.mock("../../state/preferences", async () => {
   const { AsyncResult, Atom } = await import("effect/reactivity");
   return { mobilePreferencesAtom: Atom.make(AsyncResult.initial()) };

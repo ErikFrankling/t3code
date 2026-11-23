@@ -3300,7 +3300,13 @@ export default function ChatView(props: ChatViewProps) {
         if (Date.now() > giveUpAt) break;
         await new Promise((resolve) => setTimeout(resolve, 250));
       }
-      if (!(await onSend(undefined, "auto", "foreground", undefined, { id, draft, uploaded }))) {
+      if (
+        !(await onSend(undefined, "auto", "foreground", undefined, undefined, {
+          id,
+          draft,
+          uploaded,
+        }))
+      ) {
         throw new Error(
           "The recording is saved, but this chat could not accept the message. Retry sending.",
         );

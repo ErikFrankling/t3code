@@ -55,6 +55,8 @@ const deliverTurn = Effect.fn("DictationDelivery.deliverTurn")(function* (turn: 
         createdBy: "user",
         creationSource: "creationSource" in command ? command.creationSource : "web",
       }),
+      // Only a queued-run edit reads this, and a dictation never sends one.
+      { managesProviders: false },
     );
     return;
   }
