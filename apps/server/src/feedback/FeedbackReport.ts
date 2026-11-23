@@ -129,6 +129,8 @@ export const T3_CLI_COMMANDS: ReadonlyArray<string> = [
   "t3 help",
   "t3 serve",
   "t3 app",
+  "t3 app dictation",
+  "t3 app speak-reply",
   "t3 pair",
   "t3 auth",
   "t3 auth connect-device",

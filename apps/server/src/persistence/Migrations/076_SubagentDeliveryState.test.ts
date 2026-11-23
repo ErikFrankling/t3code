@@ -30,7 +30,7 @@ layer("076_SubagentDeliveryState", (it) => {
         `;
       }
 
-      yield* runMigrations({ toMigrationInclusive: 75 });
+      yield* runMigrations({ toMigrationInclusive: 76 });
       const rows = yield* sql`
         SELECT subagent_id, completion_delivery_state, payload_json
         FROM orchestration_v2_projection_subagents ORDER BY subagent_id
