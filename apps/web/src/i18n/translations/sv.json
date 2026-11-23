@@ -71,6 +71,7 @@
   "cd03eb1b84271c02": "Agent",
   "bfe1a60f3f9c60fb": "Omgång {turn} · {what}",
   "dfdaa6255a416140": "Översikt över {turns, plural, one {{turns} senaste omgång} other {{turns} senaste omgångar}}, {textTurns, plural, =0 {ingen meddelandetext} one {meddelandetext från den senaste omgången} other {meddelandetext från de senaste {textTurns} omgångarna}}{truncated, select, yes {, förkortad för att få plats} other {}}",
+  "260c6b45f52d2f27": "Lägger till texten i dina meddelanden och agentens svar under {textTurns, plural, one {den senaste omgången} other {de senaste {textTurns} omgångarna}}.",
   "afac52a5cc2dc801": "Det gick inte att skicka ditt svar. Försök igen.",
   "79d776428f4d0650": "Filen kunde inte läsas in. Återanslut och försök igen.",
   "3ea34cbb1ca5ba9b": "Förhandsvisningen avbröts.",
@@ -3211,10 +3212,7 @@
     {
       "t": "span",
       "i": 2,
-      "c": [
-        " ",
-        "på datorn som öppnade den här sidan"
-      ]
+      "c": [" ", "på datorn som öppnade den här sidan"]
     }
   ],
   "b2d53b4d1d48fbef": [
@@ -3226,10 +3224,7 @@
     {
       "t": "span",
       "i": 2,
-      "c": [
-        " ",
-        "· den som kör den får den här åtkomsten"
-      ]
+      "c": [" ", "· den som kör den får den här åtkomsten"]
     }
   ],
   "c54cc9c75db9dc58": "Godkänn bara en inloggning som du själv precis har startat.",
@@ -3647,7 +3642,6 @@
   "4e0710d19dfc2e7e": "Skicka den här rapporten till T3-teamet?",
   "87d0ae0723ba75d1": "Det här är allt som lämnar din dator. Inget skickas förrän du trycker på Skicka.",
   "bf19826f81484328": "Ta med konversationen",
-  "260c6b45f52d2f27": "Lägger till texten i dina meddelanden och agentens svar under {textTurns, plural, one {den senaste omgången} other {de senaste {textTurns} omgångarna}}.",
   "ddb7e6f8ce99e657": "Bara den som kan köra agenter på den här datorn kan skicka eller avböja rapporten.",
   "03c1eb603c112f47": "Skicka inte",
   "653405e4ed498d9f": "Skicka",
@@ -8771,9 +8765,13 @@
   "ed83b25c71c98a20": "Välj en eller flera {scope} i {tracker} för varje projekt. Deras ärenden listas bredvid repots egna, och agenter skapar nya ärenden i det första om de inte ombeds välja ett annat.",
   "19c2d5e81ff8f89a": "{scope} i {tracker} för {project}",
   "68e061510b765772": "Inte kopplad",
+  "99d51127f573296b": "Ett konto till",
+  "8ec2c57414669b79": "Anslut en andra {tracker}-arbetsyta eller användare.",
+  "99963c0142e17f00": "För det nya {tracker}-kontot.",
   "a2d95d39d3398bda": "Autentiseringsuppgiften avvisades",
   "9eae463720500113": "Lagras på servern.",
   "b6e27ab2537ef874": "Skapa en",
+  "6d8e4ebc889bace9": "Lägg till konto",
   "13ef526271b0f5d4": "Rensa alla villkor",
   "d1938a629f039515": "Ta bort villkor",
   "84a605b241ce65b7": "Ta bort gruppen och dess villkor",
@@ -11908,7 +11906,7 @@
   "34d74827c2a8b009": "enter retur command ctrl flera rader prompt ny rad inmatningsfält",
   "9d1013084c46ecce": "kö styr om pågående omgång skicka standardbeteende inmatningsfält",
   "e5e7f5e1fb1f2e4c": "subagent sidochatt länkad tråd klick högerpanel sidopanel huvudvy kommando ctrl mittenklick",
-  "5b8b854de7ee6f4d": "installerade cli versioner nyare tillgänglig codex claude cursor grok fx kiro opencode",
+  "469007bc0796d729": "installerade cli versioner nyare tillgänglig codex claude cursor grok fx kiro lobby opencode",
   "64f12530d55d2ad1": "återuppta pågående aktiv avbrutet arbete omstart starta om dator krasch skrivbord uppdatering automatiskt",
   "214a98497c4ed05d": "caffeinate viloläge förhindra håll vaken ström laptop lock förhindra",
   "00469926c7027e2d": "balanserad prestanda batterisparläge avancerat git fetch leverantör hälsa uppdatera värd ström övervakning inaktiv policy",
@@ -11947,7 +11945,7 @@
   "2b5484226f202c19": "Fångstljud",
   "dd95128501e22145": "Fångstblink",
   "9f5280c955132ee1": "Fångstanimeringar",
-  "f8d32e19131fd5b3": "agenter cli codex claude cursor grok fx kiro opencode antigravity google logga in logga ut installera prenumeration instanser autentisering api-nyckel modeller konfiguration binär sökväg konfigurationskatalog codex_home skugghem slutpunkt argument miljövariabler visningsnamn accentfärg anpassad favorit dold automatisk komprimering inbyggda sessioner importera återuppta",
+  "1deef9ed60a747d6": "agenter cli codex claude cursor grok fx kiro lobby opencode antigravity google logga in logga ut installera prenumeration instanser autentisering api-nyckel modeller konfiguration binär sökväg konfigurationskatalog codex_home skugghem slutpunkt argument miljövariabler visningsnamn accentfärg anpassad favorit dold automatisk komprimering inbyggda sessioner importera återuppta",
   "ad371af21e5b4b01": "Användningsleverantörer",
   "9d9d31a4f3d5ff69": "användningskällor CLIProxyAPI CLI-proxy hubb kvot prenumeration gränser hanteringsnyckel lägg till ta bort",
   "d65fa0946585b245": "Textgeneratorer",
@@ -12620,6 +12618,16 @@
   "156ff7b625287a1e": "Dölj överhoppade",
   "69b985b97ab45e6b": "Visa överhoppade ({count})",
   "2400254d362de84d": "Läser in arbetsflödeskörningar…",
+  "cae5c3205c01d062": [
+    {
+      "t": "span",
+      "i": 1,
+      "c": "En arbetsflödesfil har ett problem."
+    },
+    " ",
+    "Den senaste versionen som gick att läsa in körs vidare."
+  ],
+  "ed8ce6ebc73dc12d": "Öppna filen",
   "145e1f7503ba3b2c": [
     "Den här miljön har ingen körning med den länken.",
     " ",
@@ -12645,16 +12653,6 @@
       "c": "Läs guiden"
     }
   ],
-  "cae5c3205c01d062": [
-    {
-      "t": "span",
-      "i": 1,
-      "c": "En arbetsflödesfil har ett problem."
-    },
-    " ",
-    "Den senaste versionen som gick att läsa in körs vidare."
-  ],
-  "ed8ce6ebc73dc12d": "Öppna filen",
   "5d8d278ff828102d": "Alla arbetsflöden",
   "39459da07479f482": "Agent",
   "7741243632056b81": "{step} · transkript",
@@ -12798,9 +12796,5 @@
   "27d76249d09eb69f": "Granskningsguiden är klar",
   "faa3bb26abb39c93": "Granskningsguiden misslyckades",
   "b7df38b7d8792d78": "Öppna guiden",
-  "9e91e9a77b664e4e": "Kunde inte starta en granskningsguide",
-  "99d51127f573296b": "Ett konto till",
-  "8ec2c57414669b79": "Anslut en andra {tracker}-arbetsyta eller användare.",
-  "99963c0142e17f00": "För det nya {tracker}-kontot.",
-  "6d8e4ebc889bace9": "Lägg till konto"
+  "9e91e9a77b664e4e": "Kunde inte starta en granskningsguide"
 }

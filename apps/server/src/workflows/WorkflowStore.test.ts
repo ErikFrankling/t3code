@@ -9,7 +9,7 @@ import * as PubSub from "effect/PubSub";
 import type * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
 
-import WorkflowsMigration from "../persistence/Migrations/110_Workflows.ts";
+import WorkflowsMigration from "../persistence/Migrations/111_Workflows.ts";
 import * as MilestoneHub from "../milestones/MilestoneHub.ts";
 import * as WorkflowStore from "./WorkflowStore.ts";
 

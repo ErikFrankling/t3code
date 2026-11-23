@@ -71,6 +71,7 @@
   "cd03eb1b84271c02": "Agente",
   "bfe1a60f3f9c60fb": "Turno {turn} · {what}",
   "dfdaa6255a416140": "Resumo de {turns, plural, one {{turns} turno recente} other {{turns} turnos recentes}}, {textTurns, plural, =0 {sem texto das mensagens} one {com o texto das mensagens do último turno} other {com o texto das mensagens dos últimos {textTurns} turnos}}{truncated, select, yes {, encurtado para caber} other {}}",
+  "260c6b45f52d2f27": "Adiciona o texto das suas mensagens e das respostas do agente {textTurns, plural, one {no último turno} other {nos últimos {textTurns} turnos}}.",
   "afac52a5cc2dc801": "Não foi possível enviar sua resposta. Tente novamente.",
   "79d776428f4d0650": "Não foi possível carregar o arquivo. Reconecte e tente novamente.",
   "3ea34cbb1ca5ba9b": "Pré-visualização cancelada.",
@@ -3211,10 +3212,7 @@
     {
       "t": "span",
       "i": 2,
-      "c": [
-        " ",
-        "no computador que abriu esta página"
-      ]
+      "c": [" ", "no computador que abriu esta página"]
     }
   ],
   "b2d53b4d1d48fbef": [
@@ -3226,10 +3224,7 @@
     {
       "t": "span",
       "i": 2,
-      "c": [
-        " ",
-        "· quem executar recebe este acesso"
-      ]
+      "c": [" ", "· quem executar recebe este acesso"]
     }
   ],
   "c54cc9c75db9dc58": "Aprove apenas um login que você acabou de iniciar.",
@@ -3647,7 +3642,6 @@
   "4e0710d19dfc2e7e": "Enviar este relatório para a equipe do T3?",
   "87d0ae0723ba75d1": "Isto é tudo o que sai da sua máquina. Nada é enviado até você clicar em Enviar.",
   "bf19826f81484328": "Incluir a conversa",
-  "260c6b45f52d2f27": "Adiciona o texto das suas mensagens e das respostas do agente {textTurns, plural, one {no último turno} other {nos últimos {textTurns} turnos}}.",
   "ddb7e6f8ce99e657": "Somente quem pode executar agentes nesta máquina pode enviar ou recusar o relatório.",
   "03c1eb603c112f47": "Não enviar",
   "653405e4ed498d9f": "Enviar",
@@ -8763,9 +8757,13 @@
   "ed83b25c71c98a20": "Escolha um ou mais {scope}s do {tracker} para cada projeto. As issues deles aparecem ao lado das do repositório, e os agentes criam novas issues no primeiro, a menos que outro seja pedido.",
   "19c2d5e81ff8f89a": "{scope} do {tracker} para {project}",
   "68e061510b765772": "Não vinculado",
+  "99d51127f573296b": "Outra conta",
+  "8ec2c57414669b79": "Conecte um segundo espaço de trabalho ou usuário do {tracker}.",
+  "99963c0142e17f00": "Para a nova conta do {tracker}.",
   "a2d95d39d3398bda": "Credencial recusada",
   "9eae463720500113": "Armazenado no servidor.",
   "b6e27ab2537ef874": "Criar um",
+  "6d8e4ebc889bace9": "Adicionar conta",
   "13ef526271b0f5d4": "Limpar todas as condições",
   "d1938a629f039515": "Remover condição",
   "84a605b241ce65b7": "Remover grupo e as condições dele",
@@ -11900,7 +11898,7 @@
   "34d74827c2a8b009": "enter return command ctrl várias linhas prompt nova linha editor de mensagens",
   "9d1013084c46ecce": "fila enfileirar direcionar turno em execução enviar comportamento padrão editor de mensagens",
   "e5e7f5e1fb1f2e4c": "subagente chat paralelo thread vinculada clique painel direito painel lateral visualização principal comando ctrl clique do meio",
-  "5b8b854de7ee6f4d": "cli instaladas versões mais novas disponíveis codex claude cursor grok fx kiro opencode",
+  "469007bc0796d729": "cli instaladas versões mais novas disponíveis codex claude cursor grok fx kiro lobby opencode",
   "64f12530d55d2ad1": "retomar em execução ativo interrompido trabalho reiniciar reboot máquina falha atualização do desktop automaticamente",
   "214a98497c4ed05d": "caffeinate repouso impedir manter acordado energia notebook tampa inibir",
   "00469926c7027e2d": "equilibrado desempenho economia de bateria avançado git fetch verificação de provedores atualizar host energia monitor política de ociosidade",
@@ -11939,7 +11937,7 @@
   "2b5484226f202c19": "Som de captura",
   "dd95128501e22145": "Flash de captura",
   "9f5280c955132ee1": "Animações de captura",
-  "f8d32e19131fd5b3": "agentes cli codex claude cursor grok fx kiro opencode antigravity google entrar sair instalar assinatura instâncias autenticação chave de api modelos configuração caminho do binário diretório de configuração codex_home shadow home endpoint argumentos variáveis de ambiente nome de exibição cor de destaque personalizado favorito oculto compactação automática sessões nativas importar retomar",
+  "1deef9ed60a747d6": "agentes cli codex claude cursor grok fx kiro lobby opencode antigravity google entrar sair instalar assinatura instâncias autenticação chave de api modelos configuração caminho do binário diretório de configuração codex_home shadow home endpoint argumentos variáveis de ambiente nome de exibição cor de destaque personalizado favorito oculto compactação automática sessões nativas importar retomar",
   "ad371af21e5b4b01": "Provedores de uso",
   "9d9d31a4f3d5ff69": "fontes de uso CLIProxyAPI proxy de CLI hub cota assinatura limites chave de gerenciamento adicionar remover",
   "d65fa0946585b245": "Geradores de texto",
@@ -12612,6 +12610,16 @@
   "156ff7b625287a1e": "Ocultar puladas",
   "69b985b97ab45e6b": "Mostrar puladas ({count})",
   "2400254d362de84d": "Carregando execuções de workflow…",
+  "cae5c3205c01d062": [
+    {
+      "t": "span",
+      "i": 1,
+      "c": "Um arquivo de workflow tem um problema."
+    },
+    " ",
+    "A última versão que carregou continua em execução."
+  ],
+  "ed8ce6ebc73dc12d": "Abrir o arquivo",
   "145e1f7503ba3b2c": [
     "Este ambiente não tem nenhuma execução com esse link.",
     " ",
@@ -12637,16 +12645,6 @@
       "c": "Leia o guia"
     }
   ],
-  "cae5c3205c01d062": [
-    {
-      "t": "span",
-      "i": 1,
-      "c": "Um arquivo de workflow tem um problema."
-    },
-    " ",
-    "A última versão que carregou continua em execução."
-  ],
-  "ed8ce6ebc73dc12d": "Abrir o arquivo",
   "5d8d278ff828102d": "Todos os workflows",
   "39459da07479f482": "Agente",
   "7741243632056b81": "{step} · transcrição",
@@ -12791,9 +12789,5 @@
   "27d76249d09eb69f": "Guia de revisão pronto",
   "faa3bb26abb39c93": "O guia de revisão falhou",
   "b7df38b7d8792d78": "Abrir guia",
-  "9e91e9a77b664e4e": "Não foi possível iniciar um guia de revisão",
-  "99d51127f573296b": "Outra conta",
-  "8ec2c57414669b79": "Conecte um segundo espaço de trabalho ou usuário do {tracker}.",
-  "99963c0142e17f00": "Para a nova conta do {tracker}.",
-  "6d8e4ebc889bace9": "Adicionar conta"
+  "9e91e9a77b664e4e": "Não foi possível iniciar um guia de revisão"
 }
