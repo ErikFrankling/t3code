@@ -24,7 +24,7 @@ import { issues, pullRequests } from "./forgeApi.ts";
 import { cancel, runs, signalAll, start } from "./stepServices.ts";
 import { type InRun, invoke, skip, sleep, step, stop, title, wait, workflow } from "./workflow.ts";
 import { type AgentResult, WorkflowAgentError, WorkflowAgents } from "./WorkflowAgents.ts";
-import WorkflowsMigration from "../persistence/Migrations/110_Workflows.ts";
+import WorkflowsMigration from "../persistence/Migrations/111_Workflows.ts";
 import * as WorkflowEngine from "./WorkflowEngine.ts";
 import {
   Issue,
