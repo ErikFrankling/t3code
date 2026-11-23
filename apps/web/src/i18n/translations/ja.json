@@ -12935,5 +12935,7 @@
   "201490988858b511": "{by} が取り下げ",
   "99451a5d2d40440f": "{by} が取り下げました。",
   "3ee30a50b70fffab": "{by} が取り下げました: {reason}",
-  "92e129bf413a1220": "取り下げ済み"
+  "92e129bf413a1220": "取り下げ済み",
+  "469007bc0796d729": "インストール済み CLI バージョン 新しい 利用可能 Codex Claude Cursor Grok fx Kiro OpenCode update lobby",
+  "1deef9ed60a747d6": "エージェント CLI Codex Claude Cursor Grok fx Kiro OpenCode Antigravity Google サインイン サインアウト インストール サブスクリプション インスタンス 認証 API キー モデル 構成 バイナリ パス 構成ディレクトリ CODEX_HOME シャドウホーム エンドポイント 引数 環境変数 表示名 アクセントカラー カスタム お気に入り 非表示 自動圧縮 ネイティブセッション インポート 再開 agents lobby"
 }

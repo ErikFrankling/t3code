@@ -12999,5 +12999,7 @@
   "201490988858b511": "zurückgezogen von {by}",
   "99451a5d2d40440f": "Zurückgezogen von {by}.",
   "3ee30a50b70fffab": "Zurückgezogen von {by}: {reason}",
-  "92e129bf413a1220": "zurückgezogen"
+  "92e129bf413a1220": "zurückgezogen",
+  "469007bc0796d729": "installierte cli versionen neuer verfügbar codex claude cursor grok fx kiro lobby opencode",
+  "1deef9ed60a747d6": "agenten cli codex claude cursor grok fx kiro lobby opencode antigravity google anmelden abmelden installieren abonnement instanzen authentifizierung api-schlüssel modelle konfiguration binärdatei pfad konfigurationsverzeichnis codex_home shadow home endpunkt argumente umgebungsvariablen anzeigename akzentfarbe benutzerdefiniert favorit ausgeblendet automatisch komprimieren native sitzungen import fortsetzen"
 }
