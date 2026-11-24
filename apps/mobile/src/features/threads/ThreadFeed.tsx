@@ -213,6 +213,7 @@ import {
   mediaVideoThumbnailKey,
   type MediaVideoPreviewSource,
 } from "../../lib/videoPreviewSource";
+import { CopyTextButton } from "./CopyTextButton";
 import { ReadAloudButton } from "./ReadAloudButton";
 import { Menu } from "../../components/ui/Menu";
 import { useAndroidControlSizing } from "../../components/ui/useAndroidControlSizing";
