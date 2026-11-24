@@ -200,6 +200,7 @@ const ensureNotInUse = Effect.fn("ensureDevDbNotInUse")(function* (databasePath:
 // fails typecheck when a kind is added and not listed here.
 const RECOVERY_KIND_SET = {
   "queued-runs": true,
+  "pending-requests": true,
   runtime: true,
   "restart-continuations": true,
   "subagent-results": true,
