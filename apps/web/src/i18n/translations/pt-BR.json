@@ -1,7 +1,4 @@
 {
-  "6c6e16b9488f8b91": "Role para ler tudo.",
-  "035aab5e99159bd8": "{count, plural, one {… {hidden} caractere do meio não é exibido.} other {… {hidden} caracteres do meio não são exibidos.}} O texto termina com:",
-  "011b1ef726fa9928": "Role cada parte para ler tudo.",
   "4bcfa3b976a421cf": "Chat paralelo",
   "23be753133ae6950": "Thread",
   "0001ae5846061bb6": "Thread em {machine}",
@@ -929,6 +926,7 @@
   "3f0b962160edbe6d": "Não foi possível sincronizar a thread.",
   "752b4d69669b0019": "Não foi possível carregar a atividade anterior.",
   "44de9731d5b8eb38": "O histórico de trabalho mudou. Tente carregá-lo novamente.",
+  "6ea901338c803e3e": "Não foi possível usar o crédito de redefinição.",
   "c0ea8898cd494336": "Não foi possível verificar o acesso desta conexão ao diagnóstico e ao uso.",
   "953b6473de4b9ad6": "Esta conexão não tem acesso ao diagnóstico e ao uso.",
   "8c68febc86a3f651": "Atualizando {provider}…",
@@ -1334,8 +1332,8 @@
   "bb34eaf6ddc55a72": "Esta conta não tem limites de assinatura.",
   "42a2622893a6bced": "Não foi possível ler os limites.",
   "4897e228d3185c96": "Nenhum limite informado.",
-  "e27d2cb964df5dd5": "{source}: nenhuma conta informada.",
   "161135f0aea4d1ca": "{source}: nenhuma conta do Codex, Claude ou Grok. Ignorados: {providers}.",
+  "e27d2cb964df5dd5": "{source}: nenhuma conta informada.",
   "1b503134018285f4": "{days}d {hours}h",
   "164c674cf062933a": "{label} · {count} restantes · expira em {expires}",
   "9c82c39589c23938": "{label} · {count} restantes",
@@ -1897,7 +1895,6 @@
   "1d17dc60c59e0524": "Desafixar projeto",
   "5cfaaa20c460c328": "Fixar projeto",
   "24adf508b4c5d6b5": "Configurações do projeto",
-  "60e47b3da5901619": "Configurações · {section}",
   "0c659f9a193255dd": "Falha ao adicionar o projeto",
   "4b3fc098d5a08a66": "Caminhos no estilo Windows só são compatíveis com o Windows.",
   "2c2637dc1e236fb4": "Caminhos relativos exigem um projeto ativo.",
@@ -1988,6 +1985,7 @@
   "f844c41fac2d339c": "Atual",
   "69154433587763c0": "Nenhuma ação correspondente.",
   "90c3a382ecefa0ce": "Nenhum comando, projeto ou thread correspondente.",
+  "60e47b3da5901619": "Configurações · {section}",
   "a03e4c1348ad9ba8": "Sistema",
   "8bf65a425f50d140": "Claro",
   "d604bc5cf3386f00": "Escuro",
@@ -2687,6 +2685,24 @@
   "3260b22f72f7effb": "{tooltipLead}: {title}",
   "feac8e54b30c5a03": "Processo do terminal em execução",
   "fc2c9a91f498ad6b": "{count, plural, one {{count} processo do terminal em execução. Abrir terminal} other {{count} processos do terminal em execução. Abrir terminal}}",
+  "06d3fe3e6b255d15": [
+    "+",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " mais"
+  ],
+  "f1b18820c0ab93ac": [
+    "+",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " mais em Itens vinculados"
+  ],
   "56f37ff8ca568059": "pilha",
   "6831e9a46cbd8939": "cadeia",
   "9aa9e74a3b7eee91": "Adicionar ao chat",
@@ -3077,6 +3093,8 @@
   "4f14e3fc3a216f44": "Isso encerra o processo em execução e apaga o histórico dele.",
   "16ce8443044b45fd": "Fechar {count, plural, one {{count} terminal} other {{count} terminais}}?",
   "a9697e470d40706a": "Isso encerra os processos em execução e apaga os históricos deles: {labels}.",
+  "f3c70064a22a0c76": "{terminalLabel} linha {lineStart}",
+  "8ba6febaabeb6f14": "{terminalLabel} linhas {lineStart}–{lineEnd}",
   "ef4bae5c5f3684f4": "Conteúdo gravado antes",
   "5e4a0e56a0788d86": "Conteúdo gravado depois",
   "6d5a8b471a561b9d": "Explorador de Arquivos",
@@ -3344,6 +3362,9 @@
   "f2a955905704b91d": "{hours}h {minutes}min",
   "3609f564a63c8eca": "{minutes}min",
   "9251bb742f60720d": "{hours}h",
+  "035aab5e99159bd8": "{count, plural, one {… {hidden} caractere do meio não é exibido.} other {… {hidden} caracteres do meio não são exibidos.}} O texto termina com:",
+  "011b1ef726fa9928": "Role cada parte para ler tudo.",
+  "6c6e16b9488f8b91": "Role para ler tudo.",
   "a1e982c6047c0860": "Ir para a resposta citada: {label}",
   "c156140c3f5ebb75": "Ir para a resposta a que esta responde: {label}",
   "f8031a49c6e9fe25": "Ver o texto citado do assistente: {label}",
@@ -3613,12 +3634,12 @@
   "35e0b8f7418b4a86": "Clique para enfileirar, {modifier}-clique para direcionar",
   "eed080cf5eb25bfd": "Resumir {tokens} tokens do histórico e enviar",
   "e4116d7f64a6f593": "Compactar {tokens} tokens do histórico antes de enviar",
-  "d6143c122719b099": "Manter",
-  "7335dc479a68818e": "Compactar",
   "b2411ad43ce3b143": "O próximo envio mantém todos os {tokens} tokens.",
   "ab6720311ff3140d": "O próximo envio compacta {tokens} tokens antes.",
   "1486a422ba77a084": "Clique para compactar antes",
   "b971f881c5dc4fca": "Clique para manter o histórico completo",
+  "d6143c122719b099": "Manter",
+  "7335dc479a68818e": "Compactar",
   "89426e9b039148d7": "Falha na entrada de voz",
   "2220a0fbb5b6fa47": "Baixando o modelo {percent}%",
   "5c05b24be2880672": "Gravando",
@@ -4031,11 +4052,11 @@
   "8413f3e7f703f14e": "Alternar painel de detalhes da thread",
   "a728e041b203714a": "Alternar detalhes da thread ({shortcut})",
   "5417d84fba7b6b84": "Alternar detalhes da thread",
-  "586edda3a01b9305": "Alternar gaveta do terminal",
   "d395686a462b77d2": "Alternar gaveta do terminal ({shortcut})",
+  "586edda3a01b9305": "Alternar gaveta do terminal",
   "c2fdb28a7ae3921b": "A gaveta do terminal não está disponível",
-  "8acd97d5e80bddd3": "Alternar painel direito",
   "fdc7805c136f3f7b": "Alternar painel direito ({shortcut})",
+  "8acd97d5e80bddd3": "Alternar painel direito",
   "d47ad54e98d33190": "O painel direito não está disponível",
   "7e4b0afa9879fd43": "Restaurar tamanho do painel",
   "8381e38420ae57f3": "Maximizar painel",
@@ -4174,8 +4195,6 @@
   "45cf8a09ce8995f8": "com falha",
   "7db3cecba8568144": "cancelado",
   "0c5771889f55c1fe": "interrompido",
-  "f3c70064a22a0c76": "{terminalLabel} linha {lineStart}",
-  "8ba6febaabeb6f14": "{terminalLabel} linhas {lineStart}–{lineEnd}",
   "ac7416afe98ba5f8": "Trecho do terminal, {label}",
   "bf04d61dc50685dc": "Linha {lineStart}",
   "000e3bef072f07c8": "Linhas {lineStart}–{lineEnd}",
@@ -4509,11 +4528,11 @@
   "0647cef26e3b1fa5": "O snapshot é grande demais para copiar.",
   "c036ab3d20c54b5b": "Você",
   "6b2294cfd43aee15": "{name} (convidado)",
-  "d1d1fed744318218": "Direcionamento · aguardando leitura",
-  "75948010e112a8f4": "Direcionamento",
   "1ccc41732907ca74": "Aguardando o agente ler isto. Ele lê os direcionamentos entre as etapas, depois que um comando em execução termina.",
   "ae3f487ebde9db74": "Estava na fila e depois foi promovido para direcionar o turno ativo",
   "4f2ec8c81b4efb22": "Direcionou o turno ativo",
+  "d1d1fed744318218": "Direcionamento · aguardando leitura",
+  "75948010e112a8f4": "Direcionamento",
   "d201a2c11fc08817": "Editar a partir daqui",
   "5b30ae788fdc4fd0": "Enviando…",
   "b8e1cd0265566143": [
@@ -4658,8 +4677,9 @@
   "75cdbffdefbbae3a": "Modo Ultrafast ativado",
   "79c3a186139f8c86": "Modo Fast ativado",
   "a772b49a38a3db40": "O que deu errado?",
-  "b29e1856c4aab31f": "Esta máquina",
   "0cb5a221e9e13a4e": "O agente lê os logs e o código-fonte do T3 Code aqui e pergunta antes de aplicar uma correção ou publicar qualquer coisa.",
+  "b29e1856c4aab31f": "Esta máquina",
+  "275a97b4af3c6482": "Copiar comando para um terminal",
   "e7588632064e0364": "Copiado",
   "996f7752fa033da6": [
     "ou execute",
@@ -4673,7 +4693,6 @@
       }
     }
   ],
-  "275a97b4af3c6482": "Copiar comando para um terminal",
   "2b07985d23563374": "Retoma {time}",
   "a4b4e5eb6d313af9": "Renovado {time}",
   "c0c3aa756405c1df": "Renova {time}",
@@ -4979,6 +4998,8 @@
   "70b12bc1e1a26abb": "Guarde novamente quando a compressão terminar.",
   "f6b1ef37f7587664": "Anexe novamente os arquivos soltos ou remova-os antes de guardar",
   "120167bbfb6d5939": "Aguarde o upload dos arquivos antes de guardar este prompt",
+  "410dded6e21c280d": "Os guardados estão cheios",
+  "1af8d12ac21cb183": "Os guardados comportam {max} prompts. Restaure ou exclua um para abrir espaço; o campo de texto ficou como estava.",
   "afdf475db3ca2af7": "Não foi possível guardar este prompt",
   "3f5c37167aa5034f": "O armazenamento do navegador rejeitou a gravação, então o editor de mensagens ficou como estava. Libere dados do site e tente novamente.",
   "41ba6c0b5c5e8b22": "O prompt guardado não vai sobreviver a uma recarga",
@@ -4990,6 +5011,7 @@
   "13cf3cd978eef92a": "Manter os anexos nesta máquina",
   "a4ca7da61227002d": "Remova os anexos antes de escolher o roteamento automático e depois anexe-os na máquina selecionada.",
   "512d8afab852df1a": "Não foi possível trocar de máquina",
+  "ee3ea4351c88e7d7": "Este projeto não está mais disponível.",
   "32e421d1e2dfdaff": "Verificando as máquinas…",
   "0db14066bd4ce117": "Balanceamento automático indisponível",
   "55b562c00e37321b": "Não foi possível forçar a parada do agente",
@@ -5400,6 +5422,8 @@
   "ac18a5e35195a258": "Emuladores Android",
   "94215375ea2558b8": "Em execução",
   "f8a65d4d662389b0": "Parado",
+  "381ceed77cb8b2b3": "Parar {name}",
+  "5b9fda36b610d25c": "Parar",
   "b1687c7b2b91e569": "Abrir {name}",
   "4b4ef3f2e2ed2c56": "Iniciar {name}",
   "08098a6fb84e8a34": "Abrir",
@@ -5422,6 +5446,7 @@
   ],
   "e902f208c4e6146f": "Nenhum dispositivo virtual Android encontrado. Crie um no Device Manager do Android Studio e atualize.",
   "d9a71f3db685cb0e": "Atualizar dispositivos",
+  "1d372f6d555dde3c": "Parar todos os dispositivos",
   "4ad8ced64defdf73": "Dispositivo 3D interativo. Arraste a tela para interagir. Arraste fora dela ou deslize com dois dedos para girar.",
   "84e4baf07ad8883d": "Ative este ambiente para abrir simuladores e emuladores, rodando aqui ou em um host de dispositivos remoto.",
   "771365c337509a82": "Permite que novas sessões de agente neste ambiente iniciem e controlem dispositivos locais e remotos, com as ferramentas necessárias configuradas automaticamente.",
@@ -6746,8 +6771,8 @@
   "1239149344bb4b2b": "O diff é grande demais para exibir.",
   "3ab928741d208f41": "Carregando...",
   "3e272ae9c5b76744": "Carregar diff",
-  "d4ccbc96f4d05950": "Alterado",
   "c12888742e7bd0ce": "Houve push neste arquivo desde que você o marcou como visto.",
+  "d4ccbc96f4d05950": "Alterado",
   "6594b013f63d2a3a": "Visto",
   "687f81dd084a5ab0": "Não foi possível carregar o restante deste diff.",
   "cf44cf4e3479ea7a": "Todos os commits",
@@ -6944,6 +6969,19 @@
   "36b7fbe31bde05f3": "Este repositório não tem rótulos.",
   "2764eab1d2853980": "Este repositório tem mais rótulos do que os listados aqui. Aplique os demais no host.",
   "5e5917c3b907c7d6": "Aplicada",
+  "4affc3da49f673c2": [
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " ",
+    {
+      "t": "span",
+      "i": 2,
+      "c": "comentou"
+    }
+  ],
   "404ee0e0134b60ae": "Pesquisando “{query}” em todos os hosts",
   "ca612a0074954046": "Verificando...",
   "8b04f78f836b6c11": "Nada com estes filtros",
@@ -7060,8 +7098,8 @@
   "1df18577b47fe833": "Ninguém com acesso corresponde.",
   "605ed234cd084078": "Não foi possível ler as pessoas com acesso.",
   "3e63297ce2f404d6": "Já solicitado",
-  "ad822604a0059e71": "encontrado na descrição",
   "3625557b4fc8ba68": "Encontrado na descrição",
+  "ad822604a0059e71": "encontrado na descrição",
   "ff1f73cd2455d0f6": "Nenhum método de merge disponível para este repositório.",
   "59b38d59700e0a5f": "Fechar",
   "25aa6faba20377ca": "Fechar #{number}",
@@ -7241,19 +7279,6 @@
       "t": "span",
       "i": 2,
       "c": "revisou"
-    }
-  ],
-  "4affc3da49f673c2": [
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " ",
-    {
-      "t": "span",
-      "i": 2,
-      "c": "comentou"
     }
   ],
   "04ea50285b00dcdd": "Visão geral",
@@ -9314,7 +9339,6 @@
   "b76e857a764ea02a": "Regra de agrupamento de {path} em {environment}",
   "e6e55f343639ae71": "Padrão ({mode})",
   "87158e7b8e714bc6": "Adicione um projeto pela barra lateral para configurá-lo aqui.",
-  "ee3ea4351c88e7d7": "Este projeto não está mais disponível.",
   "062d19d24615e108": "O título do projeto não pode ficar vazio",
   "303af9de2741db90": "Falha ao renomear o projeto",
   "f578154800d7af01": "Falha ao atualizar o ícone do projeto",
@@ -10006,6 +10030,7 @@
   "8b023484be3a3b1c": "Inalterado",
   "c2c1eb12ddf8465a": "Segredo compartilhado",
   "1f8429becfe86d7d": "Dias de execução",
+  "988358208ad49792": "{count, plural, one {minuto} other {minutos}}",
   "c4927d044b3eecca": "Salvar tarefa",
   "196658ca8d7106b1": "Criar tarefa",
   "5baf27d764acc26d": "Executa só quando todos os filtros correspondem. As outras requisições são registradas como filtradas. Separe os valores de “é um de” com vírgulas; um valor não pode conter vírgula.",
@@ -10779,7 +10804,6 @@
   "cb2d986e3d65b30a": "Incluído no T3 Code. Não é preciso baixar nada.",
   "e67452f247cc5272": "Desativar extensão",
   "199401965e68b97b": "Remover assistente de captura",
-  "988358208ad49792": "{count, plural, one {minuto} other {minutos}}",
   "07b142ed9cc5e3f6": "{count, plural, one {hora} other {horas}}",
   "26184a346ce1c1dc": "{count, plural, one {dia} other {dias}}",
   "f84c89790e008f96": "Em",
@@ -11745,6 +11769,7 @@
   "817dbf1c068b62e7": "Onde sua fala é convertida em texto.",
   "710d3e4f0243014c": "Ambiente escolhido (indisponível)",
   "61088464d1b7174d": "ambiente indisponível",
+  "800966eb58181745": "Verificando quais idiomas o modelo suporta…",
   "2b3e8ee4f31d1433": "Automático usa o idioma do seu Mac. Um idioma é baixado no primeiro uso.",
   "71184e5a54a69f1d": "O provedor detecta seu idioma automaticamente.",
   "ffb2653eb2d9fc1a": "{model} detecta o idioma automaticamente.",
@@ -12202,8 +12227,8 @@
   "8cf699ae75fd8067": "Fixadas",
   "be451f475c514b37": "Dispensar notificação de despertar",
   "e9ced65134f2f36c": "Despertar thread agora",
-  "374dac09151d4578": "Pendente",
   "a8f30f631e2b010e": "Aguardando sincronização com o ambiente",
+  "374dac09151d4578": "Pendente",
   "aca5896600bf173e": "Você está com outro branch em checkout no momento.",
   "f665b5be60d8c144": [
     "Transferida de ",
@@ -12357,7 +12382,6 @@
   "1a92fa2f744401bc": "Nada para redefinir no momento.",
   "fff9b7f838279ee3": "Nenhum crédito de redefinição restante.",
   "cea3cf346788481d": "Esse crédito já foi resgatado.",
-  "6ea901338c803e3e": "Não foi possível usar o crédito de redefinição.",
   "ad0e59acc4b087f5": "{label}: {remaining}% restante, {resetsIn}",
   "3d55c97a8189568e": "{label}: {remaining}% restante",
   "d6961d3b4c9657da": "{label}: {remaining}% restante, {timeLeft}% da janela restante, {resetsIn}",
@@ -12622,7 +12646,6 @@
   "b8dcbc93a2ca1861": "Esta execução não o lista mais.",
   "115c69de3202f664": "Abrir",
   "a2bbf464a3be4882": "{count, plural, =1 {1ª tentativa} =2 {2ª tentativa} =3 {3ª tentativa} other {{count}ª tentativa}}",
-  "644eafa9048b62df": "{count, plural, =1 {1ª tentativa} =2 {2ª tentativa} =3 {3ª tentativa} other {{count}ª tentativa}}",
   "0398ca6c1d24b92d": "na fila, o próximo",
   "0af6d5ffd5166214": "{count, plural, one {na fila, {count} à frente} other {na fila, {count} à frente}}",
   "e39f89c909df4db0": "Não foi possível retomar a execução",
@@ -13014,171 +13037,5 @@
   "27d76249d09eb69f": "Guia de revisão pronto",
   "faa3bb26abb39c93": "O guia de revisão falhou",
   "b7df38b7d8792d78": "Abrir guia",
-  "9e91e9a77b664e4e": "Não foi possível iniciar um guia de revisão",
-  "99d51127f573296b": "Outra conta",
-  "8ec2c57414669b79": "Conecte um segundo espaço de trabalho ou usuário do {tracker}.",
-  "99963c0142e17f00": "Para a nova conta do {tracker}.",
-  "6d8e4ebc889bace9": "Adicionar conta",
-  "8a883c4fbc127b68": "Ativando o merge automático da pilha...",
-  "5fb2a26ae31e8983": "Não foi possível ativar o merge automático da pilha",
-  "986d0dcbf4dd0098": "Merge automático da pilha ativado",
-  "f3ed1f63c8a3eef2": "{host} vai mesclar a pilha até o #{number} quando os requisitos forem atendidos.",
-  "bd536a0a1754f6cb": "Não foi possível cancelar o merge automático da pilha",
-  "bb90ac3b2f3a72d5": "O host recusou o cancelamento do merge automático. Atualize e tente novamente.",
-  "9c28753c777c37b7": "{count, plural, one {Mesclar automaticamente {count} {term, select, mr {merge request} cr {solicitação de alteração} other {pull request}}?} other {Mesclar automaticamente {count} {term, select, mr {merge requests} cr {solicitações de alteração} other {pull requests}}?}}",
-  "a86b49982e18784d": "Mescla o #{number} e as camadas não mescladas abaixo dele em {base} usando {method} quando todas atenderem aos requisitos de {host}. Isso pode acontecer imediatamente.",
-  "b1afda5c964deee4": [
-    "Merge automático da pilha (",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    ")"
-  ],
-  "33d18dda74f6d7b3": "Cancelar merge automático da pilha",
-  "012c67c7f1a99e33": "Merge automático da pilha",
-  "4a18481bea4b4ad5": "Novo dispositivo conectado a {environmentLabel}",
-  "4144ab6aa487528a": "{device} se conectou pelo {product}. Não foi você? Revise.",
-  "a10cfdb27152c757": "{count, plural, one {{count} dispositivo se conectou} other {{count} dispositivos se conectaram}} pelo {product}. Não foi você? Revise.",
-  "e0856d6a402ad821": "A política de {organization} não permite comandos de layout de worktree de projetos.",
-  "206811f6f441bfc7": "Este projeto prepara os worktrees com um comando próprio, que ninguém aprovou como está escrito agora. Esta conexão não pode aprová-lo: aprove-o em um cliente que possa usar o terminal.",
-  "b8087c9a70c26da9": "Não foi possível aprovar o comando de layout de worktree.",
-  "49eda70cfd56e621": "Executado quando uma thread em worktree começa e quando a pasta dela é restaurada",
-  "188ccaa1199f5611": "Executado quando o worktree de uma thread é removido",
-  "7e8476e7306acabe": "Permitir que este projeto execute seus comandos de worktree?",
-  "8e11914556fd8b13": [
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " prepara as threads em worktree com comandos próprios de ",
-    {
-      "t": "code",
-      "i": 2,
-      "c": "t3.json"
-    },
-    ". Eles são executados na máquina deste ambiente com as suas permissões, fora de qualquer sandbox de agente. Você será perguntado de novo sempre que o texto deles mudar."
-  ],
-  "46807acd02a4ff72": "Aprovar e continuar",
-  "a9cb97fca6a6576b": "Comando de criação",
-  "90f45a354884ccdd": "Comando de remoção",
-  "78e308ada516928b": "Não foi possível aprovar o comando",
-  "a0c772d32a233da6": "Não foi possível revogar a aprovação",
-  "0cdc8cdbed3e5eae": "Layout de worktree",
-  "c17b25519e2b194e": "Não foi possível carregar os comandos de layout de worktree",
-  "5ccd5614c65f8d1f": "Revogar a aprovação do comando {kind}",
-  "80c3794a5fa12f3a": "Aprovar o comando {kind}",
-  "f206891e124c77b0": [
-    "O ",
-    {
-      "t": "code",
-      "i": 1,
-      "c": "t3.json"
-    },
-    " deste projeto prepara as threads em worktree com comandos próprios. Eles são executados na máquina deste ambiente com as suas permissões e somente como aprovados aqui: um comando cujo texto muda precisa de aprovação de novo."
-  ],
-  "f6a91589456cca50": "Aprovado",
-  "c92657bb7f2293ff": "Precisa de aprovação",
-  "f1e5c1be1ac92361": "Aprovar",
-  "fcb5f3c4d4753326": "Esta conexão não pode aprovar comandos. Use um cliente que possa usar o terminal.",
-  "7150557773b3818b": "Na fila",
-  "efbeb3993ee2c3f5": "Na fila de {pool}",
-  "0398ca6c1d24b92d": "na fila, o próximo",
-  "0af6d5ffd5166214": "{count, plural, one {na fila, {count} à frente} other {na fila, {count} à frente}}",
-  "49be26a27dcb30e5": "na fila",
-  "4e96712d839ccbff": "{who} disse {choice}",
-  "19097cfb8f5a79cf": [
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " disse",
-    " ",
-    {
-      "t": "span",
-      "i": 2,
-      "c": {
-        "i": 3,
-        "k": "_gt_value_3",
-        "v": "v"
-      }
-    },
-    "."
-  ],
-  "e7bbf693910057bf": [
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " disse",
-    " ",
-    {
-      "t": "span",
-      "i": 2,
-      "c": {
-        "i": 3,
-        "k": "_gt_value_3",
-        "v": "v"
-      }
-    },
-    ": ",
-    {
-      "i": 4,
-      "k": "_gt_value_4",
-      "v": "v"
-    }
-  ],
-  "3759768c5d342c22": [
-    "respondida",
-    " ",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    }
-  ],
-  "e114d37b32ab0dc7": [
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " precisa de um motivo."
-  ],
-  "91aadfc843c600de": "Verificar conta Google",
-  "201490988858b511": "retirada por {by}",
-  "99451a5d2d40440f": "Retirada por {by}.",
-  "3ee30a50b70fffab": "Retirada por {by}: {reason}",
-  "92e129bf413a1220": "retirada",
-  "800966eb58181745": "Verificando quais idiomas o modelo suporta…",
-  "410dded6e21c280d": "Os guardados estão cheios",
-  "1af8d12ac21cb183": "Os guardados comportam {max} prompts. Restaure ou exclua um para abrir espaço; o campo de texto ficou como estava.",
-  "381ceed77cb8b2b3": "Parar {name}",
-  "5b9fda36b610d25c": "Parar",
-  "1d372f6d555dde3c": "Parar todos os dispositivos",
-  "06d3fe3e6b255d15": [
-    "+",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " mais"
-  ],
-  "f1b18820c0ab93ac": [
-    "+",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " mais em Itens vinculados"
-  ],
-  "469007bc0796d729": "cli instaladas versões mais novas disponíveis codex claude cursor grok fx kiro lobby opencode",
-  "1deef9ed60a747d6": "agentes cli codex claude cursor grok fx kiro lobby opencode antigravity google entrar sair instalar assinatura instâncias autenticação chave de api modelos configuração caminho do binário diretório de configuração codex_home shadow home endpoint argumentos variáveis de ambiente nome de exibição cor de destaque personalizado favorito oculto compactação automática sessões nativas importar retomar",
   "9e91e9a77b664e4e": "Não foi possível iniciar um guia de revisão"
 }

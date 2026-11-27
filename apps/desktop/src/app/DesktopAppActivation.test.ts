@@ -22,7 +22,9 @@ import { afterEach, describe, expect } from "vite-plus/test";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import { DESKTOP_APP_ACTIVATION_REQUEST_CHANNEL } from "../ipc/channels.ts";
 import * as DesktopWindow from "../window/DesktopWindow.ts";
+import * as SpeakReplyWindow from "../window/SpeakReplyWindow.ts";
 import * as DesktopAppActivation from "./DesktopAppActivation.ts";
+import * as DesktopDictation from "./DesktopDictation.ts";
 import { startDesktopAppControlServer } from "./DesktopAppActivation.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 
@@ -211,6 +213,8 @@ describe("desktop app control server", () => {
             main: Effect.succeedSome({ webContents } as unknown as Electron.BrowserWindow),
           } as unknown as ElectronWindow.ElectronWindow["Service"]),
         ),
+        Layer.provide(Layer.mock(SpeakReplyWindow.SpeakReplyWindow, {})),
+        Layer.provide(Layer.mock(DesktopDictation.DesktopDictation, {})),
         Layer.provide(NodeServices.layer),
       );
 

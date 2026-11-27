@@ -1,7 +1,4 @@
 {
-  "6c6e16b9488f8b91": "Scrolle, um alles zu lesen.",
-  "035aab5e99159bd8": "{count, plural, one {… {hidden} Zeichen in der Mitte wird nicht angezeigt.} other {… {hidden} Zeichen in der Mitte werden nicht angezeigt.}} Der Text endet mit:",
-  "011b1ef726fa9928": "Scrolle in beiden Teilen, um alles zu lesen.",
   "4bcfa3b976a421cf": "Nebenchat",
   "23be753133ae6950": "Thread",
   "0001ae5846061bb6": "Thread auf {machine}",
@@ -929,6 +926,7 @@
   "3f0b962160edbe6d": "Der Thread konnte nicht synchronisiert werden.",
   "752b4d69669b0019": "Frühere Aktivitäten konnten nicht geladen werden.",
   "44de9731d5b8eb38": "Der Arbeitsverlauf hat sich geändert. Lade ihn erneut.",
+  "6ea901338c803e3e": "Das Reset-Guthaben konnte nicht verwendet werden.",
   "c0ea8898cd494336": "Der Zugriff dieser Verbindung auf Diagnose und Nutzung konnte nicht geprüft werden.",
   "953b6473de4b9ad6": "Diese Verbindung hat keinen Zugriff auf Diagnose und Nutzung.",
   "8c68febc86a3f651": "{provider} wird aktualisiert…",
@@ -1334,8 +1332,8 @@
   "bb34eaf6ddc55a72": "Dieses Konto hat keine Abonnementlimits.",
   "42a2622893a6bced": "Limits konnten nicht gelesen werden.",
   "4897e228d3185c96": "Keine Limits gemeldet.",
-  "e27d2cb964df5dd5": "{source}: Keine Konten gemeldet.",
   "161135f0aea4d1ca": "{source}: Keine Codex-, Claude- oder Grok-Konten. Übersprungen: {providers}.",
+  "e27d2cb964df5dd5": "{source}: Keine Konten gemeldet.",
   "1b503134018285f4": "{days} T. {hours} Std.",
   "164c674cf062933a": "{label} · noch {count} · läuft ab in {expires}",
   "9c82c39589c23938": "{label} · noch {count}",
@@ -1896,7 +1894,6 @@
   "1d17dc60c59e0524": "Projekt loslösen",
   "5cfaaa20c460c328": "Projekt anheften",
   "24adf508b4c5d6b5": "Projekteinstellungen",
-  "60e47b3da5901619": "Einstellungen · {section}",
   "0c659f9a193255dd": "Projekt konnte nicht hinzugefügt werden",
   "4b3fc098d5a08a66": "Windows-Pfade werden nur unter Windows unterstützt.",
   "2c2637dc1e236fb4": "Relative Pfade erfordern ein aktives Projekt.",
@@ -1987,6 +1984,7 @@
   "f844c41fac2d339c": "Aktuell",
   "69154433587763c0": "Keine passenden Aktionen.",
   "90c3a382ecefa0ce": "Keine passenden Befehle, Projekte oder Threads.",
+  "60e47b3da5901619": "Einstellungen · {section}",
   "a03e4c1348ad9ba8": "System",
   "8bf65a425f50d140": "Hell",
   "d604bc5cf3386f00": "Dunkel",
@@ -2688,6 +2686,24 @@
   "3260b22f72f7effb": "{tooltipLead}: {title}",
   "feac8e54b30c5a03": "Terminal-Prozess läuft",
   "fc2c9a91f498ad6b": "{count, plural, one {{count} Terminal-Prozess läuft. Terminal öffnen} other {{count} Terminal-Prozesse laufen. Terminal öffnen}}",
+  "06d3fe3e6b255d15": [
+    "+",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " weitere"
+  ],
+  "f1b18820c0ab93ac": [
+    "+",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " weitere unter Verknüpfte Elemente"
+  ],
   "56f37ff8ca568059": "Stack",
   "6831e9a46cbd8939": "Kette",
   "9aa9e74a3b7eee91": "Zum Chat hinzufügen",
@@ -3078,6 +3094,8 @@
   "4f14e3fc3a216f44": "Dadurch wird der laufende Prozess gestoppt und sein Verlauf gelöscht.",
   "16ce8443044b45fd": "{count, plural, one {{count} Terminal} other {{count} Terminals}} schließen?",
   "a9697e470d40706a": "Dadurch werden ihre laufenden Prozesse gestoppt und ihre Verläufe gelöscht: {labels}.",
+  "f3c70064a22a0c76": "{terminalLabel} Zeile {lineStart}",
+  "8ba6febaabeb6f14": "{terminalLabel} Zeilen {lineStart}–{lineEnd}",
   "ef4bae5c5f3684f4": "Aufgezeichneter Inhalt vorher",
   "5e4a0e56a0788d86": "Aufgezeichneter Inhalt nachher",
   "6d5a8b471a561b9d": "Explorer",
@@ -3345,6 +3363,9 @@
   "f2a955905704b91d": "{hours} Std. {minutes} Min.",
   "3609f564a63c8eca": "{minutes} Min.",
   "9251bb742f60720d": "{hours} Std.",
+  "035aab5e99159bd8": "{count, plural, one {… {hidden} Zeichen in der Mitte wird nicht angezeigt.} other {… {hidden} Zeichen in der Mitte werden nicht angezeigt.}} Der Text endet mit:",
+  "011b1ef726fa9928": "Scrolle in beiden Teilen, um alles zu lesen.",
+  "6c6e16b9488f8b91": "Scrolle, um alles zu lesen.",
   "a1e982c6047c0860": "Zur zitierten Antwort: {label}",
   "c156140c3f5ebb75": "Zur Antwort, auf die sich dies bezieht: {label}",
   "f8031a49c6e9fe25": "Zitierten Assistententext anzeigen: {label}",
@@ -3614,12 +3635,12 @@
   "35e0b8f7418b4a86": "Klicken zum Einreihen, {modifier}-Klick zum Umlenken",
   "eed080cf5eb25bfd": "{tokens} Tokens Verlauf zusammenfassen, dann senden",
   "e4116d7f64a6f593": "{tokens} Tokens Verlauf vor dem Senden komprimieren",
-  "d6143c122719b099": "Behalten",
-  "7335dc479a68818e": "Komprimieren",
   "b2411ad43ce3b143": "Beim nächsten Senden bleiben alle {tokens} Tokens erhalten.",
   "ab6720311ff3140d": "Beim nächsten Senden werden zuerst {tokens} Tokens komprimiert.",
   "1486a422ba77a084": "Klicken, um zuerst zu komprimieren",
   "b971f881c5dc4fca": "Klicken, um den vollständigen Verlauf zu behalten",
+  "d6143c122719b099": "Behalten",
+  "7335dc479a68818e": "Komprimieren",
   "89426e9b039148d7": "Spracheingabe fehlgeschlagen",
   "2220a0fbb5b6fa47": "Modell wird heruntergeladen {percent} %",
   "5c05b24be2880672": "Aufnahme",
@@ -4034,11 +4055,11 @@
   "8413f3e7f703f14e": "Thread-Detailpanel umschalten",
   "a728e041b203714a": "Thread-Details umschalten ({shortcut})",
   "5417d84fba7b6b84": "Thread-Details umschalten",
-  "586edda3a01b9305": "Terminalbereich umschalten",
   "d395686a462b77d2": "Terminalbereich umschalten ({shortcut})",
+  "586edda3a01b9305": "Terminalbereich umschalten",
   "c2fdb28a7ae3921b": "Terminalbereich ist nicht verfügbar",
-  "8acd97d5e80bddd3": "Rechtes Panel umschalten",
   "fdc7805c136f3f7b": "Rechtes Panel umschalten ({shortcut})",
+  "8acd97d5e80bddd3": "Rechtes Panel umschalten",
   "d47ad54e98d33190": "Rechtes Panel ist nicht verfügbar",
   "7e4b0afa9879fd43": "Panelgröße wiederherstellen",
   "8381e38420ae57f3": "Panel maximieren",
@@ -4177,8 +4198,6 @@
   "45cf8a09ce8995f8": "fehlgeschlagen",
   "7db3cecba8568144": "abgebrochen",
   "0c5771889f55c1fe": "unterbrochen",
-  "f3c70064a22a0c76": "{terminalLabel} Zeile {lineStart}",
-  "8ba6febaabeb6f14": "{terminalLabel} Zeilen {lineStart}–{lineEnd}",
   "ac7416afe98ba5f8": "Terminal-Auszug, {label}",
   "bf04d61dc50685dc": "Zeile {lineStart}",
   "000e3bef072f07c8": "Zeilen {lineStart}–{lineEnd}",
@@ -4512,11 +4531,11 @@
   "0647cef26e3b1fa5": "Der Snapshot ist zu groß zum Kopieren.",
   "c036ab3d20c54b5b": "Du",
   "6b2294cfd43aee15": "{name} (Gast)",
-  "d1d1fed744318218": "Umlenkung · wartet darauf, gelesen zu werden",
-  "75948010e112a8f4": "Umlenkung",
   "1ccc41732907ca74": "Wartet darauf, dass der Agent dies liest. Er liest Umlenkungen zwischen Schritten, nachdem ein laufender Befehl beendet ist.",
   "ae3f487ebde9db74": "Zuerst eingereiht, dann zum Umlenken der aktiven Runde vorgezogen",
   "4f2ec8c81b4efb22": "Hat die aktive Runde umgelenkt",
+  "d1d1fed744318218": "Umlenkung · wartet darauf, gelesen zu werden",
+  "75948010e112a8f4": "Umlenkung",
   "d201a2c11fc08817": "Ab hier bearbeiten",
   "5b30ae788fdc4fd0": "Wird gesendet…",
   "b8e1cd0265566143": [
@@ -4661,8 +4680,9 @@
   "75cdbffdefbbae3a": "Ultrafast-Modus an",
   "79c3a186139f8c86": "Fast-Modus an",
   "a772b49a38a3db40": "Was ist schiefgelaufen?",
-  "b29e1856c4aab31f": "Dieser Rechner",
   "0cb5a221e9e13a4e": "Der Agent liest hier die Logs und den Quellcode von T3 Code und fragt nach, bevor er eine Korrektur anwendet oder etwas veröffentlicht.",
+  "b29e1856c4aab31f": "Dieser Rechner",
+  "275a97b4af3c6482": "Befehl für ein Terminal kopieren",
   "e7588632064e0364": "Kopiert",
   "996f7752fa033da6": [
     "oder führe aus:",
@@ -4676,7 +4696,6 @@
       }
     }
   ],
-  "275a97b4af3c6482": "Befehl für ein Terminal kopieren",
   "2b07985d23563374": "Wird {time} fortgesetzt",
   "a4b4e5eb6d313af9": "Wurde {time} zurückgesetzt",
   "c0c3aa756405c1df": "Wird {time} zurückgesetzt",
@@ -4982,6 +5001,8 @@
   "70b12bc1e1a26abb": "Lege erneut ab, sobald die Komprimierung abgeschlossen ist.",
   "f6b1ef37f7587664": "Hänge abgelegte Dateien erneut an oder entferne sie, bevor du ablegst",
   "120167bbfb6d5939": "Warte auf die Datei-Uploads, bevor du diesen Prompt ablegst",
+  "410dded6e21c280d": "Ablage ist voll",
+  "1af8d12ac21cb183": "Die Ablage fasst {max} Prompts. Stelle einen wieder her oder lösche einen, um Platz zu schaffen; das Eingabefeld wurde unverändert gelassen.",
   "afdf475db3ca2af7": "Dieser Prompt konnte nicht abgelegt werden",
   "3f5c37167aa5034f": "Der Browserspeicher hat das Schreiben abgelehnt, daher wurde das Eingabefeld unverändert gelassen. Gib Websitedaten frei und versuche es erneut.",
   "41ba6c0b5c5e8b22": "Abgelegter Prompt übersteht kein Neuladen",
@@ -4993,6 +5014,7 @@
   "13cf3cd978eef92a": "Anhänge auf diesem Rechner behalten",
   "a4ca7da61227002d": "Entferne die Anhänge, bevor du automatisches Routing wählst, und hänge sie dann auf dem ausgewählten Rechner an.",
   "512d8afab852df1a": "Rechner konnte nicht gewechselt werden",
+  "ee3ea4351c88e7d7": "Dieses Projekt ist nicht mehr verfügbar.",
   "32e421d1e2dfdaff": "Rechner werden geprüft…",
   "0db14066bd4ce117": "Automatische Verteilung nicht verfügbar",
   "55b562c00e37321b": "Der Agent konnte nicht zwangsweise gestoppt werden",
@@ -5402,6 +5424,8 @@
   "ac18a5e35195a258": "Android-Emulatoren",
   "94215375ea2558b8": "Läuft",
   "f8a65d4d662389b0": "Gestoppt",
+  "381ceed77cb8b2b3": "{name} stoppen",
+  "5b9fda36b610d25c": "Stoppen",
   "b1687c7b2b91e569": "{name} öffnen",
   "4b4ef3f2e2ed2c56": "{name} starten",
   "08098a6fb84e8a34": "Öffnen",
@@ -5423,6 +5447,7 @@
   ],
   "e902f208c4e6146f": "Keine virtuellen Android-Geräte gefunden. Erstelle eines im Geräte-Manager von Android Studio und aktualisiere dann.",
   "d9a71f3db685cb0e": "Geräte aktualisieren",
+  "1d372f6d555dde3c": "Alle Geräte stoppen",
   "4ad8ced64defdf73": "Interaktives 3D-Gerät. Ziehe auf dem Bildschirm, um es zu bedienen. Ziehe außerhalb oder wische mit zwei Fingern, um es zu drehen.",
   "84e4baf07ad8883d": "Erlaube dieser Umgebung, Simulatoren und Emulatoren zu öffnen, egal ob sie hier oder auf einem entfernten Geräte-Host laufen.",
   "771365c337509a82": "Neuen Agentensitzungen in dieser Umgebung erlauben, lokale und entfernte Geräte zu starten und zu steuern; die nötigen Tools werden automatisch eingerichtet.",
@@ -6746,8 +6771,8 @@
   "1239149344bb4b2b": "Der Diff ist zu groß zum Anzeigen.",
   "3ab928741d208f41": "Wird geladen...",
   "3e272ae9c5b76744": "Diff laden",
-  "d4ccbc96f4d05950": "Geändert",
   "c12888742e7bd0ce": "Auf diese Datei wurde gepusht, seit du sie als angesehen markiert hast.",
+  "d4ccbc96f4d05950": "Geändert",
   "6594b013f63d2a3a": "Angesehen",
   "687f81dd084a5ab0": "Der Rest dieses Diffs konnte nicht geladen werden.",
   "cf44cf4e3479ea7a": "Alle Commits",
@@ -6944,6 +6969,19 @@
   "36b7fbe31bde05f3": "Dieses Repository hat keine Labels.",
   "2764eab1d2853980": "Dieses Repository hat mehr Labels, als hier aufgelistet sind. Wende die übrigen auf dem Host an.",
   "5e5917c3b907c7d6": "Angewendet",
+  "4affc3da49f673c2": [
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " ",
+    {
+      "t": "span",
+      "i": 2,
+      "c": "hat kommentiert"
+    }
+  ],
   "404ee0e0134b60ae": "Alle Hosts werden nach „{query}“ durchsucht",
   "ca612a0074954046": "Wird geprüft...",
   "8b04f78f836b6c11": "Nichts mit diesen Filtern",
@@ -7061,8 +7099,8 @@
   "1df18577b47fe833": "Niemand mit Zugriff passt dazu.",
   "605ed234cd084078": "Die Personen mit Zugriff konnten nicht gelesen werden.",
   "3e63297ce2f404d6": "Bereits angefragt",
-  "ad822604a0059e71": "in der Beschreibung gefunden",
   "3625557b4fc8ba68": "In der Beschreibung gefunden",
+  "ad822604a0059e71": "in der Beschreibung gefunden",
   "ff1f73cd2455d0f6": "Für dieses Repository ist keine Merge-Methode verfügbar.",
   "59b38d59700e0a5f": "Schließen",
   "25aa6faba20377ca": "#{number} schließen",
@@ -7240,19 +7278,6 @@
       "t": "span",
       "i": 2,
       "c": "hat ein Review abgegeben"
-    }
-  ],
-  "4affc3da49f673c2": [
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " ",
-    {
-      "t": "span",
-      "i": 2,
-      "c": "hat kommentiert"
     }
   ],
   "04ea50285b00dcdd": "Übersicht",
@@ -9314,7 +9339,6 @@
   "b76e857a764ea02a": "Gruppierungsregel für {path} auf {environment}",
   "e6e55f343639ae71": "Standard ({mode})",
   "87158e7b8e714bc6": "Füge über die Seitenleiste ein Projekt hinzu, um es hier zu konfigurieren.",
-  "ee3ea4351c88e7d7": "Dieses Projekt ist nicht mehr verfügbar.",
   "062d19d24615e108": "Projekttitel darf nicht leer sein",
   "303af9de2741db90": "Projekt konnte nicht umbenannt werden",
   "f578154800d7af01": "Projektsymbol konnte nicht aktualisiert werden",
@@ -10008,6 +10032,7 @@
   "8b023484be3a3b1c": "Unverändert",
   "c2c1eb12ddf8465a": "Gemeinsames Geheimnis",
   "1f8429becfe86d7d": "Ausführungstage",
+  "988358208ad49792": "{count, plural, one {Minute} other {Minuten}}",
   "c4927d044b3eecca": "Aufgabe speichern",
   "196658ca8d7106b1": "Aufgabe erstellen",
   "5baf27d764acc26d": "Nur ausführen, wenn alle Filter zutreffen. Andere Anfragen werden als gefiltert protokolliert. Trenne „ist eines von“-Werte mit Kommas; ein Wert darf kein Komma enthalten.",
@@ -10780,7 +10805,6 @@
   "cb2d986e3d65b30a": "In T3 Code enthalten. Kein Download nötig.",
   "e67452f247cc5272": "Erweiterung deaktivieren",
   "199401965e68b97b": "Aufnahme-Hilfsprogramm entfernen",
-  "988358208ad49792": "{count, plural, one {Minute} other {Minuten}}",
   "07b142ed9cc5e3f6": "{count, plural, one {Stunde} other {Stunden}}",
   "26184a346ce1c1dc": "{count, plural, one {Tag} other {Tage}}",
   "f84c89790e008f96": "In",
@@ -11746,6 +11770,7 @@
   "817dbf1c068b62e7": "Wo deine Sprache in Text umgewandelt wird.",
   "710d3e4f0243014c": "Gewählte Umgebung (nicht verfügbar)",
   "61088464d1b7174d": "nicht verfügbare Umgebung",
+  "800966eb58181745": "Prüfe, welche Sprachen das Modell unterstützt…",
   "2b3e8ee4f31d1433": "„Automatisch“ verwendet die Sprache deines Mac. Bei der ersten Verwendung einer Sprache wird sie geladen.",
   "71184e5a54a69f1d": "Der Anbieter erkennt deine Sprache automatisch.",
   "ffb2653eb2d9fc1a": "{model} erkennt die Sprache automatisch.",
@@ -12204,8 +12229,8 @@
   "8cf699ae75fd8067": "Angeheftet",
   "be451f475c514b37": "Aufgeweckt-Hinweis schließen",
   "e9ced65134f2f36c": "Thread jetzt aufwecken",
-  "374dac09151d4578": "Ausstehend",
   "a8f30f631e2b010e": "Wartet auf die Synchronisierung mit seiner Umgebung",
+  "374dac09151d4578": "Ausstehend",
   "aca5896600bf173e": "Du hast gerade einen anderen Branch ausgecheckt.",
   "f665b5be60d8c144": [
     "Übergeben von ",
@@ -12359,7 +12384,6 @@
   "1a92fa2f744401bc": "Gerade gibt es nichts zurückzusetzen.",
   "fff9b7f838279ee3": "Kein Reset-Guthaben mehr.",
   "cea3cf346788481d": "Dieses Guthaben wurde bereits eingelöst.",
-  "6ea901338c803e3e": "Das Reset-Guthaben konnte nicht verwendet werden.",
   "ad0e59acc4b087f5": "{label}: {remaining} % übrig, {resetsIn}",
   "3d55c97a8189568e": "{label}: {remaining} % übrig",
   "d6961d3b4c9657da": "{label}: {remaining} % übrig, {timeLeft} % des Zeitfensters übrig, {resetsIn}",
@@ -12624,7 +12648,6 @@
   "b8dcbc93a2ca1861": "Diese Ausführung führt es nicht mehr auf.",
   "115c69de3202f664": "Öffnen",
   "a2bbf464a3be4882": "{count, plural, =1 {1. Versuch} =2 {2. Versuch} =3 {3. Versuch} other {{count}. Versuch}}",
-  "644eafa9048b62df": "{count, plural, =1 {1. Versuch} =2 {2. Versuch} =3 {3. Versuch} other {{count}. Versuch}}",
   "0398ca6c1d24b92d": "wartet, als Nächstes dran",
   "0af6d5ffd5166214": "{count, plural, one {wartet, {count} davor} other {wartet, {count} davor}}",
   "e39f89c909df4db0": "Die Ausführung konnte nicht fortgesetzt werden",
@@ -13014,171 +13037,5 @@
   "27d76249d09eb69f": "Review-Leitfaden bereit",
   "faa3bb26abb39c93": "Review-Leitfaden fehlgeschlagen",
   "b7df38b7d8792d78": "Leitfaden öffnen",
-  "9e91e9a77b664e4e": "Review-Leitfaden konnte nicht gestartet werden",
-  "99d51127f573296b": "Weiteres Konto",
-  "8ec2c57414669b79": "Verbinde einen zweiten {tracker}-Workspace oder -Nutzer.",
-  "99963c0142e17f00": "Für das neue {tracker}-Konto.",
-  "6d8e4ebc889bace9": "Konto hinzufügen",
-  "8a883c4fbc127b68": "Auto-Merge für den Stack wird aktiviert...",
-  "5fb2a26ae31e8983": "Auto-Merge für den Stack konnte nicht aktiviert werden",
-  "986d0dcbf4dd0098": "Auto-Merge für den Stack aktiviert",
-  "f3ed1f63c8a3eef2": "{host} mergt den Stack bis #{number}, sobald die Anforderungen erfüllt sind.",
-  "bd536a0a1754f6cb": "Auto-Merge für den Stack konnte nicht abgebrochen werden",
-  "bb90ac3b2f3a72d5": "Der Host hat das Abbrechen des Auto-Merge abgelehnt. Aktualisiere und versuche es erneut.",
-  "9c28753c777c37b7": "{count, plural, one {Auto-Merge für {count} {term, select, mr {Merge Request} cr {Änderungsanfrage} other {Pull Request}}?} other {Auto-Merge für {count} {term, select, mr {Merge Requests} cr {Änderungsanfragen} other {Pull Requests}}?}}",
-  "a86b49982e18784d": "#{number} und die darunterliegenden nicht gemergten Ebenen per {method} in {base} mergen, sobald jede davon die Anforderungen auf {host} erfüllt. Das kann sofort passieren.",
-  "b1afda5c964deee4": [
-    "Auto-Merge für Stack (",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    ")"
-  ],
-  "33d18dda74f6d7b3": "Auto-Merge für Stack abbrechen",
-  "012c67c7f1a99e33": "Auto-Merge für Stack",
-  "4a18481bea4b4ad5": "Neues Gerät bei {environmentLabel} angemeldet",
-  "4144ab6aa487528a": "{device} hat sich über {product} verbunden. Warst du das nicht? Prüfe es.",
-  "a10cfdb27152c757": "{count, plural, one {{count} Gerät hat} other {{count} Geräte haben}} sich über {product} verbunden. Warst du das nicht? Prüfe sie.",
-  "e0856d6a402ad821": "Die Richtlinie von {organization} erlaubt keine Worktree-Layout-Befehle von Projekten.",
-  "206811f6f441bfc7": "Dieses Projekt richtet Worktrees mit einem eigenen Befehl ein, den in seiner jetzigen Form niemand genehmigt hat. Über diese Verbindung lässt er sich nicht genehmigen: Genehmige ihn in einem Client, der das Terminal verwenden darf.",
-  "b8087c9a70c26da9": "Der Worktree-Layout-Befehl konnte nicht genehmigt werden.",
-  "49eda70cfd56e621": "Läuft, wenn ein Worktree-Thread startet und wenn sein Ordner wiederhergestellt wird",
-  "188ccaa1199f5611": "Läuft, wenn der Worktree eines Threads entfernt wird",
-  "7e8476e7306acabe": "Darf dieses Projekt seine Worktree-Befehle ausführen?",
-  "8e11914556fd8b13": [
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " richtet Worktree-Threads mit eigenen Befehlen aus ",
-    {
-      "t": "code",
-      "i": 2,
-      "c": "t3.json"
-    },
-    " ein. Sie laufen auf dem Rechner dieser Umgebung mit deinen Berechtigungen, außerhalb jeder Agenten-Sandbox. Du wirst erneut gefragt, sobald sich ihr Text ändert."
-  ],
-  "46807acd02a4ff72": "Genehmigen und fortfahren",
-  "a9cb97fca6a6576b": "Befehl zum Erstellen",
-  "90f45a354884ccdd": "Befehl zum Entfernen",
-  "78e308ada516928b": "Der Befehl konnte nicht genehmigt werden",
-  "a0c772d32a233da6": "Die Genehmigung konnte nicht widerrufen werden",
-  "0cdc8cdbed3e5eae": "Worktree-Layout",
-  "c17b25519e2b194e": "Die Worktree-Layout-Befehle konnten nicht geladen werden",
-  "5ccd5614c65f8d1f": "Genehmigung des Befehls {kind} widerrufen",
-  "80c3794a5fa12f3a": "Befehl {kind} genehmigen",
-  "f206891e124c77b0": [
-    "Die ",
-    {
-      "t": "code",
-      "i": 1,
-      "c": "t3.json"
-    },
-    " dieses Projekts richtet Worktree-Threads mit eigenen Befehlen ein. Sie laufen auf dem Rechner dieser Umgebung mit deinen Berechtigungen und nur so, wie sie hier genehmigt wurden: Ändert sich der Text eines Befehls, muss er erneut genehmigt werden."
-  ],
-  "f6a91589456cca50": "Genehmigt",
-  "c92657bb7f2293ff": "Genehmigung nötig",
-  "f1e5c1be1ac92361": "Genehmigen",
-  "fcb5f3c4d4753326": "Über diese Verbindung lassen sich keine Befehle genehmigen. Verwende einen Client, der das Terminal verwenden darf.",
-  "7150557773b3818b": "In der Warteschlange",
-  "efbeb3993ee2c3f5": "Wartet auf {pool}",
-  "0398ca6c1d24b92d": "wartet, als Nächstes dran",
-  "0af6d5ffd5166214": "{count, plural, one {wartet, {count} davor} other {wartet, {count} davor}}",
-  "49be26a27dcb30e5": "gewartet",
-  "4e96712d839ccbff": "{who} hat {choice} gesagt",
-  "19097cfb8f5a79cf": [
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " hat",
-    " ",
-    {
-      "t": "span",
-      "i": 2,
-      "c": {
-        "i": 3,
-        "k": "_gt_value_3",
-        "v": "v"
-      }
-    },
-    " gesagt."
-  ],
-  "e7bbf693910057bf": [
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " hat",
-    " ",
-    {
-      "t": "span",
-      "i": 2,
-      "c": {
-        "i": 3,
-        "k": "_gt_value_3",
-        "v": "v"
-      }
-    },
-    " gesagt: ",
-    {
-      "i": 4,
-      "k": "_gt_value_4",
-      "v": "v"
-    }
-  ],
-  "3759768c5d342c22": [
-    "beantwortet",
-    " ",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    }
-  ],
-  "e114d37b32ab0dc7": [
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " braucht eine Begründung."
-  ],
-  "91aadfc843c600de": "Google-Konto bestätigen",
-  "201490988858b511": "zurückgezogen von {by}",
-  "99451a5d2d40440f": "Zurückgezogen von {by}.",
-  "3ee30a50b70fffab": "Zurückgezogen von {by}: {reason}",
-  "92e129bf413a1220": "zurückgezogen",
-  "800966eb58181745": "Prüfe, welche Sprachen das Modell unterstützt…",
-  "410dded6e21c280d": "Ablage ist voll",
-  "1af8d12ac21cb183": "Die Ablage fasst {max} Prompts. Stelle einen wieder her oder lösche einen, um Platz zu schaffen; das Eingabefeld wurde unverändert gelassen.",
-  "381ceed77cb8b2b3": "{name} stoppen",
-  "5b9fda36b610d25c": "Stoppen",
-  "1d372f6d555dde3c": "Alle Geräte stoppen",
-  "06d3fe3e6b255d15": [
-    "+",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " weitere"
-  ],
-  "f1b18820c0ab93ac": [
-    "+",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " weitere unter Verknüpfte Elemente"
-  ],
-  "469007bc0796d729": "installierte cli versionen neuer verfügbar codex claude cursor grok fx kiro lobby opencode",
-  "1deef9ed60a747d6": "agenten cli codex claude cursor grok fx kiro lobby opencode antigravity google anmelden abmelden installieren abonnement instanzen authentifizierung api-schlüssel modelle konfiguration binärdatei pfad konfigurationsverzeichnis codex_home shadow home endpunkt argumente umgebungsvariablen anzeigename akzentfarbe benutzerdefiniert favorit ausgeblendet automatisch komprimieren native sitzungen import fortsetzen",
   "9e91e9a77b664e4e": "Review-Leitfaden konnte nicht gestartet werden"
 }
